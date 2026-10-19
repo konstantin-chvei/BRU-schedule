@@ -7,9 +7,12 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -20,6 +23,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -44,6 +51,10 @@ fun App(graph: AppGraph) {
                     profileCatalog = graph.profileCatalog,
                     refreshSchedule = graph.refreshSchedule,
                     appearancePreferences = graph.appearancePreferences,
+                    deadlineReminderPreferencesRepository = graph.deadlineReminderPreferences,
+                    semesterSchedulePreferencesRepository = graph.semesterSchedulePreferences,
+                    dailyMessagesRepository = graph.dailyMessages,
+                    deadlineNotificationScheduler = graph.deadlineNotificationScheduler,
                 )
             }
         },
@@ -63,7 +74,11 @@ fun App(graph: AppGraph) {
             containerColor = BruColors.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-                NavigationBar(containerColor = BruColors.surface) {
+                NavigationBar(
+                    modifier = Modifier.height(88.dp),
+                    containerColor = BruColors.surface,
+                    tonalElevation = 4.dp,
+                ) {
                     NavigationDestination(
                         selected = state.destination == MainDestination.SCHEDULE,
                         symbol = "◷",
@@ -119,12 +134,27 @@ private fun RowScope.NavigationDestination(
         selected = selected,
         onClick = onClick,
         icon = {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (selected) BruColors.indigo.copy(alpha = 0.18f) else BruColors.surface,
+            ) {
+                Text(
+                    text = symbol,
+                    modifier = Modifier.padding(horizontal = 15.dp, vertical = 4.dp)
+                        .graphicsLayer { scaleX = scale; scaleY = scale },
+                    color = if (selected) BruColors.cyan else BruColors.muted,
+                    fontSize = 23.sp,
+                )
+            }
+        },
+        label = {
             Text(
-                text = symbol,
-                modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
-                color = if (selected) BruColors.cyan else BruColors.muted,
+                label,
+                fontSize = 11.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (selected) BruColors.foreground else BruColors.muted,
             )
         },
-        label = { Text(label) },
+        alwaysShowLabel = true,
     )
 }

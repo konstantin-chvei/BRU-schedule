@@ -30,13 +30,16 @@ CREATE INDEX lesson_source_key_idx ON lesson(profile_id, source_key);
 
 CREATE TABLE academic_task (
     id TEXT NOT NULL PRIMARY KEY,
-    lesson_id TEXT NOT NULL,
+    lesson_id TEXT,
     profile_id TEXT,
     subject_name_snapshot TEXT NOT NULL,
     task_title TEXT NOT NULL,
     description TEXT NOT NULL,
     due_date INTEGER NOT NULL,
-    is_completed INTEGER NOT NULL
+    is_completed INTEGER NOT NULL,
+    link_type TEXT NOT NULL DEFAULT 'NONE',
+    reminder_mode TEXT NOT NULL DEFAULT 'INHERIT',
+    reminder_offsets_minutes TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX academic_task_due_date_idx ON academic_task(is_completed, due_date);
@@ -223,7 +226,10 @@ SELECT
     task_title AS taskTitle,
     description AS description,
     due_date AS dueDate,
-    is_completed AS isCompleted
+    is_completed AS isCompleted,
+    link_type AS linkType,
+    reminder_mode AS reminderMode,
+    reminder_offsets_minutes AS reminderOffsetsMinutes
 FROM academic_task
 ORDER BY due_date, task_title;
 
@@ -236,21 +242,25 @@ SELECT
     task_title AS taskTitle,
     description AS description,
     due_date AS dueDate,
-    is_completed AS isCompleted
+    is_completed AS isCompleted,
+    link_type AS linkType,
+    reminder_mode AS reminderMode,
+    reminder_offsets_minutes AS reminderOffsetsMinutes
 FROM academic_task
 WHERE lesson_id = ?
 ORDER BY due_date, task_title;
 
 insertTask:
 INSERT OR IGNORE INTO academic_task(
-    id, lesson_id, profile_id, subject_name_snapshot, task_title, description, due_date, is_completed
+    id, lesson_id, profile_id, subject_name_snapshot, task_title, description, due_date, is_completed,
+    link_type, reminder_mode, reminder_offsets_minutes
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateTask:
 UPDATE academic_task SET
     lesson_id = ?, profile_id = ?, subject_name_snapshot = ?, task_title = ?, description = ?,
-    due_date = ?, is_completed = ?
+    due_date = ?, is_completed = ?, link_type = ?, reminder_mode = ?, reminder_offsets_minutes = ?
 WHERE id = ?;
 
 setTaskCompleted:

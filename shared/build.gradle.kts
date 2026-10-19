@@ -42,6 +42,8 @@ kotlin {
     
     sourceSets {
         androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.core.ktx)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
             implementation(libs.sqldelight.android.driver)
@@ -82,6 +84,11 @@ sqldelight {
             packageName.set("com.example.bruschedule.data.local.db")
         }
     }
+}
+
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.example.bruschedule.generated.resources"
 }
 
 dependencies {

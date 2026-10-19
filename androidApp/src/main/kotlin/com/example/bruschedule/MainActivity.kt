@@ -7,13 +7,11 @@ import androidx.activity.enableEdgeToEdge
 import com.example.bruschedule.data.createAndroidAppGraph
 
 class MainActivity : ComponentActivity() {
-    private val appGraph by lazy(LazyThreadSafetyMode.NONE) {
-        createAndroidAppGraph(applicationContext)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Create the Activity Result launcher for POST_NOTIFICATIONS before the Activity starts.
+        val appGraph = createAndroidAppGraph(this)
         setContent {
             App(graph = appGraph)
         }

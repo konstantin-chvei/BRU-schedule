@@ -2,15 +2,17 @@ package com.example.bruschedule.domain.usecase
 
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleWindow
-import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.plus
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
 import com.example.bruschedule.domain.repository.ParserVersionRepository
 import com.example.bruschedule.domain.repository.ScheduleHtmlParser
 import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
+import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepository
 import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 sealed interface RefreshOutcome {
     data class Success(
@@ -33,6 +35,7 @@ class RefreshScheduleUseCase(
     private val remote: ScheduleRemoteDataSource,
     private val scraper: ScheduleHtmlParser,
     private val versionFlags: ParserVersionRepository,
+    private val semesterSchedulePreferences: SemesterSchedulePreferencesRepository,
     private val clock: Clock = Clock.System,
 ) {
     suspend operator fun invoke(profileId: String): RefreshOutcome {
@@ -51,10 +54,12 @@ class RefreshScheduleUseCase(
                 error("На странице не найдено ни одной пары. Локальное расписание не изменено.")
             }
             val websiteLessons = if (scraper.hasAlternatingTwoWeekCycle(html)) {
-                val semesterEnd = window.startDate.plus(
-                    DatePeriod(days = ScheduleCycleExpander.SEMESTER_HORIZON_DAYS - 1),
-                )
-                ScheduleCycleExpander.expand(parsed, window.startDate, semesterEnd)
+                val today = clock.now()
+                    .toLocalDateTime(TimeZone.currentSystemDefault())
+                    .date
+                val preferences = semesterSchedulePreferences.observe().first()
+                val semesterEnd = SemesterCoveragePolicy.coverageEndDate(today, preferences)
+                ScheduleCycleExpander.expand(parsed, today, semesterEnd)
             } else {
                 parsed
             }
@@ -85,4 +90,3 @@ class RefreshScheduleUseCase(
         }
     }
 }
-

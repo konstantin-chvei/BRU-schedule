@@ -7,12 +7,11 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.plus
 
 /**
- * Projects the site's two-week template into a semester-sized, offline-first schedule. Occurrence
+ * Projects the site's two-week template into the requested offline-first date range. Occurrence
  * identity is derived from the original stable slot key plus the occurrence date, so edits remain
  * attached to the same date/slot after every refresh.
  */
 object ScheduleCycleExpander {
-    const val SEMESTER_HORIZON_DAYS = 196 // 28 weeks: comfortably covers a university semester.
     private val TWO_WEEKS = DatePeriod(days = 14)
 
     fun expand(

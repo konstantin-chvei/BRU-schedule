@@ -5,6 +5,7 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.example.bruschedule.data.local.db.ScheduleDatabase
 import com.example.bruschedule.domain.model.AcademicTask
+import com.example.bruschedule.domain.model.DeadlineLinkType
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
@@ -12,6 +13,7 @@ import com.example.bruschedule.domain.model.ProfileSyncState
 import com.example.bruschedule.domain.model.RefreshCommit
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
+import com.example.bruschedule.domain.model.TaskReminderMode
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
@@ -75,7 +77,8 @@ class SqlDelightScheduleRepository(
         queries.selectTasks().asFlow().mapToList(Dispatchers.Default).map { rows ->
             rows.map { row -> taskFromDb(
                 row.id, row.lessonId, row.profileId, row.subjectNameSnapshot, row.taskTitle,
-                row.description, row.dueDate, row.isCompleted,
+                row.description, row.dueDate, row.isCompleted, row.linkType, row.reminderMode,
+                row.reminderOffsetsMinutes,
             ) }
         }
 
@@ -83,7 +86,8 @@ class SqlDelightScheduleRepository(
         queries.selectTasksForLesson(lessonId).asFlow().mapToList(Dispatchers.Default).map { rows ->
             rows.map { row -> taskFromDb(
                 row.id, row.lessonId, row.profileId, row.subjectNameSnapshot, row.taskTitle,
-                row.description, row.dueDate, row.isCompleted,
+                row.description, row.dueDate, row.isCompleted, row.linkType, row.reminderMode,
+                row.reminderOffsetsMinutes,
             ) }
         }
 
@@ -258,10 +262,12 @@ class SqlDelightScheduleRepository(
             queries.insertTask(
                 task.id, task.lessonId, task.profileId, task.subjectNameSnapshot,
                 task.taskTitle.trim(), task.description.trim(), task.dueDate, task.isCompleted.sqlInt(),
+                task.linkType.name, task.reminderMode.name, task.reminderOffsetsMinutes.joinToString(","),
             )
             queries.updateTask(
                 task.lessonId, task.profileId, task.subjectNameSnapshot, task.taskTitle.trim(),
-                task.description.trim(), task.dueDate, task.isCompleted.sqlInt(), task.id,
+                task.description.trim(), task.dueDate, task.isCompleted.sqlInt(), task.linkType.name,
+                task.reminderMode.name, task.reminderOffsetsMinutes.joinToString(","), task.id,
             )
         }
     }
@@ -379,13 +385,16 @@ private fun lessonFromDb(
 
 private fun taskFromDb(
     id: String,
-    lessonId: String,
+    lessonId: String?,
     profileId: String?,
     subjectNameSnapshot: String,
     taskTitle: String,
     description: String,
     dueDate: Long,
     isCompleted: Long,
+    linkType: String,
+    reminderMode: String,
+    reminderOffsetsMinutes: String,
 ) = AcademicTask(
     id = id,
     lessonId = lessonId,
@@ -395,4 +404,9 @@ private fun taskFromDb(
     isCompleted = isCompleted != 0L,
     profileId = profileId,
     subjectNameSnapshot = subjectNameSnapshot,
+    linkType = runCatching { DeadlineLinkType.valueOf(linkType) }
+        .getOrDefault(if (lessonId == null) DeadlineLinkType.NONE else DeadlineLinkType.SUBJECT),
+    reminderMode = runCatching { TaskReminderMode.valueOf(reminderMode) }
+        .getOrDefault(TaskReminderMode.INHERIT),
+    reminderOffsetsMinutes = reminderOffsetsMinutes.split(",").mapNotNull { it.toIntOrNull() },
 )

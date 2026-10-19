@@ -1,0 +1,53 @@
+package com.example.bruschedule
+
+import com.example.bruschedule.domain.model.AcademicTrack
+import com.example.bruschedule.domain.model.SemesterSchedulePreferences
+import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
+import kotlinx.datetime.LocalDate
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class SemesterCoveragePolicyTest {
+    @Test
+    fun usesBranchSpecificSessionEndAndAddsExactlyOneWeek() {
+        val belarusian = SemesterSchedulePreferences(
+            track = AcademicTrack.BELARUSIAN,
+            sessionEndDateIso = SemesterSchedulePreferences.DEFAULT_BELARUSIAN_SESSION_END,
+        )
+        val russian = SemesterSchedulePreferences(
+            track = AcademicTrack.RUSSIAN,
+            sessionEndDateIso = SemesterSchedulePreferences.DEFAULT_RUSSIAN_SESSION_END,
+        )
+        val ifzo = SemesterSchedulePreferences(
+            track = AcademicTrack.IFZO,
+            sessionEndDateIso = SemesterSchedulePreferences.DEFAULT_IFZO_SESSION_END,
+        )
+
+        assertEquals(LocalDate(2027, 1, 17), SemesterCoveragePolicy.coverageEndDate(belarusian))
+        assertEquals(LocalDate(2027, 2, 1), SemesterCoveragePolicy.coverageEndDate(russian))
+        assertEquals(LocalDate(2027, 2, 6), SemesterCoveragePolicy.coverageEndDate(ifzo))
+    }
+
+    @Test
+    fun individualIfzoEndDateIsUsedInsteadOfTheCommonSessionDate() {
+        val ifzo = SemesterSchedulePreferences(
+            track = AcademicTrack.IFZO,
+            sessionEndDateIso = "2027-01-27",
+        )
+
+        assertEquals(LocalDate(2027, 2, 3), SemesterCoveragePolicy.coverageEndDate(ifzo))
+    }
+
+    @Test
+    fun coverageCannotEndBeforeTodayWhenAStoredSessionDateHasExpired() {
+        val preferences = SemesterSchedulePreferences(
+            track = AcademicTrack.BELARUSIAN,
+            sessionEndDateIso = "2027-01-10",
+        )
+
+        assertEquals(
+            LocalDate(2027, 2, 10),
+            SemesterCoveragePolicy.coverageEndDate(LocalDate(2027, 2, 10), preferences),
+        )
+    }
+}

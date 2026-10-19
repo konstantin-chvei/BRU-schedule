@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -23,7 +24,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,9 +40,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.bruschedule.domain.model.DeadlineReminderIntervals
+import com.example.bruschedule.domain.model.DeadlineReminderPreferences
+import com.example.bruschedule.domain.model.AcademicTrack
+import com.example.bruschedule.domain.model.SemesterSchedulePreferences
+import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleAppTheme
 import com.example.bruschedule.presentation.ScheduleUiState
@@ -66,14 +79,25 @@ fun ScheduleSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("НАСТРОЙКИ · 03", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.4.sp)
-        Text("Журнал и настройки", color = BruColors.foreground, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-        Text("Проверяйте обновления, локальный кэш и историю версий расписания.", color = BruColors.muted, fontSize = 12.sp, lineHeight = 18.sp)
+        Text("Настройки", color = BruColors.foreground, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+        Text("Оформление, напоминания и обратная связь.", color = BruColors.muted, fontSize = 12.sp, lineHeight = 18.sp)
 
         AppearanceSettingsCard(
             state = state,
             onThemeSelected = viewModel::setTheme,
             onLessonColorSelected = viewModel::setLessonColor,
             onResetLessonColors = viewModel::resetLessonColors,
+        )
+
+        SemesterScheduleSettingsCard(
+            preferences = state.semesterSchedulePreferences,
+            onTrackSelected = viewModel::setAcademicTrack,
+            onIfzoDateChanged = viewModel::setIfzoSessionEndDate,
+        )
+
+        DeadlineReminderSettingsCard(
+            preferences = state.deadlineReminderPreferences,
+            onChange = viewModel::setDeadlineReminderPreferences,
         )
 
         Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
@@ -126,28 +150,7 @@ fun ScheduleSettingsScreen(
             }
         }
 
-        Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
-            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                Text("OFFLINE-FIRST", color = BruColors.mint, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
-                Text("Сначала локальное. Сеть — потом.", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Для обычной двухнедельной сетки локально хранится 28-недельный цикл; ручные правки и задания читаются из SQLDelight сразу при запуске. Если сервер недоступен или HTML изменился, сохранённое расписание остаётся нетронутым; неудачная попытка попадёт в журнал.",
-                    color = BruColors.muted,
-                    fontSize = 11.sp,
-                    lineHeight = 17.sp,
-                )
-            }
-        }
-
-        Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
-            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("КОНТУР ДАННЫХ", color = BruColors.dim, fontSize = 8.sp, letterSpacing = 1.1.sp)
-                JournalLine("Парсер", "Ksoup · таблицы групп и занятости преподавателей")
-                JournalLine("Локальная база", "SQLDelight · Android SQLite / iOS SQLite")
-                JournalLine("Флаги формата", "KMP Settings · версия парсера и маркер схемы")
-                JournalLine("Оформление", "KMP Settings · тема и четыре цвета занятий")
-            }
-        }
+        InfoCard()
         Spacer(Modifier.height(12.dp))
     }
 
@@ -180,6 +183,190 @@ fun ScheduleSettingsScreen(
             titleContentColor = BruColors.foreground,
             textContentColor = BruColors.muted,
         )
+    }
+}
+
+private const val PROJECT_TELEGRAM_BOT_URL = "https://t.me/bru_schedule_suggestion_bot"
+
+@Composable
+private fun SemesterScheduleSettingsCard(
+    preferences: SemesterSchedulePreferences,
+    onTrackSelected: (AcademicTrack) -> Unit,
+    onIfzoDateChanged: (String) -> Unit,
+) {
+    var ifzoDateText by remember(preferences.track, preferences.sessionEndDateIso) {
+        mutableStateOf(formatIsoDateForInput(preferences.sessionEndDateIso))
+    }
+    Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("СЕССИЯ 2026/27", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                Text("Период календаря", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Показываем расписание с сегодняшнего дня до недели после последнего дня сессии.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+            }
+            AcademicTrack.entries.forEach { track ->
+                val selected = preferences.track == track
+                Surface(
+                    onClick = { onTrackSelected(track) },
+                    shape = RoundedCornerShape(13.dp),
+                    color = if (selected) BruColors.indigo.copy(alpha = 0.14f) else BruColors.elevatedSurface,
+                    border = BorderStroke(1.dp, if (selected) BruColors.indigo else BruColors.outline),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(track.label, color = BruColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                sessionTrackHint(track, preferences),
+                                color = if (selected) BruColors.cyan else BruColors.muted,
+                                fontSize = 9.sp,
+                                lineHeight = 13.sp,
+                            )
+                        }
+                        Text(if (selected) "✓" else "○", color = if (selected) BruColors.cyan else BruColors.dim, fontSize = 14.sp)
+                    }
+                }
+                if (track == AcademicTrack.IFZO && selected) {
+                    OutlinedTextField(
+                        value = ifzoDateText,
+                        onValueChange = { value ->
+                            val formatted = maskRussianDate(value)
+                            ifzoDateText = formatted
+                            if (formatted.length == 10) {
+                                parseRussianDate(formatted)?.let(onIfzoDateChanged)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Последний день сессии") },
+                        placeholder = { Text("30.01.2027") },
+                        singleLine = true,
+                    )
+                    Text("ИФЗО: введите вашу дату; календарь автоматически захватит ещё 7 дней.", color = BruColors.dim, fontSize = 9.sp, lineHeight = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+private fun sessionTrackHint(track: AcademicTrack, preferences: SemesterSchedulePreferences): String = when (track) {
+    AcademicTrack.BELARUSIAN -> "Сессия 22.12.2026–10.01.2027 · календарь до 17.01.2027"
+    AcademicTrack.RUSSIAN -> "Сессия 29.12.2026–25.01.2027 · календарь до 01.02.2027"
+    AcademicTrack.IFZO -> {
+        val end = runCatching { LocalDate.parse(preferences.ifzoSessionEndDateIso) }.getOrNull()
+        end?.let { "Сессия до ${it.toRussianDate()} · календарь до ${it.plus(DatePeriod(days = SemesterCoveragePolicy.DAYS_AFTER_SESSION)).toRussianDate()}" }
+            ?: "Индивидуальные даты сессии"
+    }
+}
+
+private fun formatIsoDateForInput(isoDate: String): String =
+    runCatching { LocalDate.parse(isoDate).toRussianDate() }.getOrDefault("")
+
+private fun maskRussianDate(value: String): String {
+    val digits = value.filter(Char::isDigit).take(8)
+    return when {
+        digits.length <= 2 -> digits
+        digits.length <= 4 -> "${digits.take(2)}.${digits.drop(2)}"
+        else -> "${digits.take(2)}.${digits.substring(2, 4)}.${digits.drop(4)}"
+    }
+}
+
+private fun parseRussianDate(value: String): String? {
+    val parts = value.split('.')
+    if (parts.size != 3) return null
+    val day = parts[0].toIntOrNull() ?: return null
+    val month = parts[1].toIntOrNull() ?: return null
+    val year = parts[2].toIntOrNull() ?: return null
+    return runCatching { LocalDate(year, month, day).toString() }.getOrNull()
+}
+
+private fun LocalDate.toRussianDate(): String =
+    "${dayOfMonth.toString().padStart(2, '0')}.${monthNumber.toString().padStart(2, '0')}.$year"
+
+@Composable
+private fun DeadlineReminderSettingsCard(
+    preferences: DeadlineReminderPreferences,
+    onChange: (DeadlineReminderPreferences) -> Unit,
+) {
+    Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("ДЕДЛАЙНЫ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Напоминания", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Общие значения для задач с режимом «По умолчанию».", color = BruColors.muted, fontSize = 10.sp, lineHeight = 14.sp)
+                }
+                Switch(
+                    checked = preferences.enabled,
+                    onCheckedChange = { onChange(preferences.copy(enabled = it)) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = BruColors.cyan,
+                        checkedTrackColor = BruColors.indigo,
+                        uncheckedThumbColor = BruColors.dim,
+                        uncheckedTrackColor = BruColors.elevatedSurface,
+                        uncheckedBorderColor = BruColors.outline,
+                    ),
+                )
+            }
+            if (preferences.enabled) {
+                HorizontalDividerLine()
+                Text("НАПОМИНАТЬ ЗАРАНЕЕ", color = BruColors.dim, fontSize = 8.sp, letterSpacing = 0.9.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    DeadlineReminderIntervals.choices.forEach { minutes ->
+                        val selected = minutes in preferences.offsetsMinutes
+                        Surface(
+                            onClick = {
+                                val next = if (selected) {
+                                    if (preferences.offsetsMinutes.size <= 1) preferences.offsetsMinutes
+                                    else preferences.offsetsMinutes - minutes
+                                } else {
+                                    preferences.offsetsMinutes + minutes
+                                }
+                                onChange(preferences.copy(offsetsMinutes = next.distinct().sortedDescending()))
+                            },
+                            shape = RoundedCornerShape(11.dp),
+                            color = if (selected) BruColors.indigo.copy(alpha = 0.17f) else BruColors.elevatedSurface,
+                            border = BorderStroke(1.dp, if (selected) BruColors.indigo else BruColors.outline),
+                        ) {
+                            Text(
+                                DeadlineReminderIntervals.label(minutes),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                                color = if (selected) BruColors.cyan else BruColors.muted,
+                                fontSize = 9.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+                Text("Можно выбрать несколько интервалов. Уведомления доставляются устройством и работают без сети.", color = BruColors.dim, fontSize = 9.sp, lineHeight = 13.sp)
+            } else {
+                Text("Все напоминания о дедлайнах приостановлены.", color = BruColors.dim, fontSize = 10.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoCard() {
+    val uriHandler = LocalUriHandler.current
+    Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("INFO", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
+            Text("Есть идея для проекта?", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Предложите её через Telegram-бота — обратная связь помогает развивать приложение.", color = BruColors.muted, fontSize = 11.sp, lineHeight = 16.sp)
+            if (PROJECT_TELEGRAM_BOT_URL.isNotBlank()) {
+                TextButton(onClick = { uriHandler.openUri(PROJECT_TELEGRAM_BOT_URL) }) {
+                    Text("Открыть Telegram-бота ↗", color = BruColors.cyan, fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Text("Ссылка на бота будет добавлена после уточнения.", color = BruColors.dim, fontSize = 9.sp)
+            }
+        }
     }
 }
 

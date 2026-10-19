@@ -3,12 +3,10 @@ package com.example.bruschedule
 import com.example.bruschedule.data.scraper.BruScheduleScraper
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
-import com.example.bruschedule.domain.model.ScheduleProfile
-import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.usecase.ScheduleCycleExpander
-import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
+import kotlinx.datetime.DatePeriod
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -35,24 +33,44 @@ class ScheduleCycleExpanderTest {
     }
 
     @Test
-    fun repeatsBothWeeksForTwentyEightWeeksWithStableDateAndSlotKeys() {
+    fun repeatsOnlyFromTodayThroughTheConfiguredSemesterEnd() {
         val start = LocalDate(2026, 10, 19)
-        val through = start.plus(DatePeriod(days = ScheduleCycleExpander.SEMESTER_HORIZON_DAYS - 1))
+        val semesterEndPlusWeek = LocalDate(2027, 1, 17)
         val template = listOf(
             lesson("2026-10-19", "group-mpr-261|2026-10-19|1|08:30-10:05|0"),
             lesson("2026-10-26", "group-mpr-261|2026-10-26|1|08:30-10:05|0"),
         )
 
-        val expanded = ScheduleCycleExpander.expand(template, start, through)
-        val repeated = ScheduleCycleExpander.expand(template, start, through)
+        val expanded = ScheduleCycleExpander.expand(template, start, semesterEndPlusWeek)
+        val repeated = ScheduleCycleExpander.expand(template, start, semesterEndPlusWeek)
 
-        assertEquals(28, expanded.size)
+        assertEquals(13, expanded.size)
         assertEquals(expanded.map { it.sourceKey }, repeated.map { it.sourceKey })
         assertEquals(expanded.size, expanded.map { it.id }.distinct().size)
         assertEquals(start.toString(), expanded.first().lessonDate)
-        assertEquals(start.plus(DatePeriod(days = 189)).toString(), expanded.last().lessonDate)
+        assertEquals("2027-01-11", expanded.last().lessonDate)
+        assertTrue(expanded.all { LocalDate.parse(it.lessonDate) in start..semesterEndPlusWeek })
         assertTrue(expanded.all { it.sourceKey.contains("|${it.lessonDate}|1|08:30-10:05|0") })
         assertTrue(expanded.all { !it.isCustom })
+    }
+
+    @Test
+    fun datesBeforeTheCurrentDayAreSkippedWhenExpandingTheCurrentCycle() {
+        val today = LocalDate(2026, 10, 22)
+        val template = listOf(
+            lesson("2026-10-19", "group-mpr-261|2026-10-19|1|08:30-10:05|0"),
+            lesson("2026-10-26", "group-mpr-261|2026-10-26|1|08:30-10:05|0"),
+        )
+
+        val expanded = ScheduleCycleExpander.expand(
+            template,
+            today,
+            today.plus(DatePeriod(days = 14)),
+        )
+
+        assertTrue(expanded.isNotEmpty())
+        assertTrue(expanded.all { LocalDate.parse(it.lessonDate) >= today })
+        assertEquals("2026-10-26", expanded.first().lessonDate)
     }
 
     @Test
@@ -63,7 +81,7 @@ class ScheduleCycleExpanderTest {
         val expanded = ScheduleCycleExpander.expand(
             listOf(custom),
             start,
-            start.plus(DatePeriod(days = ScheduleCycleExpander.SEMESTER_HORIZON_DAYS - 1)),
+            LocalDate(2027, 1, 17),
         )
 
         assertEquals(listOf(custom), expanded)

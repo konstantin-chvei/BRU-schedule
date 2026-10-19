@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,12 +44,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
+import com.example.bruschedule.generated.resources.Res
+import com.example.bruschedule.generated.resources.bru_schedule_app_icon
+import org.jetbrains.compose.resources.painterResource
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.presentation.LessonUiItem
 import com.example.bruschedule.presentation.ScheduleUiState
@@ -68,8 +73,12 @@ fun ScheduleHomeScreen(
     contentPadding: PaddingValues,
 ) {
     var addProfileVisible by remember { mutableStateOf(false) }
+    var showSemesterCalendar by remember { mutableStateOf(false) }
     var lessonInEditor by remember { mutableStateOf<Lesson?>(null) }
     var isNewLesson by remember { mutableStateOf(false) }
+    var deadlineEditorVisible by remember { mutableStateOf(false) }
+    var deadlineInitialLesson by remember { mutableStateOf<Lesson?>(null) }
+    var deadlineLessonToPersist by remember { mutableStateOf<Lesson?>(null) }
 
     Column(
         modifier = Modifier
@@ -81,7 +90,7 @@ fun ScheduleHomeScreen(
     ) {
         Spacer(Modifier.height(16.dp))
         ScheduleTopBar(
-            selectedProfileName = state.selectedProfile?.name,
+            dailyMessage = state.dailyMessage,
             refreshing = state.isRefreshing,
             onRefresh = viewModel::refreshSelectedProfile,
         )
@@ -103,9 +112,12 @@ fun ScheduleHomeScreen(
                 selectedDate = state.selectedDate,
                 today = state.todayDate,
                 datesWithLessons = state.weekDatesWithLessons,
+                allDatesWithLessons = state.allScheduleDatesWithLessons,
                 coverageStartDate = state.scheduleCoverageStartDate,
                 coverageEndDate = state.scheduleCoverageEndDate,
                 showCycleIndicator = state.hasRemoteSchedule,
+                showSemesterCalendar = showSemesterCalendar,
+                onToggleSemesterCalendar = { showSemesterCalendar = !showSemesterCalendar },
                 onSelect = viewModel::selectDate,
                 onPreviousWeek = { viewModel.changeWeek(-1) },
                 onNextWeek = { viewModel.changeWeek(1) },
@@ -198,15 +210,30 @@ fun ScheduleHomeScreen(
                 viewModel.saveCustomLesson(saved)
                 lessonInEditor = null
             },
-            onCreateTask = { lesson, title, description, dueDate ->
-                viewModel.addTask(
-                    lesson,
-                    title,
-                    description,
-                    dueDate,
-                    persistLessonOverride = isNewLesson || editingLesson.isCustom || lesson.hasEditableChangesFrom(editingLesson),
-                )
+            onCreateTask = { lesson ->
+                val shouldPersistLesson = isNewLesson || editingLesson.isCustom || lesson.hasEditableChangesFrom(editingLesson)
+                deadlineInitialLesson = if (shouldPersistLesson) lesson else lesson.copy(isCustom = false)
+                deadlineLessonToPersist = lesson.takeIf { shouldPersistLesson }
                 lessonInEditor = null
+                deadlineEditorVisible = true
+            },
+        )
+    }
+    if (deadlineEditorVisible) {
+        DeadlineEditorBottomSheet(
+            state = state,
+            initialLesson = deadlineInitialLesson,
+            lessonToPersist = deadlineLessonToPersist,
+            onDismiss = {
+                deadlineEditorVisible = false
+                deadlineInitialLesson = null
+                deadlineLessonToPersist = null
+            },
+            onSave = { draft ->
+                viewModel.addTask(draft)
+                deadlineEditorVisible = false
+                deadlineInitialLesson = null
+                deadlineLessonToPersist = null
             },
         )
     }
@@ -214,7 +241,7 @@ fun ScheduleHomeScreen(
 
 @Composable
 private fun ScheduleTopBar(
-    selectedProfileName: String?,
+    dailyMessage: String,
     refreshing: Boolean,
     onRefresh: () -> Unit,
 ) {
@@ -223,20 +250,36 @@ private fun ScheduleTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
             Box(
                 modifier = Modifier
-                    .size(43.dp)
+                    .size(45.dp)
                     .clip(RoundedCornerShape(15.dp))
                     .background(BruColors.elevatedSurface)
                     .border(1.dp, BruColors.outline, RoundedCornerShape(15.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("BR", color = BruColors.cyan, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Image(
+                    painter = painterResource(Res.drawable.bru_schedule_app_icon),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(15.dp)),
+                )
             }
-            Column {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("BRU / SCHEDULE", color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                Text(selectedProfileName ?: "МИНИМАЛИСТИЧНЫЙ КАМПУС", color = BruColors.muted, fontSize = 11.sp, maxLines = 1)
+                Text(
+                    dailyMessage,
+                    color = BruColors.muted,
+                    fontSize = 9.sp,
+                    lineHeight = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         Surface(
@@ -313,9 +356,12 @@ private fun WeekCalendarRail(
     selectedDate: LocalDate,
     today: LocalDate,
     datesWithLessons: Set<String>,
+    allDatesWithLessons: Set<String>,
     coverageStartDate: LocalDate?,
     coverageEndDate: LocalDate?,
     showCycleIndicator: Boolean,
+    showSemesterCalendar: Boolean,
+    onToggleSemesterCalendar: () -> Unit,
     onSelect: (LocalDate) -> Unit,
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
@@ -325,38 +371,202 @@ private fun WeekCalendarRail(
     val firstCoveredWeek = coverageStartDate?.startOfWeek()
     val lastCoveredWeek = coverageEndDate?.startOfWeek()
     val hasSemesterCycle = showCycleIndicator && coverageStartDate != null && coverageEndDate != null &&
-        coverageStartDate.plus(DatePeriod(days = 120)) <= coverageEndDate
+        coverageEndDate > coverageStartDate
     val canGoPrevious = firstCoveredWeek != null && monday.minus(DatePeriod(days = 7)) >= firstCoveredWeek
     val canGoNext = lastCoveredWeek != null && monday.plus(DatePeriod(days = 7)) <= lastCoveredWeek
-    Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SectionEyebrow(
-                    "НЕДЕЛЯ · ${weekNumberHint(monday)}",
-                    trailing = if (hasSemesterCycle) coverageEndDate?.let { "ЦИКЛ ДО ${it.toRuDate().uppercase()}" } else null,
+                    if (showSemesterCalendar) "СЕМЕСТР · ОБЗОР" else "НЕДЕЛЯ · ${weekNumberHint(monday)}",
+                    trailing = if (hasSemesterCycle) coverageEndDate?.let { "ДО ${it.toRuDate().uppercase()}" } else null,
                 )
-                Text("${monday.toRuDate()} — ${monday.plus(DatePeriod(days = 6)).toRuDate()}", color = BruColors.muted, fontSize = 12.sp)
+                Text(
+                    if (showSemesterCalendar && coverageStartDate != null && coverageEndDate != null) {
+                        "${coverageStartDate.toRuDate()} — ${coverageEndDate.toRuDate()}"
+                    } else {
+                        "${monday.toRuDate()} — ${monday.plus(DatePeriod(days = 6)).toRuDate()}"
+                    },
+                    color = BruColors.muted,
+                    fontSize = 12.sp,
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 WeekArrow("‹", onPreviousWeek, enabled = canGoPrevious)
                 WeekArrow("›", onNextWeek, enabled = canGoNext)
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            days.forEach { date ->
-                DayPill(
-                    date = date,
-                    selected = date == selectedDate,
-                    isToday = date == today,
-                    hasLessons = date.toString() in datesWithLessons,
-                    onClick = { onSelect(date) },
-                )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CalendarModePill("Неделя", selected = !showSemesterCalendar, modifier = Modifier.weight(1f), onClick = { if (showSemesterCalendar) onToggleSemesterCalendar() })
+            CalendarModePill("Весь семестр", selected = showSemesterCalendar, modifier = Modifier.weight(1f), onClick = { if (!showSemesterCalendar) onToggleSemesterCalendar() })
+        }
+        if (showSemesterCalendar) {
+            SemesterMonthGrid(
+                selectedDate = selectedDate,
+                today = today,
+                datesWithLessons = allDatesWithLessons,
+                coverageStartDate = coverageStartDate,
+                coverageEndDate = coverageEndDate,
+                onSelect = onSelect,
+            )
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                days.forEach { date ->
+                    DayPill(
+                        date = date,
+                        selected = date == selectedDate,
+                        isToday = date == today,
+                        hasLessons = date.toString() in datesWithLessons,
+                        enabled = coverageStartDate != null && coverageEndDate != null &&
+                            date >= coverageStartDate && date <= coverageEndDate,
+                        onClick = { onSelect(date) },
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun CalendarModePill(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(13.dp),
+        color = if (selected) BruColors.indigo.copy(alpha = 0.17f) else BruColors.surface,
+        border = BorderStroke(1.dp, if (selected) BruColors.indigo else BruColors.outline),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(vertical = 10.dp),
+            color = if (selected) BruColors.cyan else BruColors.muted,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun SemesterMonthGrid(
+    selectedDate: LocalDate,
+    today: LocalDate,
+    datesWithLessons: Set<String>,
+    coverageStartDate: LocalDate?,
+    coverageEndDate: LocalDate?,
+    onSelect: (LocalDate) -> Unit,
+) {
+    if (coverageStartDate == null || coverageEndDate == null) {
+        Text("Нет данных о периоде расписания.", color = BruColors.muted, fontSize = 11.sp)
+        return
+    }
+    val months = mutableListOf<LocalDate>()
+    var cursor = LocalDate(coverageStartDate.year, coverageStartDate.monthNumber, 1)
+    val finalMonth = LocalDate(coverageEndDate.year, coverageEndDate.monthNumber, 1)
+    while (cursor <= finalMonth) {
+        months += cursor
+        cursor = cursor.plus(DatePeriod(months = 1))
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        months.forEach { firstOfMonth ->
+            val daysInMonth = firstOfMonth.plus(DatePeriod(months = 1)).minus(DatePeriod(days = 1)).dayOfMonth
+            val emptyCells = firstOfMonth.dayOfWeek.isoDayNumber - 1
+            val cells: List<LocalDate?> = List(emptyCells) { null } +
+                (0 until daysInMonth).map { day -> firstOfMonth.plus(DatePeriod(days = day)) }
+            val paddedCells = cells + List((7 - cells.size % 7) % 7) { null }
+            Surface(
+                shape = RoundedCornerShape(17.dp),
+                color = BruColors.surface,
+                border = BorderStroke(1.dp, BruColors.outline),
+            ) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        "${monthLabel(firstOfMonth.monthNumber)} ${firstOfMonth.year}",
+                        color = BruColors.foreground,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Row(Modifier.fillMaxWidth()) {
+                        listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").forEach { day ->
+                            Text(day, modifier = Modifier.weight(1f), color = BruColors.dim, fontSize = 8.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                    paddedCells.chunked(7).forEach { week ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            week.forEach { date ->
+                                Box(Modifier.weight(1f).height(38.dp), contentAlignment = Alignment.Center) {
+                                    if (date != null) {
+                                        val inCoverage = date >= coverageStartDate && date <= coverageEndDate
+                                        SemesterDayCell(
+                                            date = date,
+                                            selected = date == selectedDate,
+                                            isToday = date == today,
+                                            hasLessons = date.toString() in datesWithLessons,
+                                            enabled = inCoverage,
+                                            onClick = { onSelect(date) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SemesterDayCell(
+    date: LocalDate,
+    selected: Boolean,
+    isToday: Boolean,
+    hasLessons: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(35.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(when {
+                selected -> BruColors.indigo.copy(alpha = 0.24f)
+                else -> Color.Transparent
+            })
+            .border(
+                width = if (selected || isToday) 1.dp else 0.dp,
+                color = when { selected -> BruColors.indigo; isToday -> BruColors.cyan.copy(alpha = 0.6f); else -> Color.Transparent },
+                shape = RoundedCornerShape(9.dp),
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(date.dayOfMonth.toString(), color = if (enabled) BruColors.foreground else BruColors.dim.copy(alpha = 0.45f), fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+        Box(Modifier.padding(top = 2.dp).size(3.dp).clip(CircleShape).background(if (hasLessons) BruColors.cyan else Color.Transparent))
+    }
+}
+
+private fun monthLabel(monthNumber: Int): String = when (monthNumber) {
+    1 -> "Январь"
+    2 -> "Февраль"
+    3 -> "Март"
+    4 -> "Апрель"
+    5 -> "Май"
+    6 -> "Июнь"
+    7 -> "Июль"
+    8 -> "Август"
+    9 -> "Сентябрь"
+    10 -> "Октябрь"
+    11 -> "Ноябрь"
+    else -> "Декабрь"
 }
 
 @Composable
@@ -364,16 +574,13 @@ private fun WeekArrow(symbol: String, onClick: () -> Unit, enabled: Boolean) {
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = CircleShape,
+        shape = RoundedCornerShape(13.dp),
         color = if (enabled) BruColors.surface else BruColors.background,
         border = BorderStroke(1.dp, if (enabled) BruColors.outline else BruColors.outline.copy(alpha = 0.45f)),
     ) {
-        Text(
-            symbol,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            color = if (enabled) BruColors.foreground else BruColors.dim.copy(alpha = 0.55f),
-            fontSize = 19.sp,
-        )
+        Box(Modifier.size(width = 44.dp, height = 42.dp), contentAlignment = Alignment.Center) {
+            Text(symbol, color = if (enabled) BruColors.foreground else BruColors.dim.copy(alpha = 0.55f), fontSize = 25.sp)
+        }
     }
 }
 
@@ -383,6 +590,7 @@ private fun DayPill(
     selected: Boolean,
     isToday: Boolean,
     hasLessons: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     val scale by animateFloatAsState(if (selected) 1.04f else 1f, animationSpec = tween(180), label = "day-select-scale")
@@ -398,13 +606,22 @@ private fun DayPill(
             .clip(RoundedCornerShape(17.dp))
             .background(if (selected) BruColors.indigo.copy(alpha = 0.16f) else BruColors.surface)
             .border(1.dp, borderColor, RoundedCornerShape(17.dp))
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(weekdayShort(date), color = if (selected) BruColors.cyan else BruColors.muted, fontSize = 9.sp, letterSpacing = 0.5.sp)
-        Text(date.dayOfMonth.toString().padStart(2, '0'), color = BruColors.foreground, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(weekdayShort(date), color = when {
+            selected -> BruColors.cyan
+            enabled -> BruColors.muted
+            else -> BruColors.dim.copy(alpha = 0.45f)
+        }, fontSize = 9.sp, letterSpacing = 0.5.sp)
+        Text(
+            date.dayOfMonth.toString().padStart(2, '0'),
+            color = if (enabled) BruColors.foreground else BruColors.dim.copy(alpha = 0.45f),
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+        )
         Box(
             Modifier
                 .size(4.dp)
@@ -687,9 +904,9 @@ private fun FirstProfileCard(onAdd: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("01 / ПЕРВЫЙ ПРОФИЛЬ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.2.sp)
-            Text("Ваш кампус —\nв одном ритме.", color = BruColors.foreground, fontSize = 26.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold)
+            Text("Прогуливайте по графику.", color = BruColors.foreground, fontSize = 26.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "Добавьте группу, расписание друга или преподавателя. Расписание сохранится на устройстве и останется доступным офлайн.",
+                "Добавьте группу, друга или преподавателя. Идеальный хаос требует идеального расписания.",
                 color = BruColors.muted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,

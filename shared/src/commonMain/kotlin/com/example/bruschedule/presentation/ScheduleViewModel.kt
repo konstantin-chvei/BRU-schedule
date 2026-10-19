@@ -3,8 +3,14 @@ package com.example.bruschedule.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bruschedule.domain.model.AcademicTask
+import com.example.bruschedule.domain.model.AcademicTrack
 import com.example.bruschedule.domain.model.AppearancePreferences
+import com.example.bruschedule.domain.model.DEFAULT_DAILY_MESSAGES
+import com.example.bruschedule.domain.model.SemesterSchedulePreferences
 import com.example.bruschedule.domain.model.DomainIds
+import com.example.bruschedule.domain.model.DeadlineLinkType
+import com.example.bruschedule.domain.model.DeadlineReminderPreferences
+import com.example.bruschedule.domain.model.TaskReminderMode
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
@@ -15,9 +21,16 @@ import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
 import com.example.bruschedule.domain.repository.AppearancePreferencesRepository
+import com.example.bruschedule.domain.repository.DailyMessagesRepository
+import com.example.bruschedule.domain.repository.DeadlineNotificationScheduler
+import com.example.bruschedule.domain.repository.DeadlineReminderPreferencesRepository
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
+import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepository
+import com.example.bruschedule.domain.usecase.DailyMessageSelector
+import com.example.bruschedule.domain.usecase.DeadlineReminderPolicy
+import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
 import com.example.bruschedule.domain.usecase.RefreshOutcome
 import com.example.bruschedule.domain.usecase.RefreshScheduleUseCase
 import kotlinx.coroutines.CancellationException
@@ -37,8 +50,10 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
@@ -48,7 +63,6 @@ import kotlinx.datetime.toLocalDateTime
 enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS }
 
 private const val STARTUP_REFRESH_RETRY_COOLDOWN_MILLIS = 12 * 60 * 60 * 1000L
-private const val MINIMUM_SEMESTER_COVERAGE_DAYS = 120
 
 data class LessonUiItem(
     val lesson: Lesson,
@@ -61,6 +75,8 @@ data class DeadlineUiItem(
     val subjectName: String,
     val profileName: String?,
     val lessonType: LessonType?,
+    val linkLabel: String,
+    val linkDetail: String? = null,
 )
 
 data class ProfileSearchUiState(
@@ -77,8 +93,13 @@ data class ScheduleUiState(
     val selectedDate: LocalDate = LocalDate(2026, 1, 1),
     val todayDate: LocalDate = LocalDate(2026, 1, 1),
     val weekDatesWithLessons: Set<String> = emptySet(),
+    val allScheduleDatesWithLessons: Set<String> = emptySet(),
     val lessons: List<LessonUiItem> = emptyList(),
+    val availableLessons: List<Lesson> = emptyList(),
     val deadlines: List<DeadlineUiItem> = emptyList(),
+    val deadlineReminderPreferences: DeadlineReminderPreferences = DeadlineReminderPreferences(),
+    val semesterSchedulePreferences: SemesterSchedulePreferences = SemesterSchedulePreferences(),
+    val dailyMessage: String = DEFAULT_DAILY_MESSAGES.first(),
     val destination: MainDestination = MainDestination.SCHEDULE,
     val syncState: ProfileSyncState? = null,
     val isRefreshing: Boolean = false,
@@ -92,6 +113,21 @@ data class ScheduleUiState(
     val isLoading: Boolean = true,
 )
 
+data class DeadlineDraft(
+    val title: String,
+    val description: String,
+    val dueDateIso: String,
+    val linkType: DeadlineLinkType,
+    val profileId: String?,
+    val subjectName: String,
+    val lessonId: String?,
+    val reminderMode: TaskReminderMode,
+    val reminderOffsetsMinutes: List<Int>,
+    val lessonToPersist: Lesson? = null,
+    val taskId: String? = null,
+    val isCompleted: Boolean = false,
+)
+
 /** UI-facing MVVM state holder; local SQLDelight flows drive the screen before any network call. */
 class ScheduleViewModel(
     private val schedules: ScheduleRepository,
@@ -100,6 +136,10 @@ class ScheduleViewModel(
     private val profileCatalog: ScheduleProfileCatalogRepository,
     private val refreshSchedule: RefreshScheduleUseCase,
     private val appearancePreferences: AppearancePreferencesRepository,
+    private val deadlineReminderPreferencesRepository: DeadlineReminderPreferencesRepository,
+    private val semesterSchedulePreferencesRepository: SemesterSchedulePreferencesRepository,
+    private val dailyMessagesRepository: DailyMessagesRepository,
+    private val deadlineNotificationScheduler: DeadlineNotificationScheduler,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
     private val initialDate = today()
@@ -115,6 +155,37 @@ class ScheduleViewModel(
         started = SharingStarted.Eagerly,
         initialValue = AppearancePreferences(),
     )
+    private val reminderPreferences = deadlineReminderPreferencesRepository.observe().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = DeadlineReminderPreferences(),
+    )
+    private val semesterPreferences = semesterSchedulePreferencesRepository.observe().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = SemesterSchedulePreferences(),
+    )
+    private val dailyMessages = dailyMessagesRepository.observeMessages().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = DEFAULT_DAILY_MESSAGES,
+    )
+
+    private data class ScreenPreferencesState(
+        val appearance: AppearancePreferences,
+        val deadlineReminders: DeadlineReminderPreferences,
+        val semester: SemesterSchedulePreferences,
+        val dailyMessages: List<String>,
+    )
+
+    private val screenPreferences = combine(
+        appearance,
+        reminderPreferences,
+        semesterPreferences,
+        dailyMessages,
+    ) { currentAppearance, reminders, semester, messages ->
+        ScreenPreferencesState(currentAppearance, reminders, semester, messages)
+    }
 
     private data class BaseState(
         val profiles: List<ScheduleProfile>,
@@ -178,28 +249,38 @@ class ScheduleViewModel(
         SelectionState(core, currentSyncState, transient)
     }
 
-    val uiState = combine(baseState, selectionState, appearance) { base, selection, appearancePreferences ->
+    val uiState = combine(baseState, selectionState, screenPreferences) { base, selection, preferences ->
         val selectedId = selection.core.profileId ?: base.profiles.firstOrNull()?.id
         val selectedProfile = base.profiles.firstOrNull { it.id == selectedId }
         val profileLessons = if (selectedProfile == null) emptyList() else base.lessons.filter {
             it.profileId == selectedProfile.id
         }
-        val scheduleDates = profileLessons.mapNotNull { lesson ->
-            runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull()
-        }
-        val coverageStartDate = scheduleDates.minOrNull()
-        val coverageEndDate = scheduleDates.maxOrNull()
         val now = selection.transient.now
         val nowLocal = kotlinx.datetime.Instant.fromEpochMilliseconds(now)
             .toLocalDateTime(TimeZone.currentSystemDefault())
-        val weekStart = selection.core.date.minus(DatePeriod(days = selection.core.date.dayOfWeek.isoDayNumber - 1))
+        val todayDate = nowLocal.date
+        val coverageStartDate = selectedProfile?.let { SemesterCoveragePolicy.coverageStartDate(todayDate) }
+        val coverageEndDate = selectedProfile?.let {
+            SemesterCoveragePolicy.coverageEndDate(todayDate, preferences.semester)
+        }
+        val displayedDate = when {
+            selection.core.date < todayDate -> todayDate
+            coverageEndDate != null && selection.core.date > coverageEndDate -> coverageEndDate
+            else -> selection.core.date
+        }
+        val visibleProfileLessons = profileLessons.filter { lesson ->
+            val lessonDate = runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull()
+            lessonDate != null && lessonDate >= todayDate &&
+                (coverageEndDate == null || lessonDate <= coverageEndDate)
+        }
+        val weekStart = displayedDate.minus(DatePeriod(days = displayedDate.dayOfWeek.isoDayNumber - 1))
         val weekEnd = weekStart.plus(DatePeriod(days = 6))
-        val lessonsInWeek = profileLessons.filter {
+        val lessonsInWeek = visibleProfileLessons.filter {
             it.lessonDate >= weekStart.toString() && it.lessonDate <= weekEnd.toString()
         }
         val datesWithLessons = lessonsInWeek.mapTo(mutableSetOf()) { it.lessonDate }
-        val lessonsForDate = profileLessons
-            .filter { it.lessonDate == selection.core.date.toString() }
+        val lessonsForDate = visibleProfileLessons
+            .filter { it.lessonDate == displayedDate.toString() }
             .sortedWith(compareBy({ it.startTime }, { it.slotNumber }))
             .map { lesson ->
                 LessonUiItem(
@@ -213,31 +294,48 @@ class ScheduleViewModel(
         val orderedDeadlines = base.tasks
             .sortedWith(compareBy<AcademicTask>({ it.dueDate }, { it.isCompleted }, { it.taskTitle }))
             .map { task ->
-                val linkedLesson = lessonById[task.lessonId]
+                val linkedLesson = task.lessonId?.let(lessonById::get)
                 val taskProfileId = task.profileId ?: linkedLesson?.profileId
                 DeadlineUiItem(
                     task = task,
-                    subjectName = linkedLesson?.subjectName
-                        ?: task.subjectNameSnapshot.ifBlank { "Предмет не указан" },
+                    subjectName = when (task.linkType) {
+                        DeadlineLinkType.NONE -> "Общий дедлайн"
+                        DeadlineLinkType.SUBJECT -> linkedLesson?.subjectName
+                            ?: task.subjectNameSnapshot.ifBlank { "Предмет не указан" }
+                        DeadlineLinkType.LESSON -> linkedLesson?.subjectName
+                            ?: task.subjectNameSnapshot.ifBlank { "Пара" }
+                    },
                     profileName = taskProfileId?.let { profileById[it]?.name },
                     lessonType = linkedLesson?.type,
+                    linkLabel = when (task.linkType) {
+                        DeadlineLinkType.SUBJECT -> "ПРЕДМЕТ"
+                        DeadlineLinkType.LESSON -> "КОНКРЕТНАЯ ПАРА"
+                        DeadlineLinkType.NONE -> "БЕЗ ПРИВЯЗКИ"
+                    },
+                    linkDetail = linkedLesson?.takeIf { task.linkType == DeadlineLinkType.LESSON }
+                        ?.let { "${it.lessonDate} · ${it.startTime}" },
                 )
             }
         ScheduleUiState(
             profiles = base.profiles,
             selectedProfile = selectedProfile,
-            selectedDate = selection.core.date,
-            todayDate = nowLocal.date,
+            selectedDate = displayedDate,
+            todayDate = todayDate,
             weekDatesWithLessons = datesWithLessons,
+            allScheduleDatesWithLessons = visibleProfileLessons.mapTo(mutableSetOf()) { it.lessonDate },
             lessons = lessonsForDate,
+            availableLessons = base.lessons,
             deadlines = orderedDeadlines,
+            deadlineReminderPreferences = preferences.deadlineReminders,
+            semesterSchedulePreferences = preferences.semester,
+            dailyMessage = DailyMessageSelector.forDate(todayDate, preferences.dailyMessages),
             destination = selection.core.destination,
             syncState = if (selectedId == selection.core.profileId) selection.syncState else null,
             isRefreshing = selection.transient.refreshing,
             hasRemoteSchedule = profileLessons.any { !it.isCustom },
             scheduleCoverageStartDate = coverageStartDate,
             scheduleCoverageEndDate = coverageEndDate,
-            appearance = appearancePreferences,
+            appearance = preferences.appearance,
             notice = selection.transient.notice,
             profileSearch = selection.transient.profileSearch,
             nowEpochMillis = now,
@@ -250,6 +348,9 @@ class ScheduleViewModel(
     )
 
     init {
+        viewModelScope.launch {
+            dailyMessagesRepository.refresh()
+        }
         viewModelScope.launch {
             schedules.observeProfiles().collect { profiles ->
                 val activeId = selectedProfileId.value
@@ -278,17 +379,20 @@ class ScheduleViewModel(
     }
 
     fun selectDate(date: LocalDate) {
-        selectedDate.value = date
+        val current = uiState.value
+        val start = current.scheduleCoverageStartDate ?: return
+        val end = current.scheduleCoverageEndDate ?: return
+        if (date in start..end) selectedDate.value = date
     }
 
     fun changeWeek(weeks: Int) {
         val current = uiState.value
         val firstCoveredDate = current.scheduleCoverageStartDate ?: return
         val lastCoveredDate = current.scheduleCoverageEndDate ?: return
-        val targetDate = selectedDate.value.plus(DatePeriod(days = weeks * 7))
+        val targetDate = current.selectedDate.plus(DatePeriod(days = weeks * 7))
         val targetWeek = targetDate.startOfWeek()
         if (targetWeek < firstCoveredDate.startOfWeek() || targetWeek > lastCoveredDate.startOfWeek()) return
-        selectedDate.value = targetDate
+        selectedDate.value = if (targetDate > lastCoveredDate) lastCoveredDate else targetDate
     }
 
     fun showDestination(destination: MainDestination) {
@@ -305,6 +409,48 @@ class ScheduleViewModel(
 
     fun resetLessonColors() = updateAppearance {
         appearancePreferences.resetLessonColors()
+    }
+
+    fun setAcademicTrack(track: AcademicTrack) {
+        val current = semesterPreferences.value
+        if (current.track == track) return
+        val endDate = when (track) {
+            AcademicTrack.IFZO -> current.ifzoSessionEndDateIso
+            AcademicTrack.BELARUSIAN, AcademicTrack.RUSSIAN ->
+                SemesterSchedulePreferences.defaultSessionEndDate(track)
+        }
+        updateSemesterSchedulePreferences(current.copy(track = track, sessionEndDateIso = endDate))
+    }
+
+    fun setIfzoSessionEndDate(sessionEndDateIso: String) {
+        val normalizedDate = runCatching { LocalDate.parse(sessionEndDateIso).toString() }.getOrNull()
+        if (normalizedDate == null) {
+            notice.value = "Введите дату последнего экзамена в формате ДД.ММ.ГГГГ"
+            return
+        }
+        updateSemesterSchedulePreferences(
+            semesterPreferences.value.copy(
+                track = AcademicTrack.IFZO,
+                sessionEndDateIso = normalizedDate,
+                ifzoSessionEndDateIso = normalizedDate,
+            ),
+        )
+    }
+
+    private fun updateSemesterSchedulePreferences(preferences: SemesterSchedulePreferences) {
+        viewModelScope.launch {
+            try {
+                semesterSchedulePreferencesRepository.update(preferences)
+                val today = today()
+                val end = SemesterCoveragePolicy.coverageEndDate(today, preferences)
+                if (selectedDate.value < today || selectedDate.value > end) selectedDate.value = today
+                selectedProfileId.value?.let(::launchRefresh)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = "Не удалось сохранить период семестра: ${failure.message ?: "ошибка настроек"}"
+            }
+        }
     }
 
     private fun updateAppearance(update: suspend () -> Unit) {
@@ -331,12 +477,18 @@ class ScheduleViewModel(
     private suspend fun refreshIfSemesterCoverageIsMissing(profileId: String) {
         try {
             val cachedLessons = withContext(Dispatchers.Default) { schedules.getLessons(profileId) }
-            val coverageEnd = cachedLessons.asSequence()
+            val today = today()
+            val desiredCoverageEnd = SemesterCoveragePolicy.coverageEndDate(
+                today,
+                semesterSchedulePreferencesRepository.observe().first(),
+            )
+            val remoteDates = cachedLessons.asSequence()
                 .filterNot(Lesson::isCustom)
                 .mapNotNull { lesson -> runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull() }
-                .maxOrNull()
-            val desiredCoverageEnd = today().plus(DatePeriod(days = MINIMUM_SEMESTER_COVERAGE_DAYS))
-            if (coverageEnd != null && coverageEnd >= desiredCoverageEnd) return
+                .toList()
+            val coverageEnd = remoteDates.maxOrNull()
+            val containsDatesOutsideRequestedRange = remoteDates.any { it < today || it > desiredCoverageEnd }
+            if (coverageEnd != null && coverageEnd >= desiredCoverageEnd && !containsDatesOutsideRequestedRange) return
 
             val sync = syncRepository.observeSyncState(profileId).first()
             val lastAttempt = sync?.lastAttemptAtEpochMillis
@@ -377,8 +529,12 @@ class ScheduleViewModel(
     fun deleteSelectedProfile() {
         val selected = uiState.value.selectedProfile ?: return
         val nextProfileId = uiState.value.profiles.firstOrNull { it.id != selected.id }?.id
+        val linkedTaskIds = uiState.value.deadlines
+            .filter { it.task.profileId == selected.id }
+            .map { it.task.id }
         viewModelScope.launch {
             try {
+                linkedTaskIds.forEach { deadlineNotificationScheduler.cancel(it) }
                 schedules.deleteProfile(selected.id)
                 selectedProfileId.value = nextProfileId
                 notice.value = "Расписание «${selected.name}» и связанные локальные данные удалены"
@@ -487,46 +643,107 @@ class ScheduleViewModel(
         )
     }
 
-    fun addTask(
-        lesson: Lesson,
-        title: String,
-        description: String,
-        dueDateIso: String,
-        persistLessonOverride: Boolean = false,
-    ) {
-        if (title.isBlank()) {
+    fun addTask(draft: DeadlineDraft) {
+        if (draft.title.isBlank()) {
             notice.value = "Введите название задания"
             return
         }
         val dueDate = runCatching {
-            LocalDate.parse(dueDateIso.trim())
-                .atStartOfDayIn(TimeZone.currentSystemDefault())
+            val date = LocalDate.parse(draft.dueDateIso.trim())
+            LocalDateTime(date, LocalTime(hour = 9, minute = 0))
+                .toInstant(TimeZone.currentSystemDefault())
                 .toEpochMilliseconds()
         }.getOrElse {
             notice.value = "Дата должна быть в формате ГГГГ-ММ-ДД"
             return
         }
+        if (draft.linkType == DeadlineLinkType.SUBJECT &&
+            (draft.profileId.isNullOrBlank() || draft.subjectName.isBlank())
+        ) {
+            notice.value = "Выберите профиль и предмет"
+            return
+        }
+        if (draft.linkType == DeadlineLinkType.LESSON && draft.lessonId.isNullOrBlank()) {
+            notice.value = "Выберите свою пару"
+            return
+        }
         val task = AcademicTask(
-            id = DomainIds.new("task"),
-            lessonId = lesson.id,
-            taskTitle = title.trim(),
-            description = description.trim(),
+            id = draft.taskId ?: DomainIds.new("task"),
+            lessonId = draft.lessonId.takeIf { draft.linkType == DeadlineLinkType.LESSON },
+            taskTitle = draft.title.trim(),
+            description = draft.description.trim(),
             dueDate = dueDate,
-            isCompleted = false,
-            profileId = lesson.profileId,
-            subjectNameSnapshot = lesson.subjectName,
+            isCompleted = draft.isCompleted,
+            profileId = draft.profileId.takeIf { draft.linkType != DeadlineLinkType.NONE },
+            subjectNameSnapshot = draft.subjectName.trim().takeIf { draft.linkType != DeadlineLinkType.NONE }.orEmpty(),
+            linkType = draft.linkType,
+            reminderMode = draft.reminderMode,
+            reminderOffsetsMinutes = draft.reminderOffsetsMinutes.distinct().sortedDescending(),
         )
         viewModelScope.launch {
-            if (persistLessonOverride || schedules.getLesson(lesson.id) == null) {
-                schedules.saveCustomLesson(lesson)
+            try {
+                draft.lessonToPersist?.let { schedules.saveCustomLesson(it) }
+                tasks.saveTask(task)
+                val remindersReady = syncTaskReminders(task, reminderPreferences.value)
+                notice.value = if (!remindersReady) {
+                    "Дедлайн сохранён, но разрешение на уведомления не выдано"
+                } else if (draft.taskId == null) {
+                    "Дедлайн добавлен"
+                } else {
+                    "Изменения дедлайна сохранены"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = "Не удалось сохранить дедлайн: ${failure.message ?: "ошибка локального хранилища"}"
             }
-            tasks.saveTask(task)
-            notice.value = "Дедлайн добавлен"
         }
     }
 
     fun setTaskCompleted(taskId: String, completed: Boolean) {
-        viewModelScope.launch { tasks.setTaskCompleted(taskId, completed) }
+        viewModelScope.launch {
+            tasks.setTaskCompleted(taskId, completed)
+            val task = uiState.value.deadlines.firstOrNull { it.task.id == taskId }?.task
+            if (completed) {
+                deadlineNotificationScheduler.cancel(taskId)
+            } else if (task != null && !syncTaskReminders(task.copy(isCompleted = false), reminderPreferences.value)) {
+                notice.value = "Дедлайн открыт, но разрешение на уведомления не выдано"
+            }
+        }
+    }
+
+    fun setDeadlineReminderPreferences(preferences: DeadlineReminderPreferences) {
+        viewModelScope.launch {
+            val granted = !preferences.enabled || deadlineNotificationScheduler.requestPermission()
+            val savedPreferences = if (granted) preferences else preferences.copy(enabled = false)
+            deadlineReminderPreferencesRepository.update(savedPreferences)
+            val currentTasks = tasks.observeTasks().first()
+            if (!savedPreferences.enabled) {
+                currentTasks.forEach { deadlineNotificationScheduler.cancel(it.id) }
+            } else {
+                currentTasks.forEach { syncTaskReminders(it, savedPreferences, requestPermission = false) }
+            }
+            notice.value = when {
+                !granted -> "Разрешите уведомления в настройках устройства, чтобы включить напоминания"
+                !savedPreferences.enabled -> "Напоминания отключены"
+                else -> "Настройки напоминаний сохранены"
+            }
+        }
+    }
+
+    private suspend fun syncTaskReminders(
+        task: AcademicTask,
+        preferences: DeadlineReminderPreferences,
+        requestPermission: Boolean = true,
+    ): Boolean {
+        deadlineNotificationScheduler.cancel(task.id)
+        val offsets = DeadlineReminderPolicy.effectiveOffsets(task, preferences)
+        if (offsets.isEmpty()) return true
+        if (requestPermission && !deadlineNotificationScheduler.requestPermission()) {
+            deadlineReminderPreferencesRepository.update(preferences.copy(enabled = false))
+            return false
+        }
+        return deadlineNotificationScheduler.schedule(task, offsets)
     }
 
     private fun LocalDate.startOfWeek(): LocalDate =

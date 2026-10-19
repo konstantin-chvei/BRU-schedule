@@ -1,6 +1,6 @@
 package com.example.bruschedule.data.remote
 
-/** Fetches HTML from rasp.bru.by; the core use case depends on domain.repository's outbound port. */
+/** Fetches allow-listed remote documents (schedule HTML and the public GitHub messages text file). */
 interface HtmlTransport {
     suspend fun get(url: String): String
 }

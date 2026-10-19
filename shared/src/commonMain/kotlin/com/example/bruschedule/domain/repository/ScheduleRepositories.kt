@@ -2,6 +2,7 @@ package com.example.bruschedule.domain.repository
 
 import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.AppearancePreferences
+import com.example.bruschedule.domain.model.SemesterSchedulePreferences
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleAppTheme
@@ -59,4 +60,10 @@ interface AppearancePreferencesRepository {
     suspend fun setTheme(theme: ScheduleAppTheme)
     suspend fun setLessonColor(type: LessonType, colorHex: String)
     suspend fun resetLessonColors()
+}
+
+/** Persisted session track and final session date used by the semester calendar. */
+interface SemesterSchedulePreferencesRepository {
+    fun observe(): Flow<SemesterSchedulePreferences>
+    suspend fun update(preferences: SemesterSchedulePreferences)
 }

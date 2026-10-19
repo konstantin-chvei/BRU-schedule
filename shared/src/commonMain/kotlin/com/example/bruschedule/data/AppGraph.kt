@@ -10,8 +10,17 @@ import com.example.bruschedule.data.remote.createPlatformHtmlTransport
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.data.scraper.BruScheduleScraper
 import com.example.bruschedule.data.settings.KmpSettingsAppearanceRepository
+import com.example.bruschedule.data.settings.KmpSettingsDeadlineReminderRepository
+import com.example.bruschedule.data.settings.KmpSettingsSemesterScheduleRepository
+import com.example.bruschedule.data.settings.KmpSettingsDailyMessagesRepository
+import com.example.bruschedule.data.remote.GitHubDailyMessagesRemoteDataSource
 import com.example.bruschedule.data.settings.KmpSettingsParserVersionFlags
 import com.example.bruschedule.domain.repository.AppearancePreferencesRepository
+import com.example.bruschedule.domain.repository.DailyMessagesRepository
+import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepository
+import com.example.bruschedule.domain.repository.DeadlineNotificationScheduler
+import com.example.bruschedule.domain.repository.DeadlineReminderPreferencesRepository
+import com.example.bruschedule.domain.repository.NoOpDeadlineNotificationScheduler
 import com.example.bruschedule.domain.repository.ParserVersionRepository
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
@@ -29,17 +38,28 @@ data class AppGraph(
     val refreshSchedule: RefreshScheduleUseCase,
     val versionFlags: ParserVersionRepository,
     val appearancePreferences: AppearancePreferencesRepository,
+    val deadlineReminderPreferences: DeadlineReminderPreferencesRepository,
+    val semesterSchedulePreferences: SemesterSchedulePreferencesRepository,
+    val dailyMessages: DailyMessagesRepository,
+    val deadlineNotificationScheduler: DeadlineNotificationScheduler,
 )
 
 fun createAppGraph(
     driver: SqlDriver,
     settings: Settings = Settings(),
     transport: HtmlTransport = createPlatformHtmlTransport(),
+    deadlineNotificationScheduler: DeadlineNotificationScheduler = NoOpDeadlineNotificationScheduler(),
 ): AppGraph {
     val database = ScheduleDatabase(driver)
     val localRepository = SqlDelightScheduleRepository(database)
     val versionFlags = KmpSettingsParserVersionFlags(settings)
     val appearancePreferences = KmpSettingsAppearanceRepository(settings)
+    val deadlineReminderPreferences = KmpSettingsDeadlineReminderRepository(settings)
+    val semesterSchedulePreferences = KmpSettingsSemesterScheduleRepository(settings)
+    val dailyMessages = KmpSettingsDailyMessagesRepository(
+        settings = settings,
+        remote = GitHubDailyMessagesRemoteDataSource(transport),
+    )
 
     // SQLDelight owns real migrations. This KMP Settings marker is useful for diagnostics/upgrade
     // gates and is intentionally not used as a replacement for database schema migrations.
@@ -61,10 +81,15 @@ fun createAppGraph(
             remote = remote,
             scraper = scraper,
             versionFlags = versionFlags,
+            semesterSchedulePreferences = semesterSchedulePreferences,
         ),
         versionFlags = versionFlags,
         appearancePreferences = appearancePreferences,
+        deadlineReminderPreferences = deadlineReminderPreferences,
+        semesterSchedulePreferences = semesterSchedulePreferences,
+        dailyMessages = dailyMessages,
+        deadlineNotificationScheduler = deadlineNotificationScheduler,
     )
 }
 
-private const val CURRENT_DATABASE_MARKER = 1
+private const val CURRENT_DATABASE_MARKER = 2

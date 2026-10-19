@@ -59,9 +59,48 @@ data class Lesson(
     val sourceColorHex: String? = null,
 )
 
+enum class DeadlineLinkType {
+    SUBJECT,
+    LESSON,
+    NONE,
+}
+
+enum class TaskReminderMode {
+    /** Follow the app-wide reminder settings. */
+    INHERIT,
+    /** Use the selected reminder intervals for this task only. */
+    CUSTOM,
+    /** Never send reminders for this task. */
+    NONE,
+}
+
+data class DeadlineReminderPreferences(
+    val enabled: Boolean = true,
+    val offsetsMinutes: List<Int> = listOf(24 * 60),
+)
+
+object DeadlineReminderIntervals {
+    const val FIFTEEN_MINUTES = 15
+    const val ONE_HOUR = 60
+    const val ONE_DAY = 24 * 60
+    const val THREE_DAYS = 3 * 24 * 60
+    const val ONE_WEEK = 7 * 24 * 60
+
+    val choices = listOf(FIFTEEN_MINUTES, ONE_HOUR, ONE_DAY, THREE_DAYS, ONE_WEEK)
+
+    fun label(minutes: Int): String = when (minutes) {
+        FIFTEEN_MINUTES -> "15 мин"
+        ONE_HOUR -> "1 час"
+        ONE_DAY -> "1 день"
+        THREE_DAYS -> "3 дня"
+        ONE_WEEK -> "1 неделя"
+        else -> "${minutes} мин"
+    }
+}
+
 data class AcademicTask(
     val id: String,
-    val lessonId: String,
+    val lessonId: String? = null,
     val taskTitle: String,
     val description: String,
     /** Unix epoch milliseconds. */
@@ -70,6 +109,10 @@ data class AcademicTask(
     /** Kept as a display fallback if a lesson is later removed from the live schedule. */
     val profileId: String? = null,
     val subjectNameSnapshot: String = "",
+    val linkType: DeadlineLinkType = if (lessonId == null) DeadlineLinkType.NONE else DeadlineLinkType.SUBJECT,
+    val reminderMode: TaskReminderMode = TaskReminderMode.INHERIT,
+    /** Minute offsets before dueDate; used only when reminderMode is CUSTOM. */
+    val reminderOffsetsMinutes: List<Int> = emptyList(),
 )
 
 data class ProfileCandidate(
