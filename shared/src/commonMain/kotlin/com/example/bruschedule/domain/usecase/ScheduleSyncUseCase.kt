@@ -7,7 +7,7 @@ import com.example.bruschedule.domain.repository.ScheduleSyncRepository
 import com.example.bruschedule.domain.repository.ParserVersionRepository
 import com.example.bruschedule.domain.repository.ScheduleHtmlParser
 import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 
 sealed interface RefreshOutcome {
