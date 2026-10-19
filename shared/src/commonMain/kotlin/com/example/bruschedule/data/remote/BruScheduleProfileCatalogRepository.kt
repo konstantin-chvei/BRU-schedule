@@ -15,10 +15,11 @@ class BruScheduleProfileCatalogRepository(
         require(query.trim().length >= 2) { "Введите не менее двух символов для поиска" }
         val candidates = when (type) {
             ScheduleProfileType.TEACHER -> searchTeachers()
-            ScheduleProfileType.GROUP -> searchGroups()
+            ScheduleProfileType.GROUP -> searchGroups(query.trim())
         }
         return candidates
             .filter { parser.matchesQuery(it, query) }
+            .sortedBy { if (parser.isExactMatch(it, query)) 0 else 1 }
             .distinctBy { "${it.type}|${it.sourceUrl}|${it.sourceKey}" }
             .take(40)
     }
@@ -29,7 +30,7 @@ class BruScheduleProfileCatalogRepository(
         return parser.teacherCandidates(html, url)
     }
 
-    private suspend fun searchGroups(): List<ProfileCandidate> {
+    private suspend fun searchGroups(query: String): List<ProfileCandidate> {
         val results = mutableListOf<ProfileCandidate>()
         var lastNetworkError: String? = null
         suspend fun fetchOrNull(url: String): String? = try {
@@ -48,11 +49,23 @@ class BruScheduleProfileCatalogRepository(
         for (root in roots) {
             val rootHtml = fetchOrNull(root) ?: continue
             // Some site editions list every group directly on the root; others expose faculties.
-            results += parser.groupCandidates(rootHtml, root)
-            val facultyUrls = parser.facultyDirectoryUrls(rootHtml, root, ScheduleProfileType.GROUP)
-            for (facultyUrl in facultyUrls) {
-                val facultyHtml = fetchOrNull(facultyUrl) ?: continue
-                results += parser.groupCandidates(facultyHtml, facultyUrl)
+            val rootMatches = parser.groupCandidates(rootHtml, root).filter { parser.matchesQuery(it, query) }
+            val exactRootMatches = rootMatches.filter { parser.isExactMatch(it, query) }
+            if (exactRootMatches.isNotEmpty()) return exactRootMatches
+            results += rootMatches
+
+            for (faculty in parser.facultyDirectories(rootHtml, root, ScheduleProfileType.GROUP)) {
+                val facultyHtml = fetchOrNull(faculty.url) ?: continue
+                val facultyMatches = parser.groupCandidates(facultyHtml, faculty.url, faculty.name).filter {
+                    parser.matchesQuery(it, query)
+                }
+                val exactMatches = facultyMatches.filter { parser.isExactMatch(it, query) }
+                if (exactMatches.isNotEmpty()) {
+                    // Group codes are the lookup key. Stop at the first exact directory match so a
+                    // broken, unrelated faculty page later in the tree cannot fail this search.
+                    return exactMatches
+                }
+                results += facultyMatches
             }
         }
         if (results.isEmpty()) {

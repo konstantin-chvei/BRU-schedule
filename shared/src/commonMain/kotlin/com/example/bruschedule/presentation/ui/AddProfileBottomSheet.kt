@@ -70,7 +70,7 @@ fun AddProfileBottomSheet(
             Text("НОВЫЙ ПРОФИЛЬ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
             Text("Подключить расписание", color = BruColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "Найдите группу или преподавателя в каталоге rasp.bru.by. Источник обновляется автоматически, расписание хранится локально.",
+                "Найдите группу или преподавателя в каталоге rasp.bru.by. У групп показан факультет — проверьте его перед добавлением. Источник обновляется автоматически, расписание хранится локально.",
                 color = BruColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
@@ -169,7 +169,7 @@ private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(candidate.name, color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(candidate.subtitle.ifBlank { "rasp.bru.by" }, color = BruColors.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(candidate.subtitle.ifBlank { "rasp.bru.by" }, color = BruColors.muted, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Text("＋", modifier = Modifier.padding(start = 10.dp), color = BruColors.cyan, fontSize = 18.sp)
         }

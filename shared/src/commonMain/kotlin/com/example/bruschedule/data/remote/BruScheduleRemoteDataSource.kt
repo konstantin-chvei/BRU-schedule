@@ -8,40 +8,79 @@ import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
 import kotlinx.coroutines.CancellationException
 
 /**
- * Resolves a stable faculty/teacher page to the current dated timetable link on every refresh.
- * rasp.bru.by's directory pages are the rolling index: the weeks_YYYYMMDD_YYYYMMDD target changes
- * as the semester advances, so profiles selected from the catalogue store the directory URL.
+ * Resolves a profile through the live site hierarchy on every refresh. Group profiles store a
+ * faculty directory as a hint, but the group code is authoritative: if that hint is stale or points
+ * at an unrelated faculty, resolve the group again from the full-time/part-time indexes.
  */
 class BruScheduleRemoteDataSource(
     private val transport: HtmlTransport,
     private val directoryParser: BruScheduleDirectoryParser = BruScheduleDirectoryParser(),
 ) : ScheduleRemoteDataSource {
     override suspend fun fetchHtml(profile: ScheduleProfile, window: ScheduleWindow): String {
-        val configuredUrl = profile.sourceUrl
-        if (!configuredUrl.isNullOrBlank()) {
-            val configuredHtml = transport.get(directoryParser.absolutize(BruScheduleDirectoryParser.ROOT, configuredUrl))
-            if (directoryParser.hasScheduleTable(configuredHtml)) return configuredHtml
-            directoryParser.scheduleUrlFromIndex(configuredHtml, configuredUrl, profile, window)?.let { scheduleUrl ->
-                return transport.get(scheduleUrl)
+        var lastNetworkError: String? = null
+        suspend fun fetchOrNull(url: String): String? = try {
+            transport.get(url)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            lastNetworkError = failure.message?.takeIf(String::isNotBlank) ?: "Неизвестная ошибка сети"
+            null
+        }
+
+        val configuredUrl = profile.sourceUrl?.takeIf(String::isNotBlank)?.let {
+            directoryParser.absolutize(BruScheduleDirectoryParser.ROOT, it)
+        }
+        var configuredPage: Pair<String, String>? = null
+        var failedConfiguredUrl: String? = null
+        if (configuredUrl != null) {
+            val configuredHtml = fetchOrNull(configuredUrl)
+            if (configuredHtml != null) {
+                configuredPage = configuredUrl to configuredHtml
+                if (directoryParser.hasScheduleTable(configuredHtml)) return configuredHtml
+
+                val scheduleUrl = directoryParser.scheduleUrlFromIndex(
+                    html = configuredHtml,
+                    pageUrl = configuredUrl,
+                    profile = profile,
+                    window = window,
+                )
+                if (scheduleUrl != null) {
+                    val scheduleHtml = fetchOrNull(scheduleUrl)
+                    if (scheduleHtml != null && directoryParser.hasScheduleTable(scheduleHtml)) return scheduleHtml
+                }
+            } else {
+                failedConfiguredUrl = configuredUrl
             }
-            if (profile.type == ScheduleProfileType.GROUP) {
-                findGroupSchedule(profile, window, configuredPage = configuredUrl to configuredHtml)?.let { return it }
-            }
-            error("Не удалось найти расписание «${profile.name}» на странице каталога")
         }
 
         return when (profile.type) {
+            ScheduleProfileType.GROUP -> {
+                findGroupSchedule(profile, window, configuredPage, failedConfiguredUrl)?.let { return it }
+                lastNetworkError?.let { detail ->
+                    error("Не удалось найти расписание группы «${profile.name}». Последняя ошибка сайта: $detail")
+                }
+                error("Группа «${profile.name}» не найдена в каталогах дневной и заочной форм")
+            }
             ScheduleProfileType.TEACHER -> {
-                val indexHtml = transport.get(BruScheduleDirectoryParser.TEACHERS_INDEX)
+                val indexUrl = BruScheduleDirectoryParser.TEACHERS_INDEX
+                val indexHtml = if (configuredPage?.first == indexUrl) {
+                    configuredPage.second
+                } else {
+                    fetchOrNull(indexUrl)
+                } ?: error("Не удалось открыть каталог преподавателей rasp.bru.by: ${lastNetworkError ?: "ответ отсутствует"}")
+
                 val teacherUrl = directoryParser.scheduleUrlFromIndex(
                     html = indexHtml,
-                    pageUrl = BruScheduleDirectoryParser.TEACHERS_INDEX,
+                    pageUrl = indexUrl,
                     profile = profile,
-                ) ?: error("Преподаватель «${profile.name}» не найден в разделе преподавателей")
-                transport.get(teacherUrl)
+                ) ?: error("Преподаватель «${profile.name}» не найден в каталоге rasp.bru.by")
+                val teacherHtml = fetchOrNull(teacherUrl)
+                    ?: error("Не удалось загрузить страницу преподавателя «${profile.name}»: ${lastNetworkError ?: "ответ отсутствует"}")
+                if (!directoryParser.hasScheduleTable(teacherHtml)) {
+                    error("На странице преподавателя «${profile.name}» не найдена таблица расписания")
+                }
+                teacherHtml
             }
-            ScheduleProfileType.GROUP -> findGroupSchedule(profile, window)
-                ?: error("Группа «${profile.name}» не найдена в дневной или заочной форме")
         }
     }
 
@@ -49,6 +88,7 @@ class BruScheduleRemoteDataSource(
         profile: ScheduleProfile,
         window: ScheduleWindow,
         configuredPage: Pair<String, String>? = null,
+        failedConfiguredUrl: String? = null,
     ): String? {
         var lastNetworkError: String? = null
         suspend fun fetchOrNull(url: String): String? = try {
@@ -65,26 +105,33 @@ class BruScheduleRemoteDataSource(
             BruScheduleDirectoryParser.PART_TIME_INDEX,
         )
         for (root in roots) {
+            if (root == failedConfiguredUrl) continue
             val rootHtml = if (configuredPage?.first == root) configuredPage.second else fetchOrNull(root) ?: continue
             val rootLink = directoryParser.scheduleUrlFromIndex(rootHtml, root, profile, window)
             if (rootLink != null) {
-                fetchOrNull(rootLink)?.let { if (directoryParser.hasScheduleTable(it)) return it }
+                val rootSchedule = fetchOrNull(rootLink)
+                if (rootSchedule != null && directoryParser.hasScheduleTable(rootSchedule)) return rootSchedule
             }
 
-            val facultyPages = directoryParser.facultyDirectoryUrls(
+            val facultyPages = directoryParser.facultyDirectories(
                 html = rootHtml,
                 pageUrl = root,
                 type = ScheduleProfileType.GROUP,
             )
-            for (facultyUrl in facultyPages) {
-                val facultyHtml = if (configuredPage?.first == facultyUrl) configuredPage.second else fetchOrNull(facultyUrl) ?: continue
-                val scheduleUrl = directoryParser.scheduleUrlFromIndex(facultyHtml, facultyUrl, profile, window) ?: continue
+            for (faculty in facultyPages) {
+                if (faculty.url == failedConfiguredUrl) continue
+                val facultyHtml = if (configuredPage?.first == faculty.url) {
+                    configuredPage.second
+                } else {
+                    fetchOrNull(faculty.url) ?: continue
+                }
+                val scheduleUrl = directoryParser.scheduleUrlFromIndex(facultyHtml, faculty.url, profile, window) ?: continue
                 val scheduleHtml = fetchOrNull(scheduleUrl) ?: continue
                 if (directoryParser.hasScheduleTable(scheduleHtml)) return scheduleHtml
             }
         }
         lastNetworkError?.let { detail ->
-            error("Ошибка доступа к каталогу расписаний rasp.bru.by: $detail")
+            error("Ошибка доступа к каталогам расписаний rasp.bru.by: $detail")
         }
         return null
     }

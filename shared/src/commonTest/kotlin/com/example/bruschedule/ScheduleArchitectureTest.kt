@@ -1,6 +1,9 @@
 package com.example.bruschedule
 
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
+import com.example.bruschedule.data.remote.BruScheduleProfileCatalogRepository
+import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
+import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.scraper.BruScheduleScraper
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
@@ -10,9 +13,14 @@ import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.usecase.ScheduleMergeStrategy
 import kotlinx.datetime.LocalDate
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ScheduleArchitectureTest {
@@ -97,6 +105,131 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun groupDirectoryRetainsFacultyForExactGroupLookup() {
+        val parser = BruScheduleDirectoryParser()
+        val rootHtml = """
+            <a href="/full_time/%D0%90%D0%B2%D1%82%D0%BE%D0%BC%D0%B5%D1%85%D0%B0%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9%20%D1%84%D0%B0%D0%BA%D1%83%D0%BB%D1%8C%D1%82%D0%B5%D1%82/index.html">
+                🏛️ Автомеханический факультет <small>Групп: 24</small>
+            </a>
+            <a href="/full_time/%D0%A4%D0%B0%D0%BA%D1%83%D0%BB%D1%8C%D1%82%D0%B5%D1%82%20%D1%83%D0%BF%D1%80%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F%20%D0%B8%20%D0%B8%D0%BD%D0%BD%D0%BE%D0%B2%D0%B0%D1%86%D0%B8%D0%B9/index.html">
+                🏛️ Факультет управления и инноваций <small>Групп: 25</small>
+            </a>
+        """.trimIndent()
+        val rootUrl = BruScheduleDirectoryParser.FULL_TIME_INDEX
+        val faculties = parser.facultyDirectories(rootHtml, rootUrl, ScheduleProfileType.GROUP)
+        assertEquals(listOf("Автомеханический факультет", "Факультет управления и инноваций"), faculties.map { it.name })
+
+        val groupHtml = """
+            <h1>🏛️ Автомеханический факультет</h1>
+            <a class="group-link" href="/full_time/auto/%D0%9C%D0%9F%D0%A0-261_weeks_20261019_20261101.html">
+                <strong>МПР-261</strong><small>(МПР-261)</small>
+                <span class="period-label">19.10 – 01.11.2026</span>
+            </a>
+        """.trimIndent()
+        val candidate = parser.groupCandidates(groupHtml, faculties.first().url).single()
+
+        assertEquals("МПР-261", candidate.name)
+        assertEquals(faculties.first().url, candidate.sourceUrl)
+        assertEquals("Автомеханический факультет · 19.10 – 01.11.2026", candidate.subtitle)
+        assertTrue(parser.isExactMatch(candidate, "МПР-261"))
+        assertTrue(parser.matchesQuery(candidate, "мпр-261"))
+        assertFalse(parser.matchesQuery(candidate, "МПР-261-1"))
+    }
+
+    @Test
+    fun siteDirectoryUrlsUseHttpsAndEncodeRawCyrillicPathSegments() {
+        val url = BruScheduleDirectoryParser().absolutize(
+            BruScheduleDirectoryParser.ROOT,
+            "http://rasp.bru.by/full_time/Факультет управления и инноваций/index.html",
+        )
+
+        assertTrue(url.startsWith("https://rasp.bru.by/"))
+        assertTrue(url.contains("%20"))
+        assertFalse(url.contains("Факультет управления"))
+        assertFalse(url.contains(" "))
+    }
+
+    @Test
+    fun exactGroupSearchSkipsFailedFacultyAndReturnsTheCorrectFaculty() {
+        val autoUrl = "https://rasp.bru.by/full_time/auto/index.html"
+        val managementUrl = "https://rasp.bru.by/full_time/management/index.html"
+        val rootHtml = """
+            <a href="$managementUrl">🏛️ Факультет управления и инноваций <small>Групп: 25</small></a>
+            <a href="$autoUrl">🏛️ Автомеханический факультет <small>Групп: 24</small></a>
+        """.trimIndent()
+        val autoHtml = """
+            <h1>🏛️ Автомеханический факультет</h1>
+            <a class="group-link" href="https://rasp.bru.by/full_time/auto/МПР-261_weeks_20261019_20261101.html">
+                <strong>МПР-261</strong><span class="period-label">19.10 – 01.11.2026</span>
+            </a>
+        """.trimIndent()
+        val requestedUrls = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestedUrls += url
+                return when (url) {
+                    BruScheduleDirectoryParser.FULL_TIME_INDEX -> rootHtml
+                    autoUrl -> autoHtml
+                    managementUrl -> error("HTTP 400 on an unrelated faculty must not abort this lookup")
+                    else -> error("Unexpected test URL: $url")
+                }
+            }
+        }
+
+        val matches = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).search(ScheduleProfileType.GROUP, "МПР-261")
+        }
+
+        assertEquals(1, matches.size)
+        assertEquals("Автомеханический факультет", matches.single().subtitle.substringBefore(" ·"))
+        assertEquals(autoUrl, matches.single().sourceUrl)
+        assertTrue(managementUrl in requestedUrls)
+        assertTrue(requestedUrls.indexOf(managementUrl) < requestedUrls.indexOf(autoUrl))
+        assertFalse(BruScheduleDirectoryParser.PART_TIME_INDEX in requestedUrls)
+    }
+
+    @Test
+    fun groupRefreshRecoversFromStaleFacultyUrlAndResolvesTheMatchingFaculty() {
+        val parser = BruScheduleDirectoryParser()
+        val staleFacultyInput = "https://rasp.bru.by/full_time/Факультет управления и инноваций/index.html"
+        val managementUrl = parser.absolutize(BruScheduleDirectoryParser.ROOT, staleFacultyInput)
+        val autoUrl = "https://rasp.bru.by/full_time/auto/index.html"
+        val scheduleUrl = "https://rasp.bru.by/full_time/auto/%D0%9C%D0%9F%D0%A0-261_weeks_20261019_20261101.html"
+        val rootHtml = """
+            <a href="$managementUrl">Факультет управления и инноваций</a>
+            <a href="$autoUrl">Автомеханический факультет</a>
+        """.trimIndent()
+        val autoHtml = """
+            <h1>🏛️ Автомеханический факультет</h1>
+            <a class="group-link" href="$scheduleUrl"><strong>МПР-261</strong></a>
+        """.trimIndent()
+        val requestedUrls = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestedUrls += url
+                return when (url) {
+                    managementUrl -> error("HTTP 400: stale faculty page")
+                    BruScheduleDirectoryParser.FULL_TIME_INDEX -> rootHtml
+                    autoUrl -> autoHtml
+                    scheduleUrl -> "<table class=\"schedule-table\"></table>"
+                    else -> error("Unexpected test URL: $url")
+                }
+            }
+        }
+        val staleProfile = profile.copy(sourceUrl = staleFacultyInput)
+        val window = ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 11, 1))
+
+        val html = runSuspending {
+            BruScheduleRemoteDataSource(transport).fetchHtml(staleProfile, window)
+        }
+
+        assertTrue(html.contains("schedule-table"))
+        assertEquals(scheduleUrl, requestedUrls.last())
+        assertEquals(1, requestedUrls.count { it == managementUrl })
+        assertFalse(BruScheduleDirectoryParser.PART_TIME_INDEX in requestedUrls)
+    }
+
+    @Test
     fun directoryResolverPrefersTheRollingWindowThatCoversTodayAndNextWeek() {
         val html = """
             <a href="https://rasp.bru.by/full_time/faculty/МПР-261_weeks_20261005_20261018.html">МПР-261</a>
@@ -112,6 +245,24 @@ class ScheduleArchitectureTest {
         )
 
         assertTrue(url.orEmpty().contains("20261019_20261101"))
+    }
+
+    @Test
+    fun directoryResolverRejectsAGroupCodeThatOnlyMatchesAsAPrefix() {
+        val html = """
+            <a class="group-link" href="https://rasp.bru.by/full_time/auto/МПР-261-1_weeks_20261019_20261101.html">
+                <strong>МПР-261-1</strong>
+            </a>
+        """.trimIndent()
+
+        val url = BruScheduleDirectoryParser().scheduleUrlFromIndex(
+            html = html,
+            pageUrl = "https://rasp.bru.by/full_time/auto/index.html",
+            profile = profile,
+            window = ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 11, 1)),
+        )
+
+        assertNull(url)
     }
 
     @Test
@@ -181,6 +332,17 @@ class ScheduleArchitectureTest {
         assertEquals(2, merged.size)
         assertEquals(5, merged.first { it.id == "web-1" }.version)
         assertEquals("Консультация", merged.first { it.id == "my-extra" }.subjectName)
+    }
+
+    private fun <T> runSuspending(block: suspend () -> T): T {
+        var outcome: Result<T>? = null
+        block.startCoroutine(object : Continuation<T> {
+            override val context = EmptyCoroutineContext
+            override fun resumeWith(result: Result<T>) {
+                outcome = result
+            }
+        })
+        return outcome?.getOrThrow() ?: error("Suspend test block did not complete synchronously")
     }
 
     private fun lesson(

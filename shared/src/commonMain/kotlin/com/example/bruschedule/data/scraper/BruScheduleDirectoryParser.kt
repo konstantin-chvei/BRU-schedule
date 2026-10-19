@@ -7,45 +7,76 @@ import com.example.bruschedule.domain.model.ScheduleWindow
 import com.fleeksoft.ksoup.Ksoup
 import kotlinx.datetime.LocalDate
 
+/** Human-readable node in the site's two-level group directory. */
+data class FacultyDirectory(
+    val name: String,
+    val url: String,
+)
+
 /** Parsers for /full_time, /part_time and /index1.html; selection results retain stable URLs. */
 class BruScheduleDirectoryParser {
     fun hasScheduleTable(html: String): Boolean =
         Ksoup.parse(html).select("table.schedule-table").isNotEmpty()
 
-    fun facultyDirectoryUrls(html: String, pageUrl: String, type: ScheduleProfileType): List<String> {
+    fun facultyDirectories(html: String, pageUrl: String, type: ScheduleProfileType): List<FacultyDirectory> {
         if (type == ScheduleProfileType.TEACHER) return emptyList()
         val section = if ("part_time" in pageUrl) "part_time" else "full_time"
         val rootPath = "/$section/"
         return Ksoup.parse(html).select("a[href]")
             .mapNotNull { anchor ->
                 val absolute = absoluteUrl(pageUrl, anchor.attr("href"))
-                val path = absolute.substringAfter("rasp.bru.by", absolute)
-                val appearsToBeFacultyDirectory =
-                    path.endsWith("index.html") || path.endsWith('/') || !path.substringAfterLast('/').contains('.')
-                if (path.startsWith(rootPath) && path != rootPath && appearsToBeFacultyDirectory) {
-                    absolute
+                if (!absolute.startsWith("$ROOT/", ignoreCase = true)) return@mapNotNull null
+                val path = absolute.substringAfter("rasp.bru.by", absolute).substringBefore('#').substringBefore('?')
+                val isDatedSchedule = path.contains("_weeks_", ignoreCase = true) || path.contains("_session_", ignoreCase = true)
+                val appearsToBeFacultyDirectory = !isDatedSchedule && (
+                    path.endsWith("index.html", ignoreCase = true) || path.endsWith('/') ||
+                        !path.substringAfterLast('/').contains('.')
+                    )
+                val isFormRootIndex = path.equals("${rootPath}index.html", ignoreCase = true)
+                if (path.startsWith(rootPath, ignoreCase = true) && path != rootPath &&
+                    !isFormRootIndex && appearsToBeFacultyDirectory
+                ) {
+                    val name = normalizeSpaces(anchor.text())
+                        .replace(Regex("\\s+Групп:.*$", RegexOption.IGNORE_CASE), "")
+                        .removePrefix("🏛️")
+                        .trim()
+                    FacultyDirectory(name = name.ifBlank { path.substringAfterLast('/').ifBlank { section } }, url = absolute)
                 } else {
                     null
                 }
             }
-            .filterNot { it.endsWith("/$section/index.html") }
-            .distinct()
+            .distinctBy(FacultyDirectory::url)
     }
 
-    fun groupCandidates(html: String, facultyPageUrl: String): List<ProfileCandidate> {
+    fun facultyDirectoryUrls(html: String, pageUrl: String, type: ScheduleProfileType): List<String> =
+        facultyDirectories(html, pageUrl, type).map(FacultyDirectory::url)
+
+    fun groupCandidates(
+        html: String,
+        facultyPageUrl: String,
+        facultyNameHint: String? = null,
+    ): List<ProfileCandidate> {
         val document = Ksoup.parse(html)
+        val facultyName = facultyNameHint?.takeIf(String::isNotBlank)
+            ?: document.select("h1").firstOrNull()?.text()
+                ?.let(::normalizeSpaces)
+                ?.removePrefix("🏛️")
+                ?.trim()
+                ?.takeUnless { it.contains("форма", ignoreCase = true) }
         return document.select("a.group-link[href], a[href*=_weeks_], a[href*=_session_]")
             .mapNotNull { anchor ->
                 val label = normalizeSpaces(anchor.text())
                 val name = label.substringBefore('(').split(Regex("\\s+\\d{1,2}\\.\\d{1,2}"), limit = 2)
                     .first().trim().trimEnd('—', '-', '•')
                 if (name.isBlank()) return@mapNotNull null
+                val period = anchor.select(".period-label").firstOrNull()?.text()?.let(::normalizeSpaces).orEmpty()
+                val subtitle = listOfNotNull(facultyName, period.takeIf(String::isNotBlank)).joinToString(" · ")
                 ProfileCandidate(
                     type = ScheduleProfileType.GROUP,
                     name = name,
                     sourceUrl = facultyPageUrl,
                     sourceKey = name,
-                    subtitle = label.removePrefix(name).trim().trim('(', ')'),
+                    subtitle = subtitle,
                 )
             }
             .distinctBy { normalizeForMatch(it.name) + "|" + it.sourceUrl }
@@ -86,24 +117,44 @@ class BruScheduleDirectoryParser {
             val href = anchor.attr("href")
             val isCandidate = when (profile.type) {
                 ScheduleProfileType.GROUP ->
-                    href.contains("_weeks_") || href.contains("_session_") ||
+                    href.contains("_weeks_", ignoreCase = true) || href.contains("_session_", ignoreCase = true) ||
                         anchor.attr("class").split(Regex("\\s+")).contains("group-link")
-                ScheduleProfileType.TEACHER -> href.contains("/teachers/")
+                ScheduleProfileType.TEACHER -> href.contains("/teachers/", ignoreCase = true)
             }
-            if (!isCandidate) return@mapNotNull null
+            if (!isCandidate || key.isBlank()) return@mapNotNull null
+
             val label = normalizeForMatch(anchor.text())
             val path = normalizeForMatch(percentDecode(href))
+            val exactGroupMatch = if (profile.type == ScheduleProfileType.GROUP) {
+                val visibleName = anchor.select("strong").firstOrNull()?.text()
+                    ?.let(::normalizeSpaces)
+                    ?: normalizeSpaces(anchor.text()).substringBefore('(')
+                        .split(GROUP_DATE_SUFFIX, limit = 2).first().trim()
+                val fileName = href.substringBefore('#').substringBefore('?').substringAfterLast('/')
+                val pathName = percentDecode(fileName)
+                    .substringBefore("_weeks_", ignoreCase = true)
+                    .substringBefore("_session_", ignoreCase = true)
+                normalizeForMatch(visibleName) == key || normalizeForMatch(pathName) == key
+            } else {
+                false
+            }
             val labelNameKey = normalizeForMatch(profile.name.trim().substringBefore(' '))
-            val matches = key.isNotBlank() && (
-                label.contains(key) || key.contains(label) || path.contains(key) ||
-                    (profile.type == ScheduleProfileType.TEACHER && labelNameKey.length >= 2 && label.contains(labelNameKey))
-            )
-            if (matches) absoluteUrl(pageUrl, href) else null
+            val matches = when (profile.type) {
+                // A partial code (e.g. МПР-261 matching МПР-261-1) must never select a different group.
+                ScheduleProfileType.GROUP -> exactGroupMatch
+                ScheduleProfileType.TEACHER ->
+                    label.contains(key) || key.contains(label) || path.contains(key) ||
+                        (labelNameKey.length >= 2 && label.contains(labelNameKey))
+            }
+            if (matches) absoluteUrl(pageUrl, href) to exactGroupMatch else null
         }
+        val exactCandidates = candidates.filter { it.second }
+        val orderedCandidates = exactCandidates.ifEmpty { candidates }
         return if (window == null) {
-            candidates.firstOrNull()
+            orderedCandidates.firstOrNull()?.first
         } else {
-            candidates.firstOrNull { linkCoversWindow(it, window) } ?: candidates.firstOrNull()
+            orderedCandidates.firstOrNull { linkCoversWindow(it.first, window) }?.first
+                ?: orderedCandidates.firstOrNull()?.first
         }
     }
 
@@ -129,22 +180,87 @@ class BruScheduleDirectoryParser {
         val normalizedQuery = normalizeForMatch(query)
         if (normalizedQuery.isBlank()) return true
         val normalizedName = normalizeForMatch(candidate.name)
+        if (candidate.type == ScheduleProfileType.GROUP) return normalizedName.contains(normalizedQuery)
         if (normalizedName.contains(normalizedQuery) || normalizedQuery.contains(normalizedName)) return true
         // Teacher indexes commonly display surname + initials while the detail page has the full name.
         val surname = normalizeForMatch(query.trim().substringBefore(' '))
         return surname.length >= 2 && normalizedName.contains(surname)
     }
 
+    fun isExactMatch(candidate: ProfileCandidate, query: String): Boolean =
+        normalizeForMatch(candidate.name) == normalizeForMatch(query)
+
     fun absolutize(pageUrl: String, href: String): String = absoluteUrl(pageUrl, href)
 
     private fun absoluteUrl(pageUrl: String, href: String): String {
         val cleanHref = href.trim()
-        if (cleanHref.startsWith("https://") || cleanHref.startsWith("http://")) return cleanHref
-        if (cleanHref.startsWith("//")) return "https:$cleanHref"
-        if (cleanHref.startsWith('/')) return "$ROOT$cleanHref"
-        val directory = pageUrl.substringBeforeLast('/', pageUrl)
-        return "$directory/$cleanHref"
+        val absolute = when {
+            cleanHref.startsWith("http://", ignoreCase = true) || cleanHref.startsWith("https://", ignoreCase = true) -> cleanHref
+            cleanHref.startsWith("//") -> "https:$cleanHref"
+            cleanHref.startsWith('/') -> "$ROOT$cleanHref"
+            else -> "${pageUrl.substringBeforeLast('/', pageUrl)}/$cleanHref"
+        }
+        return normalizeSiteUrl(absolute)
     }
+
+    /** Canonical HTTPS origin and RFC 3986 path encoding for raw Cyrillic/space links. */
+    private fun normalizeSiteUrl(url: String): String {
+        val schemeEnd = url.indexOf("://")
+        if (schemeEnd < 0) return url
+        val authorityStart = schemeEnd + 3
+        val pathStart = url.indexOf('/', authorityStart)
+        val authorityEnd = if (pathStart < 0) url.length else pathStart
+        val authority = url.substring(authorityStart, authorityEnd)
+        val host = authority.substringBefore(':')
+        val isSiteHost = host.equals("rasp.bru.by", ignoreCase = true) ||
+            host.equals("www.rasp.bru.by", ignoreCase = true)
+        val suffix = if (pathStart < 0) "/" else url.substring(pathStart)
+        val canonical = if (isSiteHost) "$ROOT$suffix" else url
+        return encodeUrlPath(canonical)
+    }
+
+    private fun encodeUrlPath(url: String): String {
+        val schemeEnd = url.indexOf("://")
+        if (schemeEnd < 0) return url
+        val pathStart = url.indexOf('/', schemeEnd + 3)
+        if (pathStart < 0) return url
+        val suffixStart = listOf(url.indexOf('?', pathStart), url.indexOf('#', pathStart))
+            .filter { it >= 0 }
+            .minOrNull() ?: url.length
+        val pathBytes = url.substring(pathStart, suffixStart).encodeToByteArray()
+        val hex = "0123456789ABCDEF"
+        return buildString(url.length) {
+            append(url.substring(0, pathStart))
+            var index = 0
+            while (index < pathBytes.size) {
+                val value = pathBytes[index].toInt() and 0xff
+                val char = value.toChar()
+                if (char == '%' && index + 2 < pathBytes.size &&
+                    pathBytes[index + 1].toInt().toChar().isHexDigit() &&
+                    pathBytes[index + 2].toInt().toChar().isHexDigit()
+                ) {
+                    append('%')
+                    append(pathBytes[index + 1].toInt().toChar())
+                    append(pathBytes[index + 2].toInt().toChar())
+                    index += 3
+                } else if (
+                    char in 'A'..'Z' || char in 'a'..'z' || char in '0'..'9' ||
+                    char in "-._~/!\$&'()*+,;=:@"
+                ) {
+                    append(char)
+                    index++
+                } else {
+                    append('%')
+                    append(hex[value ushr 4])
+                    append(hex[value and 0x0f])
+                    index++
+                }
+            }
+            append(url.substring(suffixStart))
+        }
+    }
+
+    private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
     private fun percentDecode(value: String): String = value
         .replace("%20", " ", ignoreCase = true)
@@ -160,6 +276,7 @@ class BruScheduleDirectoryParser {
         .filter { it.isLetterOrDigit() }
 
     companion object {
+        private val GROUP_DATE_SUFFIX = Regex("\\s+\\d{1,2}\\.\\d{1,2}")
         private val WEEK_RANGE = Regex("_weeks_(20\\d{6})_(20\\d{6})", RegexOption.IGNORE_CASE)
         const val ROOT = "https://rasp.bru.by"
         const val FULL_TIME_INDEX = "$ROOT/full_time/index.html"
