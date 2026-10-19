@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -103,7 +104,7 @@ fun App(graph: AppGraph) {
 }
 
 @Composable
-private fun NavigationDestination(
+private fun RowScope.NavigationDestination(
     selected: Boolean,
     symbol: String,
     label: String,
