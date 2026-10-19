@@ -28,8 +28,7 @@ object ScheduleCycleExpander {
                     add(lesson)
                     return@forEach
                 }
-                val templateDate = runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull()
-                if (templateDate == null) {
+                val templateDate = runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull() ?: run {
                     add(lesson)
                     return@forEach
                 }
