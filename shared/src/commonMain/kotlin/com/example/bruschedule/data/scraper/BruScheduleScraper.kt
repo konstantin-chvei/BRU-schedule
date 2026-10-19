@@ -364,7 +364,7 @@ class BruScheduleScraper : ScheduleHtmlParser {
             }
         }
 
-        private val CSS_RULE = Regex("([^{}]+)\\{([^{}]*)}", RegexOption.DOT_MATCHES_ALL)
+        private val CSS_RULE = Regex("""([^{}]+)\{([^{}]*)\}""", RegexOption.DOT_MATCHES_ALL)
         private val RGB_COLOR = Regex("rgba?\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})", RegexOption.IGNORE_CASE)
         private val HEX_COLOR = Regex("#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3,5})?")
         private val NAMED_COLORS = mapOf(
