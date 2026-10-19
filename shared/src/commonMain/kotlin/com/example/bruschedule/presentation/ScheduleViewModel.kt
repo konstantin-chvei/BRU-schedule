@@ -288,6 +288,22 @@ class ScheduleViewModel(
         }
     }
 
+    fun deleteSelectedProfile() {
+        val selected = uiState.value.selectedProfile ?: return
+        val nextProfileId = uiState.value.profiles.firstOrNull { it.id != selected.id }?.id
+        viewModelScope.launch {
+            try {
+                schedules.deleteProfile(selected.id)
+                selectedProfileId.value = nextProfileId
+                notice.value = "Расписание «${selected.name}» и связанные локальные данные удалены"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = "Не удалось удалить расписание: ${failure.message ?: "ошибка локального хранилища"}"
+            }
+        }
+    }
+
     fun saveManualProfile(type: ScheduleProfileType, name: String, sourceUrl: String?) {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {

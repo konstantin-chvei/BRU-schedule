@@ -19,7 +19,7 @@ class KtorHtmlTransport(
             header(HttpHeaders.Accept, "text/html,application/xhtml+xml")
         }
         if (!response.status.isSuccess()) {
-            error("rasp.bru.by ответил кодом ${response.status.value}")
+            error("rasp.bru.by ответил кодом ${response.status.value} при запросе $url")
         }
         return response.bodyAsText()
     }

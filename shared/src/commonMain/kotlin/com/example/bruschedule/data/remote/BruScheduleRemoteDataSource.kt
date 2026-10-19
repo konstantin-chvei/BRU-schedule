@@ -50,15 +50,25 @@ class BruScheduleRemoteDataSource(
         window: ScheduleWindow,
         configuredPage: Pair<String, String>? = null,
     ): String? {
+        var lastNetworkError: String? = null
+        suspend fun fetchOrNull(url: String): String? = try {
+            transport.get(url)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            lastNetworkError = failure.message?.takeIf(String::isNotBlank) ?: "Неизвестная ошибка сети"
+            null
+        }
+
         val roots = listOf(
             BruScheduleDirectoryParser.FULL_TIME_INDEX,
             BruScheduleDirectoryParser.PART_TIME_INDEX,
         )
         for (root in roots) {
-            val rootHtml = if (configuredPage?.first == root) configuredPage.second else getOrNull(root) ?: continue
+            val rootHtml = if (configuredPage?.first == root) configuredPage.second else fetchOrNull(root) ?: continue
             val rootLink = directoryParser.scheduleUrlFromIndex(rootHtml, root, profile, window)
             if (rootLink != null) {
-                getOrNull(rootLink)?.let { if (directoryParser.hasScheduleTable(it)) return it }
+                fetchOrNull(rootLink)?.let { if (directoryParser.hasScheduleTable(it)) return it }
             }
 
             val facultyPages = directoryParser.facultyDirectoryUrls(
@@ -67,20 +77,15 @@ class BruScheduleRemoteDataSource(
                 type = ScheduleProfileType.GROUP,
             )
             for (facultyUrl in facultyPages) {
-                val facultyHtml = if (configuredPage?.first == facultyUrl) configuredPage.second else getOrNull(facultyUrl) ?: continue
+                val facultyHtml = if (configuredPage?.first == facultyUrl) configuredPage.second else fetchOrNull(facultyUrl) ?: continue
                 val scheduleUrl = directoryParser.scheduleUrlFromIndex(facultyHtml, facultyUrl, profile, window) ?: continue
-                val scheduleHtml = getOrNull(scheduleUrl) ?: continue
+                val scheduleHtml = fetchOrNull(scheduleUrl) ?: continue
                 if (directoryParser.hasScheduleTable(scheduleHtml)) return scheduleHtml
             }
         }
+        lastNetworkError?.let { detail ->
+            error("Ошибка доступа к каталогу расписаний rasp.bru.by: $detail")
+        }
         return null
-    }
-
-    private suspend fun getOrNull(url: String): String? = try {
-        transport.get(url)
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (_: Throwable) {
-        null
     }
 }

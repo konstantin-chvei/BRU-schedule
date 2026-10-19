@@ -14,12 +14,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +44,7 @@ fun ScheduleSettingsScreen(
     contentPadding: PaddingValues,
 ) {
     val sync = state.syncState
+    var showDeleteConfirmation by remember(state.selectedProfile?.id) { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -88,6 +95,16 @@ fun ScheduleSettingsScreen(
                 ) {
                     Text("↶  Откатить к предыдущей версии", fontWeight = FontWeight.Medium)
                 }
+                OutlinedButton(
+                    onClick = { showDeleteConfirmation = true },
+                    enabled = state.selectedProfile != null && !state.isRefreshing,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BruColors.danger),
+                    border = BorderStroke(1.dp, BruColors.danger.copy(alpha = 0.45f)),
+                ) {
+                    Text("Удалить это расписание", fontWeight = FontWeight.Medium)
+                }
             }
         }
 
@@ -114,6 +131,37 @@ fun ScheduleSettingsScreen(
             }
         }
         Spacer(Modifier.height(12.dp))
+    }
+
+    if (showDeleteConfirmation) {
+        val profileName = state.selectedProfile?.name.orEmpty()
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Удалить расписание?") },
+            text = {
+                Text(
+                    "Профиль «$profileName», сохранённые пары, ручные правки и связанные задания будут удалены с устройства.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        viewModel.deleteSelectedProfile()
+                    },
+                ) {
+                    Text("Удалить", color = BruColors.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Отмена", color = BruColors.muted)
+                }
+            },
+            containerColor = BruColors.surface,
+            titleContentColor = BruColors.foreground,
+            textContentColor = BruColors.muted,
+        )
     }
 }
 

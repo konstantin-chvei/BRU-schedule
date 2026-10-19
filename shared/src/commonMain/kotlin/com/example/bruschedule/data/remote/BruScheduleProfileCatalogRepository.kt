@@ -31,28 +31,33 @@ class BruScheduleProfileCatalogRepository(
 
     private suspend fun searchGroups(): List<ProfileCandidate> {
         val results = mutableListOf<ProfileCandidate>()
+        var lastNetworkError: String? = null
+        suspend fun fetchOrNull(url: String): String? = try {
+            transport.get(url)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            lastNetworkError = failure.message?.takeIf(String::isNotBlank) ?: "Неизвестная ошибка сети"
+            null
+        }
+
         val roots = listOf(
             BruScheduleDirectoryParser.FULL_TIME_INDEX,
             BruScheduleDirectoryParser.PART_TIME_INDEX,
         )
         for (root in roots) {
-            val rootHtml = getOrNull(root) ?: continue
+            val rootHtml = fetchOrNull(root) ?: continue
             // Some site editions list every group directly on the root; others expose faculties.
             results += parser.groupCandidates(rootHtml, root)
             val facultyUrls = parser.facultyDirectoryUrls(rootHtml, root, ScheduleProfileType.GROUP)
             for (facultyUrl in facultyUrls) {
-                val facultyHtml = getOrNull(facultyUrl) ?: continue
+                val facultyHtml = fetchOrNull(facultyUrl) ?: continue
                 results += parser.groupCandidates(facultyHtml, facultyUrl)
             }
         }
+        if (results.isEmpty()) {
+            lastNetworkError?.let { detail -> error("Не удалось загрузить каталог групп rasp.bru.by: $detail") }
+        }
         return results
-    }
-
-    private suspend fun getOrNull(url: String): String? = try {
-        transport.get(url)
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (_: Throwable) {
-        null
     }
 }
