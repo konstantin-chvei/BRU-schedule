@@ -132,8 +132,8 @@ class BruScheduleDirectoryParser {
                         .split(GROUP_DATE_SUFFIX, limit = 2).first().trim()
                 val fileName = href.substringBefore('#').substringBefore('?').substringAfterLast('/')
                 val pathName = percentDecode(fileName)
-                    .substringBefore("_weeks_", ignoreCase = true)
-                    .substringBefore("_session_", ignoreCase = true)
+                    .substringBeforeIgnoreCase("_weeks_")
+                    .substringBeforeIgnoreCase("_session_")
                 normalizeForMatch(visibleName) == key || normalizeForMatch(pathName) == key
             } else {
                 false
@@ -261,6 +261,11 @@ class BruScheduleDirectoryParser {
     }
 
     private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
+
+    private fun String.substringBeforeIgnoreCase(delimiter: String): String {
+        val index = lowercase().indexOf(delimiter.lowercase())
+        return if (index < 0) this else substring(0, index)
+    }
 
     private fun percentDecode(value: String): String = value
         .replace("%20", " ", ignoreCase = true)
