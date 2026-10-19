@@ -1,31 +1,25 @@
-This is a Kotlin Multiplatform project targeting Android, iOS.
+# BRU Schedule
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+Кроссплатформенный помощник по расписанию Белорусско-Российского университета на Kotlin Multiplatform и Compose Multiplatform. Архитектура находится в модуле `shared`: Clean Architecture + MVVM, Ksoup-парсер сайта `rasp.bru.by`, SQLDelight Offline-First база с V−1 snapshot/rollback, KMP Settings для версионирования, Ktor для загрузки страниц и общий Compose UI для Android/iOS.
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+## Основные возможности
 
-### Running the apps
+- Несколько профилей одновременно: группа, группа друга или преподаватель из каталога сайта.
+- Быстрое чтение из локального кэша; ручные правки и пары защищены от перезаписи сайтом.
+- Обновление расписания с сохранением предыдущей версии и явным откатом.
+- Парсинг двухнедельных таблиц группы и страниц занятости преподавателей; различение лекций, лабораторных и практик по классам/подписям/цветам сайта.
+- Дедлайны, связанные с парами, бейджи количества незакрытых задач и общий хронологический список.
+- Тёмный Compose UI в стиле минималистичного кибер-академизма.
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+## Запуск
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+```bash
+bash ./gradlew :androidApp:assembleDebug
+bash ./gradlew :shared:allTests
+```
 
-### Running tests
+Откройте `iosApp/iosApp.xcodeproj` в Xcode для iOS. Требуются установленный JDK и Android SDK; iOS-сборка требует Xcode. В Android добавлено разрешение `INTERNET`; без сети кэш всё равно доступен.
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+## Архитектурная документация
 
-- Android tests: `./gradlew :shared:testAndroidHostTest`
-- iOS tests: `./gradlew :shared:iosSimulatorArm64Test`
-
----
-
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+Подробное описание моделей, схемы SQLDelight, source URL resolver, merge/snapshot/rollback, UI и наблюдений по HTML-образцам находится в [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
