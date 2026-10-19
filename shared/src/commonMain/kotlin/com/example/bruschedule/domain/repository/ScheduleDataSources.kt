@@ -13,6 +13,9 @@ interface ScheduleRemoteDataSource {
 interface ScheduleHtmlParser {
     val formatVersion: Int
     fun parse(profile: ScheduleProfile, html: String, referenceDate: LocalDate): List<Lesson>
+
+    /** True only for regular timetable pages with explicit alternating week-one/week-two headers. */
+    fun hasAlternatingTwoWeekCycle(html: String): Boolean = false
 }
 
 /** Key-value metadata port; SQLDelight remains responsible for database schema migrations. */

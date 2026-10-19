@@ -94,7 +94,7 @@ data class ScheduleWindow(
     val endDate: LocalDate,
 ) {
     companion object {
-        /** Monday of this week through Sunday of next week (the site's rolling two-week view). */
+        /** Monday of this week through Sunday of next week (the site's rolling source view, later cycle-expanded). */
         fun currentAndNextWeek(clock: Clock = Clock.System): ScheduleWindow {
             val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
             val monday = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1))

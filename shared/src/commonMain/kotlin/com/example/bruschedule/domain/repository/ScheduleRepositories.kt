@@ -1,7 +1,10 @@
 package com.example.bruschedule.domain.repository
 
 import com.example.bruschedule.domain.model.AcademicTask
+import com.example.bruschedule.domain.model.AppearancePreferences
 import com.example.bruschedule.domain.model.Lesson
+import com.example.bruschedule.domain.model.LessonType
+import com.example.bruschedule.domain.model.ScheduleAppTheme
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ProfileSyncState
 import com.example.bruschedule.domain.model.RefreshCommit
@@ -48,4 +51,12 @@ interface AcademicTaskRepository {
 /** Searchable catalogue backed by the Group and Teachers directories on rasp.bru.by. */
 interface ScheduleProfileCatalogRepository {
     suspend fun search(type: ScheduleProfileType, query: String): List<ProfileCandidate>
+}
+
+/** Persisted appearance settings for the Compose shell and lesson-type accents. */
+interface AppearancePreferencesRepository {
+    fun observe(): Flow<AppearancePreferences>
+    suspend fun setTheme(theme: ScheduleAppTheme)
+    suspend fun setLessonColor(type: LessonType, colorHex: String)
+    suspend fun resetLessonColors()
 }

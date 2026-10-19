@@ -3,15 +3,18 @@ package com.example.bruschedule.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bruschedule.domain.model.AcademicTask
+import com.example.bruschedule.domain.model.AppearancePreferences
 import com.example.bruschedule.domain.model.DomainIds
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ProfileSyncState
+import com.example.bruschedule.domain.model.ScheduleAppTheme
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
+import com.example.bruschedule.domain.repository.AppearancePreferencesRepository
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +46,9 @@ import kotlinx.datetime.toLocalDateTime
 
 
 enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS }
+
+private const val STARTUP_REFRESH_RETRY_COOLDOWN_MILLIS = 12 * 60 * 60 * 1000L
+private const val MINIMUM_SEMESTER_COVERAGE_DAYS = 120
 
 data class LessonUiItem(
     val lesson: Lesson,
@@ -75,6 +82,10 @@ data class ScheduleUiState(
     val destination: MainDestination = MainDestination.SCHEDULE,
     val syncState: ProfileSyncState? = null,
     val isRefreshing: Boolean = false,
+    val hasRemoteSchedule: Boolean = false,
+    val scheduleCoverageStartDate: LocalDate? = null,
+    val scheduleCoverageEndDate: LocalDate? = null,
+    val appearance: AppearancePreferences = AppearancePreferences(),
     val notice: String? = null,
     val profileSearch: ProfileSearchUiState = ProfileSearchUiState(),
     val nowEpochMillis: Long = 0L,
@@ -88,6 +99,7 @@ class ScheduleViewModel(
     private val tasks: AcademicTaskRepository,
     private val profileCatalog: ScheduleProfileCatalogRepository,
     private val refreshSchedule: RefreshScheduleUseCase,
+    private val appearancePreferences: AppearancePreferencesRepository,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
     private val initialDate = today()
@@ -98,6 +110,11 @@ class ScheduleViewModel(
     private val notice = MutableStateFlow<String?>(null)
     private val profileSearch = MutableStateFlow(ProfileSearchUiState())
     private val nowEpochMillis = MutableStateFlow(clock.now().toEpochMilliseconds())
+    private val appearance = appearancePreferences.observe().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = AppearancePreferences(),
+    )
 
     private data class BaseState(
         val profiles: List<ScheduleProfile>,
@@ -161,20 +178,28 @@ class ScheduleViewModel(
         SelectionState(core, currentSyncState, transient)
     }
 
-    val uiState = combine(baseState, selectionState) { base, selection ->
+    val uiState = combine(baseState, selectionState, appearance) { base, selection, appearancePreferences ->
         val selectedId = selection.core.profileId ?: base.profiles.firstOrNull()?.id
         val selectedProfile = base.profiles.firstOrNull { it.id == selectedId }
+        val profileLessons = if (selectedProfile == null) emptyList() else base.lessons.filter {
+            it.profileId == selectedProfile.id
+        }
+        val scheduleDates = profileLessons.mapNotNull { lesson ->
+            runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull()
+        }
+        val coverageStartDate = scheduleDates.minOrNull()
+        val coverageEndDate = scheduleDates.maxOrNull()
         val now = selection.transient.now
         val nowLocal = kotlinx.datetime.Instant.fromEpochMilliseconds(now)
             .toLocalDateTime(TimeZone.currentSystemDefault())
         val weekStart = selection.core.date.minus(DatePeriod(days = selection.core.date.dayOfWeek.isoDayNumber - 1))
         val weekEnd = weekStart.plus(DatePeriod(days = 6))
-        val lessonsInWeek = if (selectedProfile == null) emptyList() else base.lessons.filter {
-            it.profileId == selectedProfile.id && it.lessonDate >= weekStart.toString() && it.lessonDate <= weekEnd.toString()
+        val lessonsInWeek = profileLessons.filter {
+            it.lessonDate >= weekStart.toString() && it.lessonDate <= weekEnd.toString()
         }
         val datesWithLessons = lessonsInWeek.mapTo(mutableSetOf()) { it.lessonDate }
-        val lessonsForDate = if (selectedProfile == null) emptyList() else base.lessons
-            .filter { it.profileId == selectedProfile.id && it.lessonDate == selection.core.date.toString() }
+        val lessonsForDate = profileLessons
+            .filter { it.lessonDate == selection.core.date.toString() }
             .sortedWith(compareBy({ it.startTime }, { it.slotNumber }))
             .map { lesson ->
                 LessonUiItem(
@@ -209,6 +234,10 @@ class ScheduleViewModel(
             destination = selection.core.destination,
             syncState = if (selectedId == selection.core.profileId) selection.syncState else null,
             isRefreshing = selection.transient.refreshing,
+            hasRemoteSchedule = profileLessons.any { !it.isCustom },
+            scheduleCoverageStartDate = coverageStartDate,
+            scheduleCoverageEndDate = coverageEndDate,
+            appearance = appearancePreferences,
             notice = selection.transient.notice,
             profileSearch = selection.transient.profileSearch,
             nowEpochMillis = now,
@@ -232,6 +261,10 @@ class ScheduleViewModel(
             }
         }
         viewModelScope.launch {
+            val storedProfile = schedules.observeProfiles().first().firstOrNull() ?: return@launch
+            refreshIfSemesterCoverageIsMissing(storedProfile.id)
+        }
+        viewModelScope.launch {
             while (true) {
                 nowEpochMillis.value = clock.now().toEpochMilliseconds()
                 delay(30_000)
@@ -241,6 +274,7 @@ class ScheduleViewModel(
 
     fun selectProfile(profileId: String) {
         selectedProfileId.value = profileId
+        viewModelScope.launch { refreshIfSemesterCoverageIsMissing(profileId) }
     }
 
     fun selectDate(date: LocalDate) {
@@ -248,11 +282,41 @@ class ScheduleViewModel(
     }
 
     fun changeWeek(weeks: Int) {
-        selectedDate.value = selectedDate.value.plus(DatePeriod(days = weeks * 7))
+        val current = uiState.value
+        val firstCoveredDate = current.scheduleCoverageStartDate ?: return
+        val lastCoveredDate = current.scheduleCoverageEndDate ?: return
+        val targetDate = selectedDate.value.plus(DatePeriod(days = weeks * 7))
+        val targetWeek = targetDate.startOfWeek()
+        if (targetWeek < firstCoveredDate.startOfWeek() || targetWeek > lastCoveredDate.startOfWeek()) return
+        selectedDate.value = targetDate
     }
 
     fun showDestination(destination: MainDestination) {
         this.destination.value = destination
+    }
+
+    fun setTheme(theme: ScheduleAppTheme) = updateAppearance {
+        appearancePreferences.setTheme(theme)
+    }
+
+    fun setLessonColor(type: LessonType, colorHex: String) = updateAppearance {
+        appearancePreferences.setLessonColor(type, colorHex)
+    }
+
+    fun resetLessonColors() = updateAppearance {
+        appearancePreferences.resetLessonColors()
+    }
+
+    private fun updateAppearance(update: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                update()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = "Не удалось сохранить настройки оформления: ${failure.message ?: "ошибка настроек"}"
+            }
+        }
     }
 
     fun dismissNotice() {
@@ -264,10 +328,32 @@ class ScheduleViewModel(
         launchRefresh(id)
     }
 
+    private suspend fun refreshIfSemesterCoverageIsMissing(profileId: String) {
+        try {
+            val cachedLessons = withContext(Dispatchers.Default) { schedules.getLessons(profileId) }
+            val coverageEnd = cachedLessons.asSequence()
+                .filterNot(Lesson::isCustom)
+                .mapNotNull { lesson -> runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull() }
+                .maxOrNull()
+            val desiredCoverageEnd = today().plus(DatePeriod(days = MINIMUM_SEMESTER_COVERAGE_DAYS))
+            if (coverageEnd != null && coverageEnd >= desiredCoverageEnd) return
+
+            val sync = syncRepository.observeSyncState(profileId).first()
+            val lastAttempt = sync?.lastAttemptAtEpochMillis
+            val now = clock.now().toEpochMilliseconds()
+            if (sync?.lastError != null && lastAttempt != null && now - lastAttempt < STARTUP_REFRESH_RETRY_COOLDOWN_MILLIS) return
+            launchRefresh(profileId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            notice.value = "Не удалось проверить период расписания: ${failure.message ?: "ошибка локальной базы"}"
+        }
+    }
+
     private fun launchRefresh(profileId: String) {
         if (refreshing.value) return
+        refreshing.value = true
         viewModelScope.launch {
-            refreshing.value = true
             try {
                 val result = withContext(Dispatchers.Default) { refreshSchedule(profileId) }
                 notice.value = when (result) {
@@ -442,6 +528,9 @@ class ScheduleViewModel(
     fun setTaskCompleted(taskId: String, completed: Boolean) {
         viewModelScope.launch { tasks.setTaskCompleted(taskId, completed) }
     }
+
+    private fun LocalDate.startOfWeek(): LocalDate =
+        minus(DatePeriod(days = dayOfWeek.isoDayNumber - 1))
 
     private fun today(): LocalDate =
         clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date

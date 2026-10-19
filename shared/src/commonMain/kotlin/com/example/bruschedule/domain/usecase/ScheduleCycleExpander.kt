@@ -1,0 +1,69 @@
+package com.example.bruschedule.domain.usecase
+
+import com.example.bruschedule.domain.model.Lesson
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.plus
+
+/**
+ * Projects the site's two-week template into a semester-sized, offline-first schedule. Occurrence
+ * identity is derived from the original stable slot key plus the occurrence date, so edits remain
+ * attached to the same date/slot after every refresh.
+ */
+object ScheduleCycleExpander {
+    const val SEMESTER_HORIZON_DAYS = 196 // 28 weeks: comfortably covers a university semester.
+    private val TWO_WEEKS = DatePeriod(days = 14)
+
+    fun expand(
+        templateLessons: List<Lesson>,
+        fromDate: LocalDate,
+        throughDate: LocalDate,
+    ): List<Lesson> {
+        if (templateLessons.isEmpty() || throughDate < fromDate) return emptyList()
+
+        return buildList {
+            templateLessons.forEach { lesson ->
+                if (lesson.isCustom) {
+                    add(lesson)
+                    return@forEach
+                }
+                val templateDate = runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull()
+                if (templateDate == null) {
+                    add(lesson)
+                    return@forEach
+                }
+
+                var occurrenceDate = templateDate
+                while (occurrenceDate < fromDate) occurrenceDate = occurrenceDate.plus(TWO_WEEKS)
+                while (occurrenceDate <= throughDate) {
+                    val occurrenceKey = if (occurrenceDate == templateDate) {
+                        lesson.sourceKey
+                    } else {
+                        stableOccurrenceKey(lesson, templateDate, occurrenceDate)
+                    }
+                    add(
+                        lesson.copy(
+                            id = if (occurrenceDate == templateDate) lesson.id else "web:$occurrenceKey",
+                            lessonDate = occurrenceDate.toString(),
+                            dayOfWeek = occurrenceDate.dayOfWeek.isoDayNumber,
+                            sourceKey = occurrenceKey,
+                        ),
+                    )
+                    occurrenceDate = occurrenceDate.plus(TWO_WEEKS)
+                }
+            }
+        }.distinctBy { it.sourceKey }
+            .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
+    }
+
+    private fun stableOccurrenceKey(lesson: Lesson, templateDate: LocalDate, occurrenceDate: LocalDate): String {
+        val templatePrefix = "${lesson.profileId}|$templateDate|"
+        val slotIdentity = lesson.sourceKey.removePrefix(templatePrefix)
+        return if (slotIdentity != lesson.sourceKey) {
+            "${lesson.profileId}|$occurrenceDate|$slotIdentity"
+        } else {
+            "${lesson.sourceKey}|cycle:$occurrenceDate"
+        }
+    }
+}

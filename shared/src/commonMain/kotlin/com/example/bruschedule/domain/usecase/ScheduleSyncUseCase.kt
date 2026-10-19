@@ -2,6 +2,8 @@ package com.example.bruschedule.domain.usecase
 
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleWindow
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.plus
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
 import com.example.bruschedule.domain.repository.ParserVersionRepository
@@ -48,9 +50,20 @@ class RefreshScheduleUseCase(
             if (parsed.isEmpty()) {
                 error("На странице не найдено ни одной пары. Локальное расписание не изменено.")
             }
+            val websiteLessons = if (scraper.hasAlternatingTwoWeekCycle(html)) {
+                val semesterEnd = window.startDate.plus(
+                    DatePeriod(days = ScheduleCycleExpander.SEMESTER_HORIZON_DAYS - 1),
+                )
+                ScheduleCycleExpander.expand(parsed, window.startDate, semesterEnd)
+            } else {
+                parsed
+            }
+            if (websiteLessons.isEmpty()) {
+                error("Не удалось развернуть пары на семестровый период. Локальное расписание не изменено.")
+            }
             val commit = syncRepository.applyWebsiteSchedule(
                 profileId = profile.id,
-                websiteLessons = parsed,
+                websiteLessons = websiteLessons,
                 successfulAtEpochMillis = clock.now().toEpochMilliseconds(),
             )
             versionFlags.markParserVersion(profile.id, scraper.formatVersion)

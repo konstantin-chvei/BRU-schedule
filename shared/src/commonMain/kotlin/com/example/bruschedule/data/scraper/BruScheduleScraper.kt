@@ -132,6 +132,12 @@ class BruScheduleScraper : ScheduleHtmlParser {
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
     }
 
+    override fun hasAlternatingTwoWeekCycle(html: String): Boolean {
+        // Inspect rendered text instead of relying on one CSS class: the site has multiple layouts.
+        val pageText = Ksoup.parse(html).text().lowercase().replace('ё', 'е')
+        return WEEK_ONE_HEADER.containsMatchIn(pageText) && WEEK_TWO_HEADER.containsMatchIn(pageText)
+    }
+
     private fun parseDayColumns(
         headers: List<com.fleeksoft.ksoup.nodes.Element>,
         initialYear: Int,
@@ -215,8 +221,10 @@ class BruScheduleScraper : ScheduleHtmlParser {
         .trim()
 
     companion object {
-        const val PARSER_FORMAT_VERSION = 2
+        const val PARSER_FORMAT_VERSION = 3
 
+        private val WEEK_ONE_HEADER = Regex("недел[ья]\\s*1", RegexOption.IGNORE_CASE)
+        private val WEEK_TWO_HEADER = Regex("недел[ья]\\s*2", RegexOption.IGNORE_CASE)
         private val TIME_RANGE = Regex("(\\d{1,2}:\\d{2})\\s*[-–—−]\\s*(\\d{1,2}:\\d{2})")
         private val PAIR_NUMBER = Regex("(\\d+)\\s*(?:пара|занятие)", RegexOption.IGNORE_CASE)
         private val HEADER_DATE = Regex("(\\d{1,2})\\.(\\d{1,2})(?:\\.(\\d{4}))?")

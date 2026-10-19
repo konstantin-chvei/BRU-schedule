@@ -9,7 +9,9 @@ import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.remote.createPlatformHtmlTransport
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.data.scraper.BruScheduleScraper
+import com.example.bruschedule.data.settings.KmpSettingsAppearanceRepository
 import com.example.bruschedule.data.settings.KmpSettingsParserVersionFlags
+import com.example.bruschedule.domain.repository.AppearancePreferencesRepository
 import com.example.bruschedule.domain.repository.ParserVersionRepository
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
@@ -26,6 +28,7 @@ data class AppGraph(
     val profileCatalog: ScheduleProfileCatalogRepository,
     val refreshSchedule: RefreshScheduleUseCase,
     val versionFlags: ParserVersionRepository,
+    val appearancePreferences: AppearancePreferencesRepository,
 )
 
 fun createAppGraph(
@@ -36,6 +39,7 @@ fun createAppGraph(
     val database = ScheduleDatabase(driver)
     val localRepository = SqlDelightScheduleRepository(database)
     val versionFlags = KmpSettingsParserVersionFlags(settings)
+    val appearancePreferences = KmpSettingsAppearanceRepository(settings)
 
     // SQLDelight owns real migrations. This KMP Settings marker is useful for diagnostics/upgrade
     // gates and is intentionally not used as a replacement for database schema migrations.
@@ -59,6 +63,7 @@ fun createAppGraph(
             versionFlags = versionFlags,
         ),
         versionFlags = versionFlags,
+        appearancePreferences = appearancePreferences,
     )
 }
 

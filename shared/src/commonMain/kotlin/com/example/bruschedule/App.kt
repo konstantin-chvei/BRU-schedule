@@ -43,6 +43,7 @@ fun App(graph: AppGraph) {
                     tasks = graph.taskRepository,
                     profileCatalog = graph.profileCatalog,
                     refreshSchedule = graph.refreshSchedule,
+                    appearancePreferences = graph.appearancePreferences,
                 )
             }
         },
@@ -57,7 +58,7 @@ fun App(graph: AppGraph) {
         }
     }
 
-    BruScheduleTheme {
+    BruScheduleTheme(appearance = state.appearance) {
         Scaffold(
             containerColor = BruColors.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -78,7 +79,7 @@ fun App(graph: AppGraph) {
                     NavigationDestination(
                         selected = state.destination == MainDestination.SETTINGS,
                         symbol = "⚙",
-                        label = "Журнал",
+                        label = "Настройки",
                         onClick = { viewModel.showDestination(MainDestination.SETTINGS) },
                     )
                 }

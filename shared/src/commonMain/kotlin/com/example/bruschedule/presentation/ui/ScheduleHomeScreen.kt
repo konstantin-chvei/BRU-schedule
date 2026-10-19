@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -86,7 +87,9 @@ fun ScheduleHomeScreen(
         )
         Spacer(Modifier.height(22.dp))
 
-        if (state.profiles.isEmpty()) {
+        if (state.isLoading) {
+            ScheduleLoadingStatusCard(title = "Загружаем сохранённые данные", detail = "Поднимаем расписание из локальной базы.")
+        } else if (state.profiles.isEmpty()) {
             FirstProfileCard(onAdd = { addProfileVisible = true })
         } else {
             ProfileRail(
@@ -100,6 +103,9 @@ fun ScheduleHomeScreen(
                 selectedDate = state.selectedDate,
                 today = state.todayDate,
                 datesWithLessons = state.weekDatesWithLessons,
+                coverageStartDate = state.scheduleCoverageStartDate,
+                coverageEndDate = state.scheduleCoverageEndDate,
+                showCycleIndicator = state.hasRemoteSchedule,
                 onSelect = viewModel::selectDate,
                 onPreviousWeek = { viewModel.changeWeek(-1) },
                 onNextWeek = { viewModel.changeWeek(1) },
@@ -112,7 +118,23 @@ fun ScheduleHomeScreen(
             )
             Spacer(Modifier.height(14.dp))
 
-            if (state.lessons.isEmpty()) {
+            val syncError = state.syncState?.lastError?.takeIf(String::isNotBlank)
+            when {
+                !state.hasRemoteSchedule && state.isRefreshing -> ScheduleLoadingStatusCard(
+                    title = "Загружаем расписание",
+                    detail = "Получаем расписание и сохраняем его на устройстве. Это может занять несколько секунд.",
+                )
+                !state.hasRemoteSchedule && syncError != null -> ScheduleErrorStatusCard(
+                    message = syncError,
+                    onRetry = viewModel::refreshSelectedProfile,
+                )
+                !state.hasRemoteSchedule -> ScheduleNotLoadedCard(onRetry = viewModel::refreshSelectedProfile)
+                state.isRefreshing -> ScheduleRefreshingBanner()
+                syncError != null -> CachedScheduleWarning(message = syncError, onRetry = viewModel::refreshSelectedProfile)
+            }
+            Spacer(Modifier.height(12.dp))
+
+            if (state.lessons.isEmpty() && state.hasRemoteSchedule) {
                 EmptyDayCard(
                     date = state.selectedDate,
                     onAddLesson = {
@@ -122,7 +144,7 @@ fun ScheduleHomeScreen(
                         }
                     },
                 )
-            } else {
+            } else if (state.lessons.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     state.lessons.forEach { item ->
                         LessonCard(
@@ -291,21 +313,33 @@ private fun WeekCalendarRail(
     selectedDate: LocalDate,
     today: LocalDate,
     datesWithLessons: Set<String>,
+    coverageStartDate: LocalDate?,
+    coverageEndDate: LocalDate?,
+    showCycleIndicator: Boolean,
     onSelect: (LocalDate) -> Unit,
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
 ) {
     val monday = selectedDate.minus(DatePeriod(days = selectedDate.dayOfWeek.isoDayNumber - 1))
     val days = (0..6).map { monday.plus(DatePeriod(days = it)) }
+    val firstCoveredWeek = coverageStartDate?.startOfWeek()
+    val lastCoveredWeek = coverageEndDate?.startOfWeek()
+    val hasSemesterCycle = showCycleIndicator && coverageStartDate != null && coverageEndDate != null &&
+        coverageStartDate.plus(DatePeriod(days = 120)) <= coverageEndDate
+    val canGoPrevious = firstCoveredWeek != null && monday.minus(DatePeriod(days = 7)) >= firstCoveredWeek
+    val canGoNext = lastCoveredWeek != null && monday.plus(DatePeriod(days = 7)) <= lastCoveredWeek
     Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionEyebrow("НЕДЕЛЯ · ${weekNumberHint(monday)}")
+                SectionEyebrow(
+                    "НЕДЕЛЯ · ${weekNumberHint(monday)}",
+                    trailing = if (hasSemesterCycle) coverageEndDate?.let { "ЦИКЛ ДО ${it.toRuDate().uppercase()}" } else null,
+                )
                 Text("${monday.toRuDate()} — ${monday.plus(DatePeriod(days = 6)).toRuDate()}", color = BruColors.muted, fontSize = 12.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                WeekArrow("‹", onPreviousWeek)
-                WeekArrow("›", onNextWeek)
+                WeekArrow("‹", onPreviousWeek, enabled = canGoPrevious)
+                WeekArrow("›", onNextWeek, enabled = canGoNext)
             }
         }
         Row(
@@ -326,14 +360,20 @@ private fun WeekCalendarRail(
 }
 
 @Composable
-private fun WeekArrow(symbol: String, onClick: () -> Unit) {
+private fun WeekArrow(symbol: String, onClick: () -> Unit, enabled: Boolean) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         shape = CircleShape,
-        color = BruColors.surface,
-        border = BorderStroke(1.dp, BruColors.outline),
+        color = if (enabled) BruColors.surface else BruColors.background,
+        border = BorderStroke(1.dp, if (enabled) BruColors.outline else BruColors.outline.copy(alpha = 0.45f)),
     ) {
-        Text(symbol, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = BruColors.foreground, fontSize = 19.sp)
+        Text(
+            symbol,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            color = if (enabled) BruColors.foreground else BruColors.dim.copy(alpha = 0.55f),
+            fontSize = 19.sp,
+        )
     }
 }
 
@@ -520,6 +560,99 @@ private fun TypeTagLabel(label: String, accent: Color) {
 }
 
 @Composable
+private fun ScheduleLoadingStatusCard(title: String, detail: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        shape = RoundedCornerShape(20.dp),
+        color = BruColors.elevatedSurface,
+        border = BorderStroke(1.dp, BruColors.cyan.copy(alpha = 0.28f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(17.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(21.dp), color = BruColors.cyan, strokeWidth = 2.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, color = BruColors.foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(detail, color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleNotLoadedCard(onRetry: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = BruColors.surface,
+        border = BorderStroke(1.dp, BruColors.outline),
+    ) {
+        Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("РАСПИСАНИЕ ЕЩЁ НЕ ЗАГРУЖЕНО", color = BruColors.cyan, fontSize = 8.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+            Text("Загрузите расписание, чтобы сохранить его офлайн. Обычный недельный цикл будет показан на семестр.", color = BruColors.muted, fontSize = 11.sp, lineHeight = 16.sp)
+            TextButton(onClick = onRetry) { Text("Загрузить расписание  →", color = BruColors.cyan, fontSize = 11.sp) }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleErrorStatusCard(message: String, onRetry: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = BruColors.danger.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, BruColors.danger.copy(alpha = 0.30f)),
+    ) {
+        Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text("НЕ УДАЛОСЬ ЗАГРУЗИТЬ", color = BruColors.danger, fontSize = 8.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+            Text(message, color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            TextButton(onClick = onRetry) { Text("Повторить", color = BruColors.danger, fontSize = 11.sp) }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleRefreshingBanner() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = BruColors.cyan.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, BruColors.cyan.copy(alpha = 0.2f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(15.dp), color = BruColors.cyan, strokeWidth = 1.7.dp)
+            Text("Обновляем семестровый цикл · сохранённое расписание доступно", color = BruColors.muted, fontSize = 9.sp, lineHeight = 13.sp)
+        }
+    }
+}
+
+@Composable
+private fun CachedScheduleWarning(message: String, onRetry: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = BruColors.amber.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, BruColors.amber.copy(alpha = 0.24f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 13.dp, top = 9.dp, bottom = 9.dp, end = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("!", color = BruColors.amber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Не удалось обновить. Показан локальный кэш: $message", modifier = Modifier.weight(1f), color = BruColors.muted, fontSize = 9.sp, lineHeight = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            TextButton(onClick = onRetry) { Text("Повтор", color = BruColors.amber, fontSize = 9.sp) }
+        }
+    }
+}
+
+@Composable
 private fun EmptyDayCard(date: LocalDate, onAddLesson: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(22.dp),
@@ -588,6 +721,9 @@ private fun Lesson.hasEditableChangesFrom(original: Lesson): Boolean =
         endTime != original.endTime ||
         slotNumber != original.slotNumber ||
         type != original.type
+
+private fun LocalDate.startOfWeek(): LocalDate =
+    minus(DatePeriod(days = dayOfWeek.isoDayNumber - 1))
 
 private fun LocalDate.toRuDate(): String =
     "${dayOfMonth.toString().padStart(2, '0')} ${monthNameShort(monthNumber)}"
