@@ -126,6 +126,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/BRUScheduleDerivedData" \
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
+            ENABLE_PREVIEWS=NO \
             build 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
 
       - name: Report iOS build errors
@@ -143,12 +144,11 @@ jobs:
               print("::error::iOS build failed before a log file was created")
           else:
               lines = log.read_text(errors="replace").splitlines()
-              anchors = [i for i, line in enumerate(lines) if re.search(r"error:|failed|failure|exception|unresolved reference|no value passed|cannot be reassigned|undefined symbols|symbol not found|library not found|framework not found|duplicate symbol|ld:", line, re.I)]
-              selected_indices = sorted({j for i in anchors[-15:] for j in range(max(0, i - 6), min(len(lines), i + 3))})
-              selected = [lines[i] for i in selected_indices] if selected_indices else lines[-40:]
-              for line in selected[-45:]:
-                  escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-                  print(f"::error title=iOS build log::{escaped}")
+              tail = lines[-45:]
+              escaped_lines = []
+              for line in tail:
+                  escaped_lines.append(line[:900].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
+              print("::error title=iOS build log tail::" + "%0A".join(escaped_lines))
           PY
 
       - name: Upload iOS build log
