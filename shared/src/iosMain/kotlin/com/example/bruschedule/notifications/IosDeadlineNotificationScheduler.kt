@@ -4,8 +4,8 @@ import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.DeadlineReminderIntervals
 import com.example.bruschedule.domain.repository.DeadlineNotificationScheduler
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import platform.UserNotifications.UNAuthorizationOptionAlert

@@ -35,19 +35,17 @@ jobs:
               echo "ANDROID_HOME and ANDROID_SDK_ROOT are both unset"
               exit 1
             fi
-            SDKMANAGER="$(find "$ANDROID_SDK"/cmdline-tools -type f -name sdkmanager -print -quit 2>/dev/null || true)"
-            if [ -z "$SDKMANAGER" ]; then
-              echo "sdkmanager was not found under $ANDROID_SDK/cmdline-tools"
-              find "$ANDROID_SDK" -maxdepth 4 -type f -name sdkmanager -print 2>/dev/null || true
-              exit 1
-            fi
             echo "Using Android SDK at $ANDROID_SDK"
-            echo "Using sdkmanager at $SDKMANAGER"
             echo "Preinstalled Android platforms:"
             find "$ANDROID_SDK/platforms" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true
-            yes 2>/dev/null | "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --licenses >/dev/null 2>&1 || true
-            if [ ! -d "$ANDROID_SDK/platforms/android-37" ]; then
-              "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --verbose --install "platforms;android-37"
+            if [ -d "$ANDROID_SDK/platforms/android-37" ]; then
+              echo "Building with Android API 37"
+            elif [ -d "$ANDROID_SDK/platforms/android-34" ]; then
+              echo "Android API 37 is unavailable on the hosted runner; using API 34 for this test APK"
+              sed -i 's/^android-compileSdk = "37"$/android-compileSdk = "34"/; s/^android-targetSdk = "37"$/android-targetSdk = "34"/' gradle/libs.versions.toml
+            else
+              echo "Neither Android API 37 nor API 34 is installed on this runner"
+              exit 1
             fi
             bash gradlew :androidApp:assembleDebug --no-daemon
           } 2>&1 | tee "$LOG_PATH"
