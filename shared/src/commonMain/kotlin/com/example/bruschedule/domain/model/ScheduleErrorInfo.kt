@@ -77,13 +77,6 @@ data class ScheduleErrorInfo(
                     category = "SOURCE"
                     message = "Это расписание больше не найдено на сайте. Проверьте источник или выберите другое расписание."
                 }
-                    category = if (listOf("timeout", "timed out", "timedout").any(normalized::contains)) "TIMEOUT" else "NETWORK"
-                    message = if (category == "TIMEOUT") {
-                        "Сервер не ответил вовремя. Проверьте подключение и попробуйте ещё раз."
-                    } else {
-                        "Не удалось связаться с сервером. Проверьте подключение к интернету."
-                    }
-                }
                 listOf(".schedule-table", "пустой html", "пустое расписание", "не найдено ни одной пары", "изменил разметку", "не удалось развернуть пары").any(normalized::contains) -> {
                     category = "PARSE"
                     message = "Сайт ответил, но расписание не удалось прочитать. Возможно, изменилась структура страницы."
