@@ -12,30 +12,62 @@ permissions:
 jobs:
   android-apk:
     name: Android debug APK
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android API 37
-        run: sdkmanager --install "platforms;android-37"
-
       - name: Build installable debug APK
-        run: bash gradlew :androidApp:assembleDebug --no-daemon
+        run: |
+          set -euo pipefail
+          LOG_PATH="$RUNNER_TEMP/android-build.log"
+          {
+            ANDROID_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            if [ -z "$ANDROID_SDK" ]; then
+              echo "ANDROID_HOME and ANDROID_SDK_ROOT are both unset"
+              exit 1
+            fi
+            SDKMANAGER="$(find "$ANDROID_SDK"/cmdline-tools -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+            if [ -z "$SDKMANAGER" ]; then
+              echo "sdkmanager was not found under $ANDROID_SDK/cmdline-tools"
+              find "$ANDROID_SDK" -maxdepth 4 -type f -name sdkmanager -print 2>/dev/null || true
+              exit 1
+            fi
+            echo "Using Android SDK at $ANDROID_SDK"
+            echo "Using sdkmanager at $SDKMANAGER"
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --install "platforms;android-37"
+            bash gradlew :androidApp:assembleDebug --no-daemon
+          } 2>&1 | tee "$LOG_PATH"
+
+      - name: Report Android build errors
+        if: failure()
+        env:
+          BUILD_LOG: ${{ runner.temp }}/android-build.log
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          log = Path(os.environ["BUILD_LOG"])
+          if not log.exists():
+              print("::error::Android build failed before a log file was created")
+          else:
+              for line in log.read_text(errors="replace").splitlines()[-40:]:
+                  escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                  print(f"::error title=Android build log::{escaped}")
+          PY
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bru-schedule-android-debug-apk
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
@@ -48,27 +80,46 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
 
       - name: Build for Apple Silicon iOS Simulator
-        run: >-
-          xcodebuild
-          -project iosApp/iosApp.xcodeproj
-          -scheme iosApp
-          -configuration Debug
-          -sdk iphonesimulator
-          -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath "$RUNNER_TEMP/BRUScheduleDerivedData"
-          ARCHS=arm64
-          CODE_SIGNING_ALLOWED=NO
-          build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/BRUScheduleDerivedData" \
+            ARCHS=arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
+
+      - name: Report iOS build errors
+        if: failure()
+        env:
+          BUILD_LOG: ${{ runner.temp }}/ios-build.log
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          log = Path(os.environ["BUILD_LOG"])
+          if not log.exists():
+              print("::error::iOS build failed before a log file was created")
+          else:
+              for line in log.read_text(errors="replace").splitlines()[-40:]:
+                  escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                  print(f"::error title=iOS build log::{escaped}")
+          PY
 
       - name: Package Simulator app
         run: >-
@@ -77,7 +128,7 @@ jobs:
           "$RUNNER_TEMP/BRUSchedule-iOS-Simulator.zip"
 
       - name: Upload Simulator app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bru-schedule-ios-simulator-app
           path: ${{ runner.temp }}/BRUSchedule-iOS-Simulator.zip
