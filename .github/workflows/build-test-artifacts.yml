@@ -59,13 +59,17 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+          import re
           from pathlib import Path
 
           log = Path(os.environ["BUILD_LOG"])
           if not log.exists():
               print("::error::Android build failed before a log file was created")
           else:
-              for line in log.read_text(errors="replace").splitlines()[-40:]:
+              lines = log.read_text(errors="replace").splitlines()
+              matches = [line for line in lines if re.search(r"error:|failed|failure|exception|not found|could not|http [45][0-9][0-9]", line, re.I)]
+              selected = matches[-35:] if matches else lines[-40:]
+              for line in selected:
                   escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                   print(f"::error title=Android build log::{escaped}")
           PY
@@ -114,13 +118,17 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+          import re
           from pathlib import Path
 
           log = Path(os.environ["BUILD_LOG"])
           if not log.exists():
               print("::error::iOS build failed before a log file was created")
           else:
-              for line in log.read_text(errors="replace").splitlines()[-40:]:
+              lines = log.read_text(errors="replace").splitlines()
+              matches = [line for line in lines if re.search(r"error:|failed|failure|exception|unresolved reference|no value passed|cannot be reassigned", line, re.I)]
+              selected = matches[-35:] if matches else lines[-40:]
+              for line in selected:
                   escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                   print(f"::error title=iOS build log::{escaped}")
           PY
