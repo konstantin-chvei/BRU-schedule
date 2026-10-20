@@ -65,9 +65,10 @@ jobs:
               print("::error::Android build failed before a log file was created")
           else:
               lines = log.read_text(errors="replace").splitlines()
-              matches = [line for line in lines if re.search(r"error:|failed|failure|exception|not found|could not|http [45][0-9][0-9]", line, re.I)]
-              selected = matches[-35:] if matches else lines[-40:]
-              for line in selected:
+              anchors = [i for i, line in enumerate(lines) if re.search(r"error:|failed|failure|exception|not found|could not|http [45][0-9][0-9]|aar metadata|compile.?sdk|minCompileSdk", line, re.I)]
+              selected_indices = sorted({j for i in anchors[-15:] for j in range(max(0, i - 2), min(len(lines), i + 3))})
+              selected = [lines[i] for i in selected_indices] if selected_indices else lines[-40:]
+              for line in selected[-45:]:
                   escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                   print(f"::error title=Android build log::{escaped}")
           PY
@@ -124,9 +125,10 @@ jobs:
               print("::error::iOS build failed before a log file was created")
           else:
               lines = log.read_text(errors="replace").splitlines()
-              matches = [line for line in lines if re.search(r"error:|failed|failure|exception|unresolved reference|no value passed|cannot be reassigned", line, re.I)]
-              selected = matches[-35:] if matches else lines[-40:]
-              for line in selected:
+              anchors = [i for i, line in enumerate(lines) if re.search(r"error:|failed|failure|exception|unresolved reference|no value passed|cannot be reassigned|undefined symbols|symbol not found|library not found|framework not found|duplicate symbol|ld:", line, re.I)]
+              selected_indices = sorted({j for i in anchors[-15:] for j in range(max(0, i - 6), min(len(lines), i + 3))})
+              selected = [lines[i] for i in selected_indices] if selected_indices else lines[-40:]
+              for line in selected[-45:]:
                   escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                   print(f"::error title=iOS build log::{escaped}")
           PY
