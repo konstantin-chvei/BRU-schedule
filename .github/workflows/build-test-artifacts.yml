@@ -1,0 +1,85 @@
+name: Build test artifacts
+
+on:
+  push:
+    branches:
+      - arena/a130e7c0-bru-schedule
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 37
+        run: sdkmanager --install "platforms;android-37"
+
+      - name: Build installable debug APK
+        run: bash gradlew :androidApp:assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bru-schedule-android-debug-apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  ios-simulator:
+    name: iOS Simulator app
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build for Apple Silicon iOS Simulator
+        run: >-
+          xcodebuild
+          -project iosApp/iosApp.xcodeproj
+          -scheme iosApp
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/BRUScheduleDerivedData"
+          ARCHS=arm64
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Package Simulator app
+        run: >-
+          ditto -c -k --sequesterRsrc --keepParent
+          "$RUNNER_TEMP/BRUScheduleDerivedData/Build/Products/Debug-iphonesimulator/BRUSchedule.app"
+          "$RUNNER_TEMP/BRUSchedule-iOS-Simulator.zip"
+
+      - name: Upload Simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: bru-schedule-ios-simulator-app
+          path: ${{ runner.temp }}/BRUSchedule-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 30
