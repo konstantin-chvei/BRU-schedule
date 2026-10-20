@@ -28,6 +28,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,6 +50,7 @@ import com.example.bruschedule.domain.model.DeadlineReminderIntervals
 import com.example.bruschedule.domain.model.DeadlineReminderPreferences
 import com.example.bruschedule.domain.model.AcademicTrack
 import com.example.bruschedule.domain.model.SemesterSchedulePreferences
+import com.example.bruschedule.domain.model.TypographyPreferences
 import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -60,6 +63,7 @@ import com.example.bruschedule.ui.theme.BruColors
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.roundToInt
 
 @Composable
 fun ScheduleSettingsScreen(
@@ -87,6 +91,11 @@ fun ScheduleSettingsScreen(
             onThemeSelected = viewModel::setTheme,
             onLessonColorSelected = viewModel::setLessonColor,
             onResetLessonColors = viewModel::resetLessonColors,
+        )
+
+        TypographySettingsCard(
+            fontScale = state.typography.fontScale,
+            onFontScaleChanged = viewModel::setTypographyScale,
         )
 
         SemesterScheduleSettingsCard(
@@ -183,6 +192,62 @@ fun ScheduleSettingsScreen(
             titleContentColor = BruColors.foreground,
             textContentColor = BruColors.muted,
         )
+    }
+}
+
+@Composable
+private fun TypographySettingsCard(
+    fontScale: Float,
+    onFontScaleChanged: (Float) -> Unit,
+) {
+    Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("ТИПОГРАФИКА", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                Text("Размер текста", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Настройте все надписи в приложении. Изменения видны сразу.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+            }
+            Surface(shape = RoundedCornerShape(14.dp), color = BruColors.elevatedSurface) {
+                Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("BRU / SCHEDULE", color = BruColors.foreground, fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                    Text("Расписание на сегодня · ближайшая пара", color = BruColors.muted, fontSize = 13.sp)
+                    Text("Мелкая подпись и время · 09:40", color = BruColors.dim, fontSize = 11.sp)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Общий масштаб", color = BruColors.muted, fontSize = 11.sp)
+                Text(
+                    "${(fontScale * 100).roundToInt()}%",
+                    color = BruColors.cyan,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Slider(
+                value = fontScale,
+                onValueChange = onFontScaleChanged,
+                valueRange = TypographyPreferences.MIN_FONT_SCALE..TypographyPreferences.MAX_FONT_SCALE,
+                steps = 3,
+                colors = SliderDefaults.colors(
+                    thumbColor = BruColors.cyan,
+                    activeTrackColor = BruColors.indigo,
+                    inactiveTrackColor = BruColors.outline,
+                    activeTickColor = BruColors.cyan,
+                    inactiveTickColor = BruColors.muted,
+                ),
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Стандартный", color = BruColors.dim, fontSize = 9.sp)
+                Text("Крупный", color = BruColors.dim, fontSize = 9.sp)
+            }
+            TextButton(onClick = { onFontScaleChanged(TypographyPreferences.DEFAULT_FONT_SCALE) }) {
+                Text("Сбросить к 110%", color = BruColors.cyan, fontSize = 11.sp)
+            }
+        }
     }
 }
 

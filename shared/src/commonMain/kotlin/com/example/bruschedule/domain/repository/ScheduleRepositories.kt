@@ -3,6 +3,7 @@ package com.example.bruschedule.domain.repository
 import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.AppearancePreferences
 import com.example.bruschedule.domain.model.SemesterSchedulePreferences
+import com.example.bruschedule.domain.model.TypographyPreferences
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleAppTheme
@@ -66,4 +67,10 @@ interface AppearancePreferencesRepository {
 interface SemesterSchedulePreferencesRepository {
     fun observe(): Flow<SemesterSchedulePreferences>
     suspend fun update(preferences: SemesterSchedulePreferences)
+}
+
+/** Persisted global font-size multiplier used by the Compose density provider. */
+interface TypographyPreferencesRepository {
+    fun observe(): Flow<TypographyPreferences>
+    suspend fun update(preferences: TypographyPreferences)
 }

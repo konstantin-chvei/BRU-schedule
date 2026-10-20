@@ -7,6 +7,7 @@ import com.example.bruschedule.domain.model.AcademicTrack
 import com.example.bruschedule.domain.model.AppearancePreferences
 import com.example.bruschedule.domain.model.DEFAULT_DAILY_MESSAGES
 import com.example.bruschedule.domain.model.SemesterSchedulePreferences
+import com.example.bruschedule.domain.model.TypographyPreferences
 import com.example.bruschedule.domain.model.DomainIds
 import com.example.bruschedule.domain.model.DeadlineLinkType
 import com.example.bruschedule.domain.model.DeadlineReminderPreferences
@@ -28,6 +29,7 @@ import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepositor
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
 import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepository
+import com.example.bruschedule.domain.repository.TypographyPreferencesRepository
 import com.example.bruschedule.domain.usecase.DailyMessageSelector
 import com.example.bruschedule.domain.usecase.DeadlineReminderPolicy
 import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
@@ -107,6 +109,7 @@ data class ScheduleUiState(
     val scheduleCoverageStartDate: LocalDate? = null,
     val scheduleCoverageEndDate: LocalDate? = null,
     val appearance: AppearancePreferences = AppearancePreferences(),
+    val typography: TypographyPreferences = TypographyPreferences(),
     val notice: String? = null,
     val profileSearch: ProfileSearchUiState = ProfileSearchUiState(),
     val nowEpochMillis: Long = 0L,
@@ -139,6 +142,7 @@ class ScheduleViewModel(
     private val deadlineReminderPreferencesRepository: DeadlineReminderPreferencesRepository,
     private val semesterSchedulePreferencesRepository: SemesterSchedulePreferencesRepository,
     private val dailyMessagesRepository: DailyMessagesRepository,
+    private val typographyPreferencesRepository: TypographyPreferencesRepository,
     private val deadlineNotificationScheduler: DeadlineNotificationScheduler,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
@@ -170,12 +174,18 @@ class ScheduleViewModel(
         started = SharingStarted.Eagerly,
         initialValue = DEFAULT_DAILY_MESSAGES,
     )
+    private val typography = typographyPreferencesRepository.observe().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = TypographyPreferences(),
+    )
 
     private data class ScreenPreferencesState(
         val appearance: AppearancePreferences,
         val deadlineReminders: DeadlineReminderPreferences,
         val semester: SemesterSchedulePreferences,
         val dailyMessages: List<String>,
+        val typography: TypographyPreferences,
     )
 
     private val screenPreferences = combine(
@@ -183,8 +193,9 @@ class ScheduleViewModel(
         reminderPreferences,
         semesterPreferences,
         dailyMessages,
-    ) { currentAppearance, reminders, semester, messages ->
-        ScreenPreferencesState(currentAppearance, reminders, semester, messages)
+        typography,
+    ) { currentAppearance, reminders, semester, messages, currentTypography ->
+        ScreenPreferencesState(currentAppearance, reminders, semester, messages, currentTypography)
     }
 
     private data class BaseState(
@@ -336,6 +347,7 @@ class ScheduleViewModel(
             scheduleCoverageStartDate = coverageStartDate,
             scheduleCoverageEndDate = coverageEndDate,
             appearance = preferences.appearance,
+            typography = preferences.typography,
             notice = selection.transient.notice,
             profileSearch = selection.transient.profileSearch,
             nowEpochMillis = now,
@@ -401,6 +413,21 @@ class ScheduleViewModel(
 
     fun setTheme(theme: ScheduleAppTheme) = updateAppearance {
         appearancePreferences.setTheme(theme)
+    }
+
+    fun setTypographyScale(scale: Float) {
+        val preferences = TypographyPreferences(
+            fontScale = TypographyPreferences.normalize(scale),
+        )
+        viewModelScope.launch {
+            try {
+                typographyPreferencesRepository.update(preferences)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = "Не удалось сохранить размер шрифта: ${failure.message ?: "ошибка настроек"}"
+            }
+        }
     }
 
     fun setLessonColor(type: LessonType, colorHex: String) = updateAppearance {

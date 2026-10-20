@@ -5,13 +5,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -42,18 +43,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
-import com.example.bruschedule.generated.resources.Res
-import com.example.bruschedule.generated.resources.bru_schedule_app_icon
-import org.jetbrains.compose.resources.painterResource
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.presentation.LessonUiItem
 import com.example.bruschedule.presentation.ScheduleUiState
@@ -255,28 +259,14 @@ private fun ScheduleTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(45.dp)
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(BruColors.elevatedSurface)
-                    .border(1.dp, BruColors.outline, RoundedCornerShape(15.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    painter = painterResource(Res.drawable.bru_schedule_app_icon),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(15.dp)),
-                )
-            }
+            BrandCalendarGlyph()
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("BRU / SCHEDULE", color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                 Text(
                     dailyMessage,
                     color = BruColors.muted,
-                    fontSize = 9.sp,
-                    lineHeight = 12.sp,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -297,6 +287,52 @@ private fun ScheduleTopBar(
                 Text(if (refreshing) "···" else "↻", color = BruColors.cyan, fontSize = 17.sp)
                 Text(if (refreshing) "Загрузка" else "Обновить", color = BruColors.foreground, fontSize = 11.sp)
             }
+        }
+    }
+}
+
+@Composable
+private fun BrandCalendarGlyph() {
+    val ink = BruColors.foreground
+    val accent = BruColors.cyan
+    Canvas(Modifier.size(45.dp)) {
+        drawBrandCalendarGlyph(ink, accent)
+    }
+}
+
+private fun DrawScope.drawBrandCalendarGlyph(ink: Color, accent: Color) {
+    val unit = minOf(size.width, size.height) / 44f
+    val stroke = 2.1f * unit
+    val left = 5f * unit
+    val top = 7f * unit
+    val frameSize = Size(34f * unit, 30f * unit)
+
+    listOf(14f, 30f).forEach { x ->
+        drawLine(ink, Offset(x * unit, 3f * unit), Offset(x * unit, 12f * unit), stroke, StrokeCap.Round)
+    }
+    drawRoundRect(
+        color = ink,
+        topLeft = Offset(left, top),
+        size = frameSize,
+        cornerRadius = CornerRadius(5f * unit),
+        style = Stroke(width = stroke),
+    )
+    drawLine(ink, Offset(left, 17f * unit), Offset(left + frameSize.width, 17f * unit), stroke, StrokeCap.Round)
+
+    val cellSize = 3.2f * unit
+    val cellGap = 2.1f * unit
+    val gridWidth = cellSize * 4f + cellGap * 3f
+    val gridLeft = (size.width - gridWidth) / 2f
+    for (row in 0..1) {
+        for (column in 0..3) {
+            val x = gridLeft + column * (cellSize + cellGap)
+            val y = (21f + row * 7f) * unit
+            drawRoundRect(
+                color = if (row == 0 && column == 2) accent else ink.copy(alpha = 0.9f),
+                topLeft = Offset(x, y),
+                size = Size(cellSize, cellSize),
+                cornerRadius = CornerRadius(1f * unit),
+            )
         }
     }
 }
@@ -410,23 +446,30 @@ private fun WeekCalendarRail(
                 onSelect = onSelect,
             )
         } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                days.forEach { date ->
-                    DayPill(
-                        date = date,
-                        selected = date == selectedDate,
-                        isToday = date == today,
-                        hasLessons = date.toString() in datesWithLessons,
-                        enabled = coverageStartDate != null && coverageEndDate != null &&
-                            date >= coverageStartDate && date <= coverageEndDate,
-                        onClick = { onSelect(date) },
-                    )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val showAllDays = maxWidth >= 364.dp
+                val pillGap = if (showAllDays) 5.dp else 8.dp
+                val pillWidth = if (showAllDays) {
+                    ((maxWidth - 42.dp) / 7f).coerceAtMost(52.dp)
+                } else {
+                    ((maxWidth - 12.dp - 40.dp) / 6f).coerceIn(36.dp, 56.dp)
+                }
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    Spacer(Modifier.width(6.dp))
+                    days.forEachIndexed { index, date ->
+                        if (index > 0) Spacer(Modifier.width(pillGap))
+                        DayPill(
+                            date = date,
+                            pillWidth = pillWidth,
+                            selected = date == selectedDate,
+                            isToday = date == today,
+                            hasLessons = date.toString() in datesWithLessons,
+                            enabled = coverageStartDate != null && coverageEndDate != null &&
+                                date >= coverageStartDate && date <= coverageEndDate,
+                            onClick = { onSelect(date) },
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
                 }
             }
         }
@@ -587,6 +630,7 @@ private fun WeekArrow(symbol: String, onClick: () -> Unit, enabled: Boolean) {
 @Composable
 private fun DayPill(
     date: LocalDate,
+    pillWidth: Dp,
     selected: Boolean,
     isToday: Boolean,
     hasLessons: Boolean,
@@ -601,7 +645,7 @@ private fun DayPill(
     )
     Column(
         modifier = Modifier
-            .width(52.dp)
+            .width(pillWidth)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(17.dp))
             .background(if (selected) BruColors.indigo.copy(alpha = 0.16f) else BruColors.surface)

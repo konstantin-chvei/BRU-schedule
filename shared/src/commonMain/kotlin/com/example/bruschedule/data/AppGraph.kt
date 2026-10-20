@@ -13,11 +13,13 @@ import com.example.bruschedule.data.settings.KmpSettingsAppearanceRepository
 import com.example.bruschedule.data.settings.KmpSettingsDeadlineReminderRepository
 import com.example.bruschedule.data.settings.KmpSettingsSemesterScheduleRepository
 import com.example.bruschedule.data.settings.KmpSettingsDailyMessagesRepository
+import com.example.bruschedule.data.settings.KmpSettingsTypographyPreferencesRepository
 import com.example.bruschedule.data.remote.GitHubDailyMessagesRemoteDataSource
 import com.example.bruschedule.data.settings.KmpSettingsParserVersionFlags
 import com.example.bruschedule.domain.repository.AppearancePreferencesRepository
 import com.example.bruschedule.domain.repository.DailyMessagesRepository
 import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepository
+import com.example.bruschedule.domain.repository.TypographyPreferencesRepository
 import com.example.bruschedule.domain.repository.DeadlineNotificationScheduler
 import com.example.bruschedule.domain.repository.DeadlineReminderPreferencesRepository
 import com.example.bruschedule.domain.repository.NoOpDeadlineNotificationScheduler
@@ -41,6 +43,7 @@ data class AppGraph(
     val deadlineReminderPreferences: DeadlineReminderPreferencesRepository,
     val semesterSchedulePreferences: SemesterSchedulePreferencesRepository,
     val dailyMessages: DailyMessagesRepository,
+    val typographyPreferences: TypographyPreferencesRepository,
     val deadlineNotificationScheduler: DeadlineNotificationScheduler,
 )
 
@@ -60,6 +63,7 @@ fun createAppGraph(
         settings = settings,
         remote = GitHubDailyMessagesRemoteDataSource(transport),
     )
+    val typographyPreferences = KmpSettingsTypographyPreferencesRepository(settings)
 
     // SQLDelight owns real migrations. This KMP Settings marker is useful for diagnostics/upgrade
     // gates and is intentionally not used as a replacement for database schema migrations.
@@ -88,6 +92,7 @@ fun createAppGraph(
         deadlineReminderPreferences = deadlineReminderPreferences,
         semesterSchedulePreferences = semesterSchedulePreferences,
         dailyMessages = dailyMessages,
+        typographyPreferences = typographyPreferences,
         deadlineNotificationScheduler = deadlineNotificationScheduler,
     )
 }
