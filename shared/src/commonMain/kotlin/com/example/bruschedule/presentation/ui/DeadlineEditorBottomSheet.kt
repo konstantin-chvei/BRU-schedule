@@ -21,7 +21,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -39,7 +38,9 @@ import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.DeadlineLinkType
 import com.example.bruschedule.domain.model.DeadlineReminderIntervals
 import com.example.bruschedule.domain.model.Lesson
+import com.example.bruschedule.domain.model.LessonRecurrence
 import com.example.bruschedule.domain.model.TaskReminderMode
+import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.presentation.DeadlineDraft
 import com.example.bruschedule.presentation.ScheduleUiState
 import com.example.bruschedule.ui.theme.BruColors
@@ -55,6 +56,7 @@ import kotlinx.datetime.toLocalDateTime
 fun DeadlineEditorBottomSheet(
     state: ScheduleUiState,
     initialLesson: Lesson? = null,
+    initialLessonRecurrence: LessonRecurrence = LessonRecurrence.NONE,
     initialTask: AcademicTask? = null,
     lessonToPersist: Lesson? = null,
     onDismiss: () -> Unit,
@@ -101,6 +103,7 @@ fun DeadlineEditorBottomSheet(
         .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }))
     val subjects = profileLessons.map { it.subjectName.trim() }.filter(String::isNotBlank).distinct().sorted()
     val availableProfileLessons = profileLessons
+    val selectedLinkedLesson = availableProfileLessons.firstOrNull { it.id == selectedLessonId }
     val selectedProfile = state.profiles.firstOrNull { it.id == selectedProfileId }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -145,6 +148,7 @@ fun DeadlineEditorBottomSheet(
                 onValueChange = { title = it },
                 label = { Text("Название задания") },
                 modifier = Modifier.fillMaxWidth(),
+                textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
                 shape = RoundedCornerShape(13.dp),
             )
@@ -153,6 +157,7 @@ fun DeadlineEditorBottomSheet(
                 onValueChange = { description = it },
                 label = { Text("Комментарий · необязательно") },
                 modifier = Modifier.fillMaxWidth(),
+                textStyle = typographyTextStyle(TypographyRole.BODY),
                 minLines = 2,
                 shape = RoundedCornerShape(13.dp),
             )
@@ -168,6 +173,7 @@ fun DeadlineEditorBottomSheet(
                 },
                 label = { Text("Дата · ГГГГ-ММ-ДД") },
                 modifier = Modifier.fillMaxWidth(),
+                textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
                 isError = dateError != null,
                 shape = RoundedCornerShape(13.dp),
@@ -239,6 +245,16 @@ fun DeadlineEditorBottomSheet(
                         }
                         Text("Дедлайн будет связан с предметом, но не с одной конкретной датой занятий.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
                     } else if (availableProfileLessons.isNotEmpty()) {
+                        if (initialTask?.linkType == DeadlineLinkType.LESSON &&
+                            availableProfileLessons.none { it.id == initialTask.lessonId }
+                        ) {
+                            Text(
+                                "Исходная пара удалена или перенесена. Выберите новую пару и при необходимости измените срок.",
+                                color = BruColors.danger,
+                                fontSize = 10.sp,
+                                lineHeight = 15.sp,
+                            )
+                        }
                         SelectionField(
                             label = "КОНКРЕТНАЯ ПАРА",
                             value = availableProfileLessons.firstOrNull { it.id == selectedLessonId }?.let(::lessonLabel) ?: "Выберите пару",
@@ -246,6 +262,16 @@ fun DeadlineEditorBottomSheet(
                             onSelect = { selectedLessonId = it },
                         )
                         Text("Дедлайн будет связан с выбранным занятием, датой и временем.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
+                        selectedLinkedLesson?.let { lesson ->
+                            TextButton(
+                                onClick = {
+                                    dueDate = lesson.lessonDate
+                                    dateError = null
+                                },
+                            ) {
+                                Text("Поставить срок на дату пары", color = BruColors.cyan, fontSize = 10.sp)
+                            }
+                        }
                     } else {
                         Text("В этом профиле пока нет занятий. Выберите другой профиль или тип привязки.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
                     }
@@ -324,6 +350,7 @@ fun DeadlineEditorBottomSheet(
                                     },
                                     taskId = initialTask?.id,
                                     isCompleted = initialTask?.isCompleted ?: false,
+                                    lessonRecurrence = initialLessonRecurrence,
                                 ),
                             )
                         }

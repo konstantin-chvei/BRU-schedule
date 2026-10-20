@@ -19,7 +19,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -35,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ScheduleProfileType
+import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.presentation.ProfileSearchUiState
 import com.example.bruschedule.ui.theme.BruColors
 
@@ -83,6 +83,7 @@ fun AddProfileBottomSheet(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
+                textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
                 label = { Text(if (selectedType == ScheduleProfileType.GROUP) "Номер группы" else "Фамилия преподавателя") },
                 placeholder = { Text(if (selectedType == ScheduleProfileType.GROUP) "Например, МПР-261" else "Например, Агеева") },
@@ -102,8 +103,11 @@ fun AddProfileBottomSheet(
                 Text(if (searchState.loading) "Ищем в каталоге" else "Искать на сайте", fontWeight = FontWeight.SemiBold)
             }
 
-            searchState.error?.let {
-                Text(it, color = BruColors.danger, fontSize = 11.sp, lineHeight = 16.sp)
+            searchState.error?.let { error ->
+                ScheduleErrorPanel(
+                    error = error,
+                    onRetry = { onSearch(selectedType, query.trim()) },
+                )
             }
             searchState.candidates.take(14).forEach { candidate ->
                 ProfileCandidateRow(candidate, onClick = { onSelectCandidate(candidate) })
@@ -118,6 +122,7 @@ fun AddProfileBottomSheet(
                 value = sourceUrl,
                 onValueChange = { sourceUrl = it },
                 modifier = Modifier.fillMaxWidth(),
+                textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
                 label = { Text("Ссылка на страницу rasp.bru.by · необязательно") },
                 placeholder = { Text("https://rasp.bru.by/…") },

@@ -11,6 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -18,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -32,8 +33,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.Lesson
+import com.example.bruschedule.domain.model.LessonNotes
+import com.example.bruschedule.domain.model.LessonRecurrence
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
+import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.ui.theme.BruColors
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -44,9 +48,12 @@ import kotlinx.datetime.isoDayNumber
 fun LessonActionBottomSheet(
     lesson: Lesson,
     isNew: Boolean,
+    linkedDeadlineCount: Int = 0,
+    minimumLessonDate: LocalDate? = null,
+    maximumLessonDate: LocalDate? = null,
     onDismiss: () -> Unit,
-    onSaveLesson: (Lesson) -> Unit,
-    onCreateTask: (Lesson) -> Unit,
+    onSaveLesson: (Lesson, Boolean, LessonRecurrence) -> Unit,
+    onCreateTask: (Lesson, LessonRecurrence) -> Unit,
 ) {
     var subject by remember(lesson.id) { mutableStateOf(lesson.subjectName) }
     var teacher by remember(lesson.id) { mutableStateOf(lesson.teacherName) }
@@ -56,8 +63,12 @@ fun LessonActionBottomSheet(
     var end by remember(lesson.id) { mutableStateOf(lesson.endTime) }
     var slot by remember(lesson.id) { mutableStateOf(lesson.slotNumber.takeIf { it > 0 }?.toString().orEmpty()) }
     var type by remember(lesson.id) { mutableStateOf(lesson.type) }
+    var notes by remember(lesson.id) { mutableStateOf(lesson.notes) }
+    var recurrence by remember(lesson.id) { mutableStateOf(LessonRecurrence.NONE) }
+    var moveLinkedDeadlines by remember(lesson.id) { mutableStateOf(false) }
     var validationError by remember(lesson.id) { mutableStateOf<String?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val fieldTextStyle = typographyTextStyle(TypographyRole.BODY)
     val editedLesson = lesson.copy(
         subjectName = subject.trim(),
         teacherName = teacher.trim(),
@@ -70,6 +81,7 @@ fun LessonActionBottomSheet(
         type = type,
         colorHex = LessonTypePalette.accent(type),
         isCustom = true,
+        notes = notes.trim(),
     )
 
     ModalBottomSheet(
@@ -88,26 +100,126 @@ fun LessonActionBottomSheet(
         ) {
             Text("${if (isNew) "НОВАЯ" else "РУЧНАЯ ПРАВКА"} · ПАРА", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.2.sp)
             Text(if (isNew) "Добавить пару" else "Изменить расписание", color = BruColors.foreground, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(subject, { subject = it }, label = { Text("Предмет") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(13.dp))
-            OutlinedTextField(teacher, { teacher = it }, label = { Text("Преподаватель") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(13.dp))
-            OutlinedTextField(classroom, { classroom = it }, label = { Text("Корпус / аудитория") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(13.dp))
+            OutlinedTextField(
+                value = subject,
+                onValueChange = { subject = it },
+                label = { Text("Предмет") },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = fieldTextStyle,
+                singleLine = true,
+                shape = RoundedCornerShape(13.dp),
+            )
+            OutlinedTextField(
+                value = teacher,
+                onValueChange = { teacher = it },
+                label = { Text("Преподаватель") },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = fieldTextStyle,
+                singleLine = true,
+                shape = RoundedCornerShape(13.dp),
+            )
+            OutlinedTextField(
+                value = classroom,
+                onValueChange = { classroom = it },
+                label = { Text("Корпус / аудитория") },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = fieldTextStyle,
+                singleLine = true,
+                shape = RoundedCornerShape(13.dp),
+            )
+            OutlinedTextField(
+                value = notes,
+                onValueChange = { notes = it.take(LessonNotes.MAX_LENGTH) },
+                label = { Text("Заметки · необязательно") },
+                placeholder = { Text("Например: ручку и линейку") },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = fieldTextStyle,
+                minLines = 2,
+                maxLines = 4,
+                shape = RoundedCornerShape(13.dp),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(date, { date = it }, label = { Text("Дата · ГГГГ-ММ-ДД") }, modifier = Modifier.weight(1.2f), singleLine = true, shape = RoundedCornerShape(13.dp))
-                OutlinedTextField(slot, { slot = it }, label = { Text("Пара №") }, modifier = Modifier.weight(0.8f), singleLine = true, shape = RoundedCornerShape(13.dp))
+                OutlinedTextField(
+                    value = date,
+                    onValueChange = { date = it },
+                    label = { Text("Дата · ГГГГ-ММ-ДД") },
+                    modifier = Modifier.weight(1.2f),
+                    textStyle = fieldTextStyle,
+                    singleLine = true,
+                    shape = RoundedCornerShape(13.dp),
+                )
+                OutlinedTextField(
+                    value = slot,
+                    onValueChange = { slot = it },
+                    label = { Text("Пара №") },
+                    modifier = Modifier.weight(0.8f),
+                    textStyle = fieldTextStyle,
+                    singleLine = true,
+                    shape = RoundedCornerShape(13.dp),
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(start, { start = it }, label = { Text("Начало") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(13.dp))
-                OutlinedTextField(end, { end = it }, label = { Text("Конец") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(13.dp))
+                OutlinedTextField(
+                    value = start,
+                    onValueChange = { start = it },
+                    label = { Text("Начало") },
+                    modifier = Modifier.weight(1f),
+                    textStyle = fieldTextStyle,
+                    singleLine = true,
+                    shape = RoundedCornerShape(13.dp),
+                )
+                OutlinedTextField(
+                    value = end,
+                    onValueChange = { end = it },
+                    label = { Text("Конец") },
+                    modifier = Modifier.weight(1f),
+                    textStyle = fieldTextStyle,
+                    singleLine = true,
+                    shape = RoundedCornerShape(13.dp),
+                )
             }
             LessonTypeDropdown(type, onTypeChange = { type = it })
+            if (isNew) {
+                LessonRecurrenceDropdown(recurrence, onRecurrenceChange = { recurrence = it })
+                Text(
+                    "Повторы создаются до конца периода расписания. Каждый экземпляр можно изменить отдельно.",
+                    color = BruColors.dim,
+                    fontSize = 9.sp,
+                    lineHeight = 13.sp,
+                )
+            }
             validationError?.let { Text(it, color = BruColors.danger, fontSize = 11.sp) }
             Text("Ручные пары не перезаписываются при синхронизации с сайтом.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
+            if (linkedDeadlineCount > 0) {
+                Surface(shape = RoundedCornerShape(12.dp), color = BruColors.elevatedSurface) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(end = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = moveLinkedDeadlines,
+                            onCheckedChange = { moveLinkedDeadlines = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = BruColors.cyan,
+                                uncheckedColor = BruColors.dim,
+                                checkmarkColor = BruColors.background,
+                            ),
+                        )
+                        Text(
+                            "Перенести $linkedDeadlineCount связанных дедлайнов на дату этой пары",
+                            color = BruColors.muted,
+                            fontSize = 10.sp,
+                            lineHeight = 14.sp,
+                        )
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Закрыть", color = BruColors.muted) }
                 Button(
                     onClick = {
-                        validationError = validateLesson(editedLesson)
-                        if (validationError == null) onSaveLesson(editedLesson)
+                        validationError = validateLesson(editedLesson, minimumLessonDate, maximumLessonDate)
+                        if (validationError == null) onSaveLesson(editedLesson, moveLinkedDeadlines, recurrence)
                     },
                     modifier = Modifier.weight(1.2f),
                     shape = RoundedCornerShape(13.dp),
@@ -116,8 +228,8 @@ fun LessonActionBottomSheet(
             }
             Button(
                 onClick = {
-                    validationError = validateLesson(editedLesson)
-                    if (validationError == null) onCreateTask(editedLesson)
+                    validationError = validateLesson(editedLesson, minimumLessonDate, maximumLessonDate)
+                    if (validationError == null) onCreateTask(editedLesson, recurrence)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(13.dp),
@@ -157,12 +269,66 @@ private fun LessonTypeDropdown(type: LessonType, onTypeChange: (LessonType) -> U
     }
 }
 
-private fun validateLesson(lesson: Lesson): String? {
+@Composable
+private fun LessonRecurrenceDropdown(
+    recurrence: LessonRecurrence,
+    onRecurrenceChange: (LessonRecurrence) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("ПОВТОРЕНИЕ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
+        Box {
+            Surface(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(13.dp),
+                color = BruColors.elevatedSurface,
+                border = BorderStroke(1.dp, BruColors.outline),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(recurrence.label(), color = BruColors.foreground, fontSize = 12.sp)
+                    Text("⌄", color = BruColors.muted)
+                }
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                LessonRecurrence.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label()) },
+                        onClick = {
+                            onRecurrenceChange(option)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun LessonRecurrence.label(): String = when (this) {
+    LessonRecurrence.NONE -> "Без повтора"
+    LessonRecurrence.WEEKLY -> "Раз в неделю"
+    LessonRecurrence.BIWEEKLY -> "Раз в две недели"
+    LessonRecurrence.MONTHLY -> "Раз в месяц"
+}
+
+private fun validateLesson(
+    lesson: Lesson,
+    minimumLessonDate: LocalDate?,
+    maximumLessonDate: LocalDate?,
+): String? {
     if (lesson.subjectName.isBlank()) return "Название предмета не может быть пустым"
     val start = runCatching { LocalTime.parse(lesson.startTime) }.getOrNull()
     val end = runCatching { LocalTime.parse(lesson.endTime) }.getOrNull()
     if (start == null || end == null || end <= start) return "Укажите корректное время начала и окончания в формате ЧЧ:ММ"
-    if (runCatching { LocalDate.parse(lesson.lessonDate) }.isFailure) return "Дата должна быть в формате ГГГГ-ММ-ДД"
+    val date = runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull()
+        ?: return "Дата должна быть в формате ГГГГ-ММ-ДД"
+    if (minimumLessonDate != null && date < minimumLessonDate) return "Дата пары не может быть раньше текущего периода расписания"
+    if (maximumLessonDate != null && date > maximumLessonDate) return "Дата пары выходит за конец выбранного периода расписания"
     return null
 }
 

@@ -7,6 +7,7 @@ import com.example.bruschedule.data.local.db.ScheduleDatabase
 import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.DeadlineLinkType
 import com.example.bruschedule.domain.model.Lesson
+import com.example.bruschedule.domain.model.LessonNotes
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ProfileSyncState
@@ -46,7 +47,7 @@ class SqlDelightScheduleRepository(
             rows.map { row -> lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
             ) }
         }
 
@@ -55,7 +56,7 @@ class SqlDelightScheduleRepository(
             rows.map { row -> lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
             ) }
         }
 
@@ -107,7 +108,7 @@ class SqlDelightScheduleRepository(
             lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
             )
         }
 
@@ -116,7 +117,7 @@ class SqlDelightScheduleRepository(
             lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
             )
         }
 
@@ -139,16 +140,66 @@ class SqlDelightScheduleRepository(
     }
 
     override suspend fun saveCustomLesson(lesson: Lesson) {
+        saveCustomLessons(listOf(lesson))
+    }
+
+    override suspend fun saveCustomLessons(lessons: List<Lesson>) {
+        if (lessons.isEmpty()) return
+        database.transaction { lessons.forEach(::upsertCustomLesson) }
+    }
+
+    override suspend fun saveLessonNotes(lessonId: String, notes: String): Boolean {
+        var saved = false
         database.transaction {
-            val previous = queries.getLesson(lesson.id).executeAsOneOrNull()
-            val customLesson = lesson.copy(
-                isCustom = true,
-                version = (previous?.version?.toInt() ?: 0) + 1,
-                colorHex = LessonTypePalette.accent(lesson.type),
-                sourceKey = lesson.sourceKey.ifBlank { "custom:${lesson.id}" },
-            )
-            upsertLesson(customLesson)
+            if (queries.getLesson(lessonId).executeAsOneOrNull() == null) return@transaction
+            val safeNotes = notes.take(LessonNotes.MAX_LENGTH)
+            queries.updateLessonNotes(safeNotes, lessonId)
+            // Notes belong to the user, not to a schedule version; rollback must preserve them.
+            queries.updateLessonSnapshotNotes(safeNotes, lessonId)
+            saved = true
         }
+        return saved
+    }
+
+    private fun upsertCustomLesson(lesson: Lesson) {
+        val previous = queries.getLesson(lesson.id).executeAsOneOrNull()
+        val customLesson = lesson.copy(
+            isCustom = true,
+            version = (previous?.version?.toInt() ?: 0) + 1,
+            colorHex = LessonTypePalette.accent(lesson.type),
+            sourceKey = lesson.sourceKey.ifBlank { "custom:${lesson.id}" },
+            notes = lesson.notes.take(LessonNotes.MAX_LENGTH),
+        )
+        upsertLesson(customLesson)
+    }
+
+    override suspend fun deleteCustomLessonAndPreserveTasks(lessonId: String): Boolean {
+        var deleted = false
+        database.transaction {
+            val lesson = queries.getLesson(lessonId).executeAsOneOrNull() ?: return@transaction
+            if (lesson.isCustom == 0L) return@transaction
+
+            queries.selectTasksForLesson(lessonId).executeAsList().forEach { task ->
+                val canKeepSubjectLink = !task.profileId.isNullOrBlank() && task.subjectNameSnapshot.isNotBlank()
+                val fallbackLinkType = if (canKeepSubjectLink) DeadlineLinkType.SUBJECT.name else DeadlineLinkType.NONE.name
+                queries.updateTask(
+                    null,
+                    task.profileId.takeIf { canKeepSubjectLink },
+                    task.subjectNameSnapshot,
+                    task.taskTitle,
+                    task.description,
+                    task.dueDate,
+                    task.isCompleted,
+                    fallbackLinkType,
+                    task.reminderMode,
+                    task.reminderOffsetsMinutes,
+                    task.id,
+                )
+            }
+            queries.deleteLesson(lessonId)
+            deleted = true
+        }
+        return deleted
     }
 
     override suspend fun applyWebsiteSchedule(
@@ -167,7 +218,7 @@ class SqlDelightScheduleRepository(
                 lessonFromDb(
                     row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                     row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex,
+                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
                 )
             }
 
@@ -234,14 +285,14 @@ class SqlDelightScheduleRepository(
                 lessonFromDb(
                     row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                     row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex,
+                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
                 )
             }
             val current = queries.selectLessonsForProfile(profileId).executeAsList().map { row ->
                 lessonFromDb(
                     row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                     row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex,
+                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
                 )
             }
             val restored = ScheduleMergeStrategy.restoreSnapshot(
@@ -258,18 +309,25 @@ class SqlDelightScheduleRepository(
     }
 
     override suspend fun saveTask(task: AcademicTask) {
-        database.transaction {
-            queries.insertTask(
-                task.id, task.lessonId, task.profileId, task.subjectNameSnapshot,
-                task.taskTitle.trim(), task.description.trim(), task.dueDate, task.isCompleted.sqlInt(),
-                task.linkType.name, task.reminderMode.name, task.reminderOffsetsMinutes.joinToString(","),
-            )
-            queries.updateTask(
-                task.lessonId, task.profileId, task.subjectNameSnapshot, task.taskTitle.trim(),
-                task.description.trim(), task.dueDate, task.isCompleted.sqlInt(), task.linkType.name,
-                task.reminderMode.name, task.reminderOffsetsMinutes.joinToString(","), task.id,
-            )
-        }
+        database.transaction { upsertTask(task) }
+    }
+
+    override suspend fun saveTasks(tasks: List<AcademicTask>) {
+        if (tasks.isEmpty()) return
+        database.transaction { tasks.forEach(::upsertTask) }
+    }
+
+    private fun upsertTask(task: AcademicTask) {
+        queries.insertTask(
+            task.id, task.lessonId, task.profileId, task.subjectNameSnapshot,
+            task.taskTitle.trim(), task.description.trim(), task.dueDate, task.isCompleted.sqlInt(),
+            task.linkType.name, task.reminderMode.name, task.reminderOffsetsMinutes.joinToString(","),
+        )
+        queries.updateTask(
+            task.lessonId, task.profileId, task.subjectNameSnapshot, task.taskTitle.trim(),
+            task.description.trim(), task.dueDate, task.isCompleted.sqlInt(), task.linkType.name,
+            task.reminderMode.name, task.reminderOffsetsMinutes.joinToString(","), task.id,
+        )
     }
 
     override suspend fun setTaskCompleted(taskId: String, completed: Boolean) {
@@ -298,6 +356,7 @@ class SqlDelightScheduleRepository(
             lesson.version.toLong(),
             lesson.sourceKey,
             lesson.sourceColorHex,
+            lesson.notes.take(LessonNotes.MAX_LENGTH),
         )
         queries.updateLesson(
             lesson.profileId,
@@ -315,6 +374,7 @@ class SqlDelightScheduleRepository(
             lesson.version.toLong(),
             lesson.sourceKey,
             lesson.sourceColorHex,
+            lesson.notes.take(LessonNotes.MAX_LENGTH),
             lesson.id,
         )
     }
@@ -338,6 +398,7 @@ class SqlDelightScheduleRepository(
             lesson.version.toLong(),
             lesson.sourceKey,
             lesson.sourceColorHex,
+            lesson.notes.take(LessonNotes.MAX_LENGTH),
         )
     }
 }
@@ -364,6 +425,7 @@ private fun lessonFromDb(
     version: Long,
     sourceKey: String,
     sourceColorHex: String?,
+    notes: String,
 ) = Lesson(
     id = id,
     profileId = profileId,
@@ -381,6 +443,7 @@ private fun lessonFromDb(
     slotNumber = slotNumber.toInt(),
     sourceKey = sourceKey,
     sourceColorHex = sourceColorHex,
+    notes = notes,
 )
 
 private fun taskFromDb(

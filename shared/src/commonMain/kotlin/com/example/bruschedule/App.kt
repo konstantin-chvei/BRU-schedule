@@ -1,7 +1,6 @@
 package com.example.bruschedule
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -21,7 +20,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -30,17 +28,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -50,13 +45,12 @@ import com.example.bruschedule.data.AppGraph
 import com.example.bruschedule.presentation.MainDestination
 import com.example.bruschedule.presentation.ScheduleViewModel
 import com.example.bruschedule.presentation.ui.DeadlinesDashboardScreen
+import com.example.bruschedule.presentation.ui.LocalTypographyPreferences
 import com.example.bruschedule.presentation.ui.ScheduleHomeScreen
 import com.example.bruschedule.presentation.ui.ScheduleSettingsScreen
+import com.example.bruschedule.presentation.ui.Text
 import com.example.bruschedule.ui.theme.BruColors
 import com.example.bruschedule.ui.theme.BruScheduleTheme
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 @Composable
 fun App(graph: AppGraph) {
@@ -90,12 +84,7 @@ fun App(graph: AppGraph) {
     }
 
     BruScheduleTheme(appearance = state.appearance) {
-        val systemDensity = LocalDensity.current
-        val appDensity = Density(
-            density = systemDensity.density,
-            fontScale = systemDensity.fontScale * state.typography.fontScale,
-        )
-        CompositionLocalProvider(LocalDensity provides appDensity) {
+        CompositionLocalProvider(LocalTypographyPreferences provides state.typography) {
             Scaffold(
                 containerColor = BruColors.background,
                 snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -153,24 +142,21 @@ private fun RowScope.NavigationDestination(
     label: String,
     onClick: () -> Unit,
 ) {
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 1.04f else 0.98f,
-        label = "navigation-scale",
-    )
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
         icon = {
             Surface(
-                modifier = Modifier.size(48.dp).graphicsLayer { scaleX = scale; scaleY = scale },
-                shape = RoundedCornerShape(if (selected) 16.dp else 13.dp),
-                color = if (selected) BruColors.indigo.copy(alpha = 0.2f) else Color.Transparent,
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(13.dp),
+                color = if (selected) BruColors.indigo.copy(alpha = 0.16f) else Color.Transparent,
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     NavigationGlyph(
                         destination = destination,
                         color = if (selected) BruColors.cyan else BruColors.muted,
-                        modifier = Modifier.size(if (selected) 31.dp else 28.dp),
+                        accent = if (selected) BruColors.cyan else BruColors.muted,
+                        modifier = Modifier.size(30.dp),
                     )
                 }
             }
@@ -198,83 +184,88 @@ private fun RowScope.NavigationDestination(
 private fun NavigationGlyph(
     destination: MainDestination,
     color: Color,
+    accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    val accent = BruColors.cyan
     Canvas(modifier) {
         when (destination) {
             MainDestination.SCHEDULE -> drawCalendarGlyph(color, accent)
-            MainDestination.DEADLINES -> drawChecklistGlyph(color)
+            MainDestination.DEADLINES -> drawChecklistGlyph(color, accent)
             MainDestination.SETTINGS -> drawSettingsGlyph(color)
         }
     }
 }
 
 private fun DrawScope.drawCalendarGlyph(color: Color, accent: Color) {
-    val unit = minOf(size.width, size.height) / 32f
-    val stroke = 2.1f * unit
+    val unit = minOf(size.width, size.height) / 24f
+    val stroke = 1.8f * unit
     drawRoundRect(
         color = color,
-        topLeft = Offset(4f * unit, 5f * unit),
-        size = Size(24f * unit, 23f * unit),
-        cornerRadius = CornerRadius(4f * unit),
+        topLeft = Offset(3.6f * unit, 5f * unit),
+        size = Size(16.8f * unit, 16f * unit),
+        cornerRadius = CornerRadius(3f * unit),
         style = Stroke(width = stroke),
     )
-    drawLine(color, Offset(4f * unit, 12f * unit), Offset(28f * unit, 12f * unit), stroke, StrokeCap.Round)
-    listOf(10f, 22f).forEach { x ->
-        drawLine(color, Offset(x * unit, 3f * unit), Offset(x * unit, 9f * unit), stroke, StrokeCap.Round)
+    drawLine(color, Offset(3.8f * unit, 10.2f * unit), Offset(20.2f * unit, 10.2f * unit), stroke, StrokeCap.Round)
+    listOf(8f, 16f).forEach { x ->
+        drawLine(color, Offset(x * unit, 3f * unit), Offset(x * unit, 7.4f * unit), stroke, StrokeCap.Round)
     }
     for (row in 0..1) {
         for (column in 0..2) {
-            val x = (9f + column * 6.5f) * unit
-            val y = (17f + row * 5.5f) * unit
-            if (row == 0 && column == 1) {
-                drawRoundRect(
-                    color = accent,
-                    topLeft = Offset(x, y),
-                    size = Size(3.3f * unit, 3.3f * unit),
-                    cornerRadius = CornerRadius(1f * unit),
-                )
-            } else {
-                drawCircle(color, radius = 1.35f * unit, center = Offset(x + 1.65f * unit, y + 1.65f * unit))
-            }
+            val x = (6f + column * 5f) * unit
+            val y = (13.2f + row * 4.2f) * unit
+            drawRoundRect(
+                color = if (row == 0 && column == 1) accent else color,
+                topLeft = Offset(x, y),
+                size = Size(2.4f * unit, 2.4f * unit),
+                cornerRadius = CornerRadius(0.7f * unit),
+            )
         }
     }
 }
 
-private fun DrawScope.drawChecklistGlyph(color: Color) {
-    val unit = minOf(size.width, size.height) / 32f
-    val stroke = 2.0f * unit
+private fun DrawScope.drawChecklistGlyph(color: Color, accent: Color) {
+    val unit = minOf(size.width, size.height) / 24f
+    val stroke = 1.7f * unit
     drawRoundRect(
         color = color,
-        topLeft = Offset(5f * unit, 3.5f * unit),
-        size = Size(22f * unit, 25f * unit),
-        cornerRadius = CornerRadius(4f * unit),
+        topLeft = Offset(4.3f * unit, 4f * unit),
+        size = Size(15.4f * unit, 17.3f * unit),
+        cornerRadius = CornerRadius(2.8f * unit),
         style = Stroke(width = stroke),
     )
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(9f * unit, 2.6f * unit),
+        size = Size(6f * unit, 4.2f * unit),
+        cornerRadius = CornerRadius(1.4f * unit),
+    )
     for (row in 0..2) {
-        val y = (11f + row * 6f) * unit
-        drawLine(color, Offset(8f * unit, y), Offset(10f * unit, y + 2f * unit), stroke, StrokeCap.Round)
-        drawLine(color, Offset(10f * unit, y + 2f * unit), Offset(13f * unit, y - 2f * unit), stroke, StrokeCap.Round)
-        drawLine(color, Offset(16f * unit, y), Offset(23f * unit, y), stroke, StrokeCap.Round)
+        val y = (9.3f + row * 4.8f) * unit
+        drawLine(color, Offset(7f * unit, y), Offset(8.2f * unit, y + 1.2f * unit), stroke, StrokeCap.Round)
+        drawLine(accent, Offset(8.2f * unit, y + 1.2f * unit), Offset(10.2f * unit, y - 1.4f * unit), stroke, StrokeCap.Round)
+        drawLine(color, Offset(12f * unit, y), Offset(17.5f * unit, y), stroke, StrokeCap.Round)
     }
 }
 
 private fun DrawScope.drawSettingsGlyph(color: Color) {
-    val unit = minOf(size.width, size.height) / 32f
+    val unit = minOf(size.width, size.height) / 24f
     val center = Offset(size.width / 2f, size.height / 2f)
-    for (tooth in 0..7) {
-        val angle = (PI / 4.0 * tooth) - (PI / 2.0)
-        val dx = cos(angle).toFloat()
-        val dy = sin(angle).toFloat()
+    val diagonals = 0.7071068f
+    val directions = listOf(
+        Offset(1f, 0f), Offset(-1f, 0f), Offset(0f, 1f), Offset(0f, -1f),
+        Offset(diagonals, diagonals), Offset(-diagonals, diagonals),
+        Offset(diagonals, -diagonals), Offset(-diagonals, -diagonals),
+    )
+    directions.forEach { direction ->
         drawLine(
             color = color,
-            start = Offset(center.x + dx * 8.5f * unit, center.y + dy * 8.5f * unit),
-            end = Offset(center.x + dx * 13f * unit, center.y + dy * 13f * unit),
-            strokeWidth = 3.4f * unit,
+            start = Offset(center.x + direction.x * 7f * unit, center.y + direction.y * 7f * unit),
+            end = Offset(center.x + direction.x * 9f * unit, center.y + direction.y * 9f * unit),
+            strokeWidth = 2.5f * unit,
             cap = StrokeCap.Round,
         )
     }
-    drawCircle(color, radius = 8.2f * unit, center = center, style = Stroke(width = 3.1f * unit))
-    drawCircle(color, radius = 2.4f * unit, center = center)
+    drawCircle(color, radius = 7f * unit, center = center, style = Stroke(width = 2f * unit))
+    drawCircle(color, radius = 2.6f * unit, center = center, style = Stroke(width = 1.8f * unit))
 }

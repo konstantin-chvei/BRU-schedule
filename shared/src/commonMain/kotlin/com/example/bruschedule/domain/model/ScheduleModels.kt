@@ -38,6 +38,10 @@ enum class LessonType {
  * sourceKey is a stable identity for the website slot, deliberately independent of the subject,
  * teacher and room so a student can edit those fields without losing the override on refresh.
  */
+object LessonNotes {
+    const val MAX_LENGTH = 500
+}
+
 data class Lesson(
     val id: String,
     val profileId: String,
@@ -57,6 +61,8 @@ data class Lesson(
     val sourceKey: String = id,
     /** Original CSS color from rasp.bru.by, useful for parser diagnostics and future remapping. */
     val sourceColorHex: String? = null,
+    /** Optional user-authored reminder or preparation note for this specific lesson occurrence. */
+    val notes: String = "",
 )
 
 enum class DeadlineLinkType {

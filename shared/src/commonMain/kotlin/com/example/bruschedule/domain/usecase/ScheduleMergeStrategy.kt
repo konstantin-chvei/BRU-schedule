@@ -16,9 +16,9 @@ object ScheduleMergeStrategy {
             .filter(Lesson::isCustom)
             .filter { it.sourceKey.isNotBlank() }
             .associateBy(Lesson::sourceKey)
-        val previousWebById = existing.asSequence()
-            .filterNot(Lesson::isCustom)
-            .associateBy(Lesson::id)
+        val existingWebsiteLessons = existing.filterNot(Lesson::isCustom)
+        val previousWebById = existingWebsiteLessons.associateBy(Lesson::id)
+        val previousWebByLessonIdentity = existingWebsiteLessons.groupBy(Lesson::noteIdentity)
 
         val distinctIncoming = incoming.distinctBy { lesson ->
             lesson.sourceKey.takeIf(String::isNotBlank) ?: lesson.id
@@ -29,9 +29,12 @@ object ScheduleMergeStrategy {
             if (customOverride != null) {
                 customOverride
             } else {
+                val previousWebsiteLesson = previousWebById[webLesson.id]
+                    ?: previousWebByLessonIdentity[webLesson.noteIdentity()]?.singleOrNull()
                 webLesson.copy(
                     isCustom = false,
                     version = (previousWebById[webLesson.id]?.version ?: 0) + 1,
+                    notes = previousWebsiteLesson?.notes.orEmpty(),
                 )
             }
         }
@@ -70,3 +73,6 @@ object ScheduleMergeStrategy {
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
     }
 }
+
+private fun Lesson.noteIdentity(): String =
+    listOf(profileId, lessonDate, slotNumber.toString(), subjectName.trim().lowercase()).joinToString("|")

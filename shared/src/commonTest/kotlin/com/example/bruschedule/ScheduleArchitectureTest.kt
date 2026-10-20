@@ -299,6 +299,21 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun lessonNotesFollowTheSameWebsiteClassWhenItsSourceIdChanges() {
+        val previous = lesson(
+            id = "web-old",
+            sourceKey = "slot-old",
+            subject = "Физика",
+            isCustom = false,
+        ).copy(notes = "Взять линейку")
+        val refreshed = previous.copy(id = "web-new", sourceKey = "slot-new", version = 1, notes = "")
+
+        val merged = ScheduleMergeStrategy.merge(listOf(previous), listOf(refreshed))
+
+        assertEquals("Взять линейку", merged.single().notes)
+    }
+
+    @Test
     fun rollbackRestoresSnapshotVersionsButKeepsEditsMadeAfterTheSnapshot() {
         val oldOverriddenWeb = lesson(id = "web-1", sourceKey = "slot-1", subject = "Старая версия", isCustom = false, version = 7)
         val oldUntouchedWeb = lesson(id = "web-2", sourceKey = "slot-2", subject = "Физика", isCustom = false, version = 6)

@@ -8,6 +8,7 @@ import com.example.bruschedule.domain.model.AppearancePreferences
 import com.example.bruschedule.domain.model.DEFAULT_DAILY_MESSAGES
 import com.example.bruschedule.domain.model.SemesterSchedulePreferences
 import com.example.bruschedule.domain.model.TypographyPreferences
+import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.domain.model.DomainIds
 import com.example.bruschedule.domain.model.DeadlineLinkType
 import com.example.bruschedule.domain.model.DeadlineReminderPreferences
@@ -15,9 +16,11 @@ import com.example.bruschedule.domain.model.TaskReminderMode
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
+import com.example.bruschedule.domain.model.LessonRecurrence
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ProfileSyncState
 import com.example.bruschedule.domain.model.ScheduleAppTheme
+import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
@@ -33,6 +36,9 @@ import com.example.bruschedule.domain.repository.TypographyPreferencesRepository
 import com.example.bruschedule.domain.usecase.DailyMessageSelector
 import com.example.bruschedule.domain.usecase.DeadlineReminderPolicy
 import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
+import com.example.bruschedule.domain.usecase.CustomLessonRecurrenceExpander
+import com.example.bruschedule.domain.usecase.ScheduleConflictDetector
+import com.example.bruschedule.domain.usecase.ScheduleLessonConflict
 import com.example.bruschedule.domain.usecase.RefreshOutcome
 import com.example.bruschedule.domain.usecase.RefreshScheduleUseCase
 import kotlinx.coroutines.CancellationException
@@ -79,6 +85,7 @@ data class DeadlineUiItem(
     val lessonType: LessonType?,
     val linkLabel: String,
     val linkDetail: String? = null,
+    val linkedLessonMissing: Boolean = false,
 )
 
 data class ProfileSearchUiState(
@@ -86,7 +93,7 @@ data class ProfileSearchUiState(
     val type: ScheduleProfileType = ScheduleProfileType.GROUP,
     val loading: Boolean = false,
     val candidates: List<ProfileCandidate> = emptyList(),
-    val error: String? = null,
+    val error: ScheduleErrorInfo? = null,
 )
 
 data class ScheduleUiState(
@@ -98,6 +105,7 @@ data class ScheduleUiState(
     val allScheduleDatesWithLessons: Set<String> = emptySet(),
     val lessons: List<LessonUiItem> = emptyList(),
     val availableLessons: List<Lesson> = emptyList(),
+    val scheduleConflicts: List<ScheduleLessonConflict> = emptyList(),
     val deadlines: List<DeadlineUiItem> = emptyList(),
     val deadlineReminderPreferences: DeadlineReminderPreferences = DeadlineReminderPreferences(),
     val semesterSchedulePreferences: SemesterSchedulePreferences = SemesterSchedulePreferences(),
@@ -129,6 +137,7 @@ data class DeadlineDraft(
     val lessonToPersist: Lesson? = null,
     val taskId: String? = null,
     val isCompleted: Boolean = false,
+    val lessonRecurrence: LessonRecurrence = LessonRecurrence.NONE,
 )
 
 /** UI-facing MVVM state holder; local SQLDelight flows drive the screen before any network call. */
@@ -174,11 +183,7 @@ class ScheduleViewModel(
         started = SharingStarted.Eagerly,
         initialValue = DEFAULT_DAILY_MESSAGES,
     )
-    private val typography = typographyPreferencesRepository.observe().stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = TypographyPreferences(),
-    )
+    private val typography = MutableStateFlow(TypographyPreferences())
 
     private data class ScreenPreferencesState(
         val appearance: AppearancePreferences,
@@ -197,6 +202,11 @@ class ScheduleViewModel(
     ) { currentAppearance, reminders, semester, messages, currentTypography ->
         ScreenPreferencesState(currentAppearance, reminders, semester, messages, currentTypography)
     }
+
+    private data class DeadlineMoveResult(
+        val movedCount: Int,
+        val reminderError: ScheduleErrorInfo? = null,
+    )
 
     private data class BaseState(
         val profiles: List<ScheduleProfile>,
@@ -320,11 +330,15 @@ class ScheduleViewModel(
                     lessonType = linkedLesson?.type,
                     linkLabel = when (task.linkType) {
                         DeadlineLinkType.SUBJECT -> "ПРЕДМЕТ"
-                        DeadlineLinkType.LESSON -> "КОНКРЕТНАЯ ПАРА"
+                        DeadlineLinkType.LESSON -> if (linkedLesson == null) "СВЯЗЬ С ПАРОЙ ПОТЕРЯНА" else "КОНКРЕТНАЯ ПАРА"
                         DeadlineLinkType.NONE -> "БЕЗ ПРИВЯЗКИ"
                     },
-                    linkDetail = linkedLesson?.takeIf { task.linkType == DeadlineLinkType.LESSON }
-                        ?.let { "${it.lessonDate} · ${it.startTime}" },
+                    linkDetail = when {
+                        task.linkType == DeadlineLinkType.LESSON && linkedLesson == null -> "Пара удалена или перенесена. Измените привязку дедлайна."
+                        task.linkType == DeadlineLinkType.LESSON -> linkedLesson?.let { "${it.lessonDate} · ${it.startTime}" }
+                        else -> null
+                    },
+                    linkedLessonMissing = task.linkType == DeadlineLinkType.LESSON && linkedLesson == null,
                 )
             }
         ScheduleUiState(
@@ -336,6 +350,7 @@ class ScheduleViewModel(
             allScheduleDatesWithLessons = visibleProfileLessons.mapTo(mutableSetOf()) { it.lessonDate },
             lessons = lessonsForDate,
             availableLessons = base.lessons,
+            scheduleConflicts = ScheduleConflictDetector.find(visibleProfileLessons, base.tasks),
             deadlines = orderedDeadlines,
             deadlineReminderPreferences = preferences.deadlineReminders,
             semesterSchedulePreferences = preferences.semester,
@@ -360,6 +375,9 @@ class ScheduleViewModel(
     )
 
     init {
+        viewModelScope.launch {
+            typographyPreferencesRepository.observe().collect { typography.value = it }
+        }
         viewModelScope.launch {
             dailyMessagesRepository.refresh()
         }
@@ -386,6 +404,10 @@ class ScheduleViewModel(
     }
 
     fun selectProfile(profileId: String) {
+        if (uiState.value.profiles.none { it.id == profileId }) {
+            notice.value = "Это расписание больше не сохранено. Выберите другое или добавьте его заново."
+            return
+        }
         selectedProfileId.value = profileId
         viewModelScope.launch { refreshIfSemesterCoverageIsMissing(profileId) }
     }
@@ -415,17 +437,33 @@ class ScheduleViewModel(
         appearancePreferences.setTheme(theme)
     }
 
-    fun setTypographyScale(scale: Float) {
-        val preferences = TypographyPreferences(
-            fontScale = TypographyPreferences.normalize(scale),
+    fun setTypographyScale(role: TypographyRole, scale: Float) {
+        persistTypography(typography.value.withScale(role, scale))
+    }
+
+    fun resetTypographyScales() {
+        val defaultScale = TypographyPreferences.MIN_FONT_SCALE
+        persistTypography(
+            TypographyPreferences(
+                displayScale = defaultScale,
+                headingScale = defaultScale,
+                bodyScale = defaultScale,
+                captionScale = defaultScale,
+            ),
         )
+    }
+
+    private fun persistTypography(updated: TypographyPreferences) {
+        val previous = typography.value
+        typography.value = updated
         viewModelScope.launch {
             try {
-                typographyPreferencesRepository.update(preferences)
+                typographyPreferencesRepository.update(updated)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                notice.value = "Не удалось сохранить размер шрифта: ${failure.message ?: "ошибка настроек"}"
+                if (typography.value == updated) typography.value = previous
+                notice.value = errorNotice("Не удалось сохранить размер шрифта", failure, "PREFERENCES")
             }
         }
     }
@@ -475,7 +513,7 @@ class ScheduleViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                notice.value = "Не удалось сохранить период семестра: ${failure.message ?: "ошибка настроек"}"
+                notice.value = errorNotice("Не удалось сохранить период семестра", failure, "PREFERENCES")
             }
         }
     }
@@ -487,7 +525,7 @@ class ScheduleViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                notice.value = "Не удалось сохранить настройки оформления: ${failure.message ?: "ошибка настроек"}"
+                notice.value = errorNotice("Не удалось сохранить настройки оформления", failure, "PREFERENCES")
             }
         }
     }
@@ -497,7 +535,11 @@ class ScheduleViewModel(
     }
 
     fun refreshSelectedProfile() {
-        val id = selectedProfileId.value ?: uiState.value.selectedProfile?.id ?: return
+        val id = selectedProfileId.value ?: uiState.value.selectedProfile?.id
+        if (id == null) {
+            notice.value = "Сначала выберите или добавьте расписание"
+            return
+        }
         launchRefresh(id)
     }
 
@@ -525,7 +567,7 @@ class ScheduleViewModel(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
-            notice.value = "Не удалось проверить период расписания: ${failure.message ?: "ошибка локальной базы"}"
+            notice.value = errorNotice("Не удалось проверить период расписания", failure, "DATABASE")
         }
     }
 
@@ -537,8 +579,16 @@ class ScheduleViewModel(
                 val result = withContext(Dispatchers.Default) { refreshSchedule(profileId) }
                 notice.value = when (result) {
                     is RefreshOutcome.Success -> "Обновлено: ${result.lessonCount} пар · ручных сохранено ${result.preservedCustomLessonCount}"
-                    is RefreshOutcome.Failure -> "Не удалось обновить. Локальные данные сохранены. ${result.message}"
+                    is RefreshOutcome.Failure -> "${result.error.message} · Код: ${result.error.code}"
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                val error = ScheduleErrorInfo.fromThrowable(failure, operation = "SYNC")
+                runCatching {
+                    syncRepository.recordRefreshFailure(profileId, clock.now().toEpochMilliseconds(), error.encodeForStorage())
+                }
+                notice.value = "${error.message} · Код: ${error.code}"
             } finally {
                 refreshing.value = false
             }
@@ -546,10 +596,20 @@ class ScheduleViewModel(
     }
 
     fun rollbackSelectedProfile() {
-        val id = selectedProfileId.value ?: uiState.value.selectedProfile?.id ?: return
+        val id = selectedProfileId.value ?: uiState.value.selectedProfile?.id
+        if (id == null) {
+            notice.value = "Сначала выберите расписание"
+            return
+        }
         viewModelScope.launch {
-            val restored = withContext(Dispatchers.Default) { syncRepository.rollbackToPrevious(id) }
-            notice.value = if (restored) "Восстановлена предыдущая версия расписания" else "Снимок для отката не найден"
+            try {
+                val restored = withContext(Dispatchers.Default) { syncRepository.rollbackToPrevious(id) }
+                notice.value = if (restored) "Восстановлен локальный сейв расписания" else "Локальный сейв ещё не создан"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось восстановить локальный сейв", failure, "DATABASE")
+            }
         }
     }
 
@@ -568,7 +628,7 @@ class ScheduleViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                notice.value = "Не удалось удалить расписание: ${failure.message ?: "ошибка локального хранилища"}"
+                notice.value = errorNotice("Не удалось удалить расписание", failure, "DATABASE")
             }
         }
     }
@@ -579,11 +639,16 @@ class ScheduleViewModel(
             notice.value = "Укажите название группы или преподавателя"
             return
         }
-        val url = sourceUrl?.trim()?.takeIf(String::isNotBlank)
-        if (url != null && !url.startsWith("https://rasp.bru.by/")) {
+        val enteredUrl = sourceUrl?.trim()?.takeIf(String::isNotBlank)
+        val rootUrl = "https://rasp.bru.by"
+        if (enteredUrl != null &&
+            !enteredUrl.startsWith("$rootUrl/", ignoreCase = true) &&
+            !enteredUrl.equals(rootUrl, ignoreCase = true)
+        ) {
             notice.value = "Можно добавить только ссылку rasp.bru.by"
             return
         }
+        val url = enteredUrl?.let { if (it.equals(rootUrl, ignoreCase = true)) "$rootUrl/" else it }
         val id = DomainIds.new("profile")
         val profile = ScheduleProfile(
             id = id,
@@ -593,10 +658,16 @@ class ScheduleViewModel(
             sourceKey = cleanName,
         )
         viewModelScope.launch {
-            schedules.saveProfile(profile)
-            selectedProfileId.value = id
-            notice.value = "Профиль «$cleanName» добавлен · загружаем расписание"
-            launchRefresh(id)
+            try {
+                schedules.saveProfile(profile)
+                selectedProfileId.value = id
+                notice.value = "Профиль «$cleanName» добавлен · загружаем расписание"
+                launchRefresh(id)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось добавить расписание", failure, "PROFILE")
+            }
         }
     }
 
@@ -613,7 +684,7 @@ class ScheduleViewModel(
                 profileSearch.value = ProfileSearchUiState(
                     query = query,
                     type = type,
-                    error = failure.message ?: "Каталог сейчас недоступен",
+                    error = ScheduleErrorInfo.fromThrowable(failure, operation = "SEARCH"),
                 )
             }
         }
@@ -628,22 +699,124 @@ class ScheduleViewModel(
             sourceKey = candidate.sourceKey,
         )
         viewModelScope.launch {
-            schedules.saveProfile(profile)
-            selectedProfileId.value = profile.id
-            profileSearch.value = ProfileSearchUiState(type = candidate.type)
-            notice.value = "Профиль «${candidate.name}» добавлен · загружаем расписание"
-            launchRefresh(profile.id)
+            try {
+                schedules.saveProfile(profile)
+                selectedProfileId.value = profile.id
+                profileSearch.value = ProfileSearchUiState(type = candidate.type)
+                notice.value = "Профиль «${candidate.name}» добавлен · загружаем расписание"
+                launchRefresh(profile.id)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось добавить расписание", failure, "PROFILE")
+            }
         }
     }
 
-    fun saveCustomLesson(lesson: Lesson) {
+    fun saveCustomLesson(
+        lesson: Lesson,
+        recurrence: LessonRecurrence = LessonRecurrence.NONE,
+        detachFromWebsiteSource: Boolean = false,
+        moveDeadlinesWithPair: Boolean = false,
+    ) {
         val custom = lesson.copy(
             isCustom = true,
             colorHex = LessonTypePalette.accent(lesson.type),
+            sourceKey = if (detachFromWebsiteSource) "custom:${lesson.id}" else lesson.sourceKey.ifBlank { "custom:${lesson.id}" },
         )
         viewModelScope.launch {
-            schedules.saveCustomLesson(custom)
-            notice.value = "Пара сохранена локально и защищена от перезаписи сайтом"
+            try {
+                val occurrences = persistCustomLessonOccurrences(custom, recurrence)
+                val deadlineMove = if (moveDeadlinesWithPair) {
+                    moveLinkedDeadlinesToLessonDate(custom)
+                } else {
+                    DeadlineMoveResult(movedCount = 0)
+                }
+                notice.value = when {
+                    deadlineMove.movedCount > 0 && deadlineMove.reminderError != null ->
+                        "Сроки перенесены (${deadlineMove.movedCount}), но напоминания не удалось обновить · Код: ${deadlineMove.reminderError.code}"
+                    deadlineMove.movedCount > 0 ->
+                        "Пара сохранена · дедлайнов перенесено на её дату: ${deadlineMove.movedCount}"
+                    recurrence != LessonRecurrence.NONE ->
+                        "Добавлено пар: ${occurrences.size} · до ${occurrences.last().lessonDate}"
+                    else -> "Пара сохранена локально"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось сохранить пару или связанные дедлайны", failure, "DATABASE")
+            }
+        }
+    }
+
+    fun saveLessonNotes(lessonId: String, notes: String) {
+        viewModelScope.launch {
+            try {
+                val saved = schedules.saveLessonNotes(lessonId, notes)
+                notice.value = if (saved) "Заметки к паре сохранены" else "Эта пара уже отсутствует в расписании"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось сохранить заметки к паре", failure, "DATABASE")
+            }
+        }
+    }
+
+    private suspend fun persistCustomLessonOccurrences(
+        lesson: Lesson,
+        recurrence: LessonRecurrence,
+    ): List<Lesson> {
+        val anchorDate = LocalDate.parse(lesson.lessonDate)
+        val coverageEndDate = uiState.value.scheduleCoverageEndDate
+            ?.takeIf { it >= anchorDate }
+            ?: anchorDate
+        val occurrences = CustomLessonRecurrenceExpander.expand(lesson, recurrence, coverageEndDate)
+        schedules.saveCustomLessons(occurrences)
+        return occurrences
+    }
+
+    private suspend fun moveLinkedDeadlinesToLessonDate(lesson: Lesson): DeadlineMoveResult {
+        val newLessonDate = LocalDate.parse(lesson.lessonDate)
+        val zone = TimeZone.currentSystemDefault()
+        val linkedTasks = tasks.observeTasksForLesson(lesson.id).first()
+        val updatedTasks = linkedTasks.map { task ->
+            val previousDateTime = kotlinx.datetime.Instant.fromEpochMilliseconds(task.dueDate).toLocalDateTime(zone)
+            val newDueDate = LocalDateTime(newLessonDate, previousDateTime.time)
+                .toInstant(zone)
+                .toEpochMilliseconds()
+            task.copy(dueDate = newDueDate)
+        }
+        tasks.saveTasks(updatedTasks)
+
+        var reminderError: ScheduleErrorInfo? = null
+        for (task in updatedTasks.filter { !it.isCompleted }) {
+            try {
+                if (!syncTaskReminders(task, reminderPreferences.value, requestPermission = false) && reminderError == null) {
+                    reminderError = ScheduleErrorInfo.fromDiagnostic("reminder scheduler returned false", "TASK")
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                if (reminderError == null) reminderError = ScheduleErrorInfo.fromThrowable(failure, "TASK")
+            }
+        }
+        return DeadlineMoveResult(updatedTasks.size, reminderError)
+    }
+
+    fun deleteCustomLesson(lessonId: String) {
+        viewModelScope.launch {
+            try {
+                val deleted = schedules.deleteCustomLessonAndPreserveTasks(lessonId)
+                notice.value = if (deleted) {
+                    "Личная пара удалена. Связанные дедлайны сохранены и привязаны к предмету."
+                } else {
+                    "Пара уже удалена или не является личной."
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось удалить личную пару", failure, "DATABASE")
+            }
         }
     }
 
@@ -709,7 +882,7 @@ class ScheduleViewModel(
         )
         viewModelScope.launch {
             try {
-                draft.lessonToPersist?.let { schedules.saveCustomLesson(it) }
+                draft.lessonToPersist?.let { persistCustomLessonOccurrences(it, draft.lessonRecurrence) }
                 tasks.saveTask(task)
                 val remindersReady = syncTaskReminders(task, reminderPreferences.value)
                 notice.value = if (!remindersReady) {
@@ -722,38 +895,50 @@ class ScheduleViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                notice.value = "Не удалось сохранить дедлайн: ${failure.message ?: "ошибка локального хранилища"}"
+                notice.value = errorNotice("Не удалось сохранить дедлайн", failure, "TASK")
             }
         }
     }
 
     fun setTaskCompleted(taskId: String, completed: Boolean) {
         viewModelScope.launch {
-            tasks.setTaskCompleted(taskId, completed)
-            val task = uiState.value.deadlines.firstOrNull { it.task.id == taskId }?.task
-            if (completed) {
-                deadlineNotificationScheduler.cancel(taskId)
-            } else if (task != null && !syncTaskReminders(task.copy(isCompleted = false), reminderPreferences.value)) {
-                notice.value = "Дедлайн открыт, но разрешение на уведомления не выдано"
+            try {
+                tasks.setTaskCompleted(taskId, completed)
+                val task = uiState.value.deadlines.firstOrNull { it.task.id == taskId }?.task
+                if (completed) {
+                    deadlineNotificationScheduler.cancel(taskId)
+                } else if (task != null && !syncTaskReminders(task.copy(isCompleted = false), reminderPreferences.value)) {
+                    notice.value = "Дедлайн открыт, но разрешение на уведомления не выдано"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось изменить статус дедлайна", failure, "TASK")
             }
         }
     }
 
     fun setDeadlineReminderPreferences(preferences: DeadlineReminderPreferences) {
         viewModelScope.launch {
-            val granted = !preferences.enabled || deadlineNotificationScheduler.requestPermission()
-            val savedPreferences = if (granted) preferences else preferences.copy(enabled = false)
-            deadlineReminderPreferencesRepository.update(savedPreferences)
-            val currentTasks = tasks.observeTasks().first()
-            if (!savedPreferences.enabled) {
-                currentTasks.forEach { deadlineNotificationScheduler.cancel(it.id) }
-            } else {
-                currentTasks.forEach { syncTaskReminders(it, savedPreferences, requestPermission = false) }
-            }
-            notice.value = when {
-                !granted -> "Разрешите уведомления в настройках устройства, чтобы включить напоминания"
-                !savedPreferences.enabled -> "Напоминания отключены"
-                else -> "Настройки напоминаний сохранены"
+            try {
+                val granted = !preferences.enabled || deadlineNotificationScheduler.requestPermission()
+                val savedPreferences = if (granted) preferences else preferences.copy(enabled = false)
+                deadlineReminderPreferencesRepository.update(savedPreferences)
+                val currentTasks = tasks.observeTasks().first()
+                if (!savedPreferences.enabled) {
+                    currentTasks.forEach { deadlineNotificationScheduler.cancel(it.id) }
+                } else {
+                    currentTasks.forEach { syncTaskReminders(it, savedPreferences, requestPermission = false) }
+                }
+                notice.value = when {
+                    !granted -> "Разрешите уведомления в настройках устройства, чтобы включить напоминания"
+                    !savedPreferences.enabled -> "Напоминания отключены"
+                    else -> "Настройки напоминаний сохранены"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось обновить напоминания", failure, "TASK")
             }
         }
     }
@@ -771,6 +956,11 @@ class ScheduleViewModel(
             return false
         }
         return deadlineNotificationScheduler.schedule(task, offsets)
+    }
+
+    private fun errorNotice(prefix: String, failure: Throwable, operation: String): String {
+        val error = ScheduleErrorInfo.fromThrowable(failure, operation)
+        return "$prefix: ${error.message} · Код: ${error.code}"
     }
 
     private fun LocalDate.startOfWeek(): LocalDate =

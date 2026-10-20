@@ -1,0 +1,138 @@
+package com.example.bruschedule.domain.model
+
+/** A short, user-safe error summary. Raw exception text is never shown in the UI or persisted. */
+data class ScheduleErrorInfo(
+    val message: String,
+    val code: String,
+) {
+    fun encodeForStorage(): String = "$STORAGE_PREFIX$code|$message"
+
+    companion object {
+        private const val STORAGE_PREFIX = "@BRU_ERROR_V1:"
+        private val HTTP_STATUS = Regex("(?:кодом\\s*|HTTP(?:/\\d(?:\\.\\d)?)?\\s*)(\\d{3})", RegexOption.IGNORE_CASE)
+
+        /** Converts an exception chain to a concise message and a stable, short diagnostic code. */
+        fun fromThrowable(failure: Throwable, operation: String = "SYNC"): ScheduleErrorInfo {
+            val messages = mutableListOf<String>()
+            var cause: Throwable? = failure
+            repeat(5) {
+                val current = cause ?: return@repeat
+                current.message?.takeIf(String::isNotBlank)?.take(MAX_CAUSE_MESSAGE_LENGTH)?.let(messages::add)
+                cause = current.cause
+            }
+            return fromDiagnostic(messages.joinToString(" | ").ifBlank { "unknown failure" }, operation)
+        }
+
+        /** Decodes new compact entries and safely summarizes verbose entries from older versions. */
+        fun decodeStored(value: String): ScheduleErrorInfo {
+            if (value.startsWith(STORAGE_PREFIX)) {
+                val payload = value.removePrefix(STORAGE_PREFIX)
+                val separator = payload.indexOf('|')
+                if (separator in 1 until payload.lastIndex) {
+                    val code = payload.substring(0, separator)
+                    val message = payload.substring(separator + 1).take(MAX_MESSAGE_LENGTH)
+                    if (code.length <= MAX_CODE_LENGTH && code.all(::isCodeCharacter) && message.isNotBlank()) {
+                        return ScheduleErrorInfo(message, code)
+                    }
+                }
+            }
+            return fromDiagnostic(value, "SYNC")
+        }
+
+        fun fromDiagnostic(diagnostic: String, operation: String = "SYNC"): ScheduleErrorInfo {
+            val source = diagnostic.take(MAX_DIAGNOSTIC_LENGTH).ifBlank { "unknown failure" }
+            val normalized = source.lowercase()
+            val status = HTTP_STATUS.find(source)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            val networkFailure = listOf(
+                "timeout", "timed out", "timedout", "unknownhost", "unable to resolve", "could not resolve host",
+                "failed host lookup", "failed to connect", "connection refused", "connection reset", "no route to host",
+                "network is unreachable", "internet connection appears", "no internet connection", "socketexception",
+                "sslhandshakeexception", "dns", "ошибка сети", "сеть недоступна", "нет подключения", "нет сети",
+                "ответ отсутствует", "не удалось открыть каталог", "не удалось загрузить каталог",
+            ).any(normalized::contains)
+            val category: String
+            val message: String
+
+            when {
+                status != null -> {
+                    category = "HTTP$status"
+                    message = when (status) {
+                        404 -> "Страница расписания не найдена. Возможно, источник удалён или изменён."
+                        406 -> "Сайт отклонил запрос (HTTP 406). Попробуйте позже или проверьте источник."
+                        429 -> "Сайт ограничил частые запросы. Попробуйте повторить обновление позже."
+                        in 500..599 -> "Сайт расписания временно недоступен (HTTP $status). Попробуйте позже."
+                        else -> "Сайт не принял запрос (HTTP $status). Проверьте источник и попробуйте снова."
+                    }
+                }
+                networkFailure -> {
+                    category = if (listOf("timeout", "timed out", "timedout").any(normalized::contains)) "TIMEOUT" else "NETWORK"
+                    message = if (category == "TIMEOUT") {
+                        "Сервер не ответил вовремя. Проверьте подключение и попробуйте ещё раз."
+                    } else {
+                        "Не удалось связаться с сервером. Проверьте подключение к интернету."
+                    }
+                }
+                listOf("профиль расписания не найден", "не найден в каталоге", "не найдена в каталогах", "страница расписания не найдена", "преподаватель", "группа").any(normalized::contains) &&
+                    listOf("не найден", "не найдена", "не найдено", "не существует", "удален", "удалён").any(normalized::contains) -> {
+                    category = "SOURCE"
+                    message = "Это расписание больше не найдено на сайте. Проверьте источник или выберите другое расписание."
+                }
+                    category = if (listOf("timeout", "timed out", "timedout").any(normalized::contains)) "TIMEOUT" else "NETWORK"
+                    message = if (category == "TIMEOUT") {
+                        "Сервер не ответил вовремя. Проверьте подключение и попробуйте ещё раз."
+                    } else {
+                        "Не удалось связаться с сервером. Проверьте подключение к интернету."
+                    }
+                }
+                listOf(".schedule-table", "пустой html", "пустое расписание", "не найдено ни одной пары", "изменил разметку", "не удалось развернуть пары").any(normalized::contains) -> {
+                    category = "PARSE"
+                    message = "Сайт ответил, но расписание не удалось прочитать. Возможно, изменилась структура страницы."
+                }
+                listOf("sqlite", "database", "constraint", "sql exception", "локальн", "хранилищ").any(normalized::contains) -> {
+                    category = "LOCAL"
+                    message = "Не удалось сохранить или прочитать данные на устройстве. Повторите попытку."
+                }
+                operation == "SEARCH" -> {
+                    category = "SEARCH"
+                    message = "Каталог расписаний сейчас недоступен. Проверьте подключение или добавьте профиль по ссылке."
+                }
+                operation == "TASK" -> {
+                    category = "TASK"
+                    message = "Не удалось сохранить изменения дедлайна. Проверьте данные и повторите попытку."
+                }
+                operation == "PROFILE" -> {
+                    category = "PROFILE"
+                    message = "Не удалось сохранить расписание на устройстве. Повторите попытку."
+                }
+                operation == "DATABASE" -> {
+                    category = "LOCAL"
+                    message = "Не удалось прочитать или сохранить данные на устройстве. Повторите попытку."
+                }
+                operation == "PREFERENCES" -> {
+                    category = "SETTINGS"
+                    message = "Не удалось сохранить настройки. Повторите попытку."
+                }
+                else -> {
+                    category = "UNKNOWN"
+                    message = "Не удалось выполнить операцию. Сохранённые данные не изменены."
+                }
+            }
+
+            val operationCode = operation.uppercase()
+                .filter { it in 'A'..'Z' || it in '0'..'9' }
+                .take(8)
+                .ifBlank { "APP" }
+            val fingerprint = source.hashCode().toUInt().toString(16).uppercase().padStart(8, '0')
+            val code = "$operationCode-$category-$fingerprint".take(MAX_CODE_LENGTH)
+            return ScheduleErrorInfo(message, code)
+        }
+
+        private fun isCodeCharacter(character: Char): Boolean =
+            character in 'A'..'Z' || character in '0'..'9' || character == '-'
+
+        private const val MAX_MESSAGE_LENGTH = 180
+        private const val MAX_CAUSE_MESSAGE_LENGTH = 512
+        private const val MAX_CODE_LENGTH = 40
+        private const val MAX_DIAGNOSTIC_LENGTH = 2_048
+    }
+}

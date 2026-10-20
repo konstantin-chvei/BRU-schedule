@@ -28,11 +28,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,8 +57,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.Lesson
+import com.example.bruschedule.domain.model.LessonRecurrence
 import com.example.bruschedule.domain.model.LessonType
+import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.ScheduleProfileType
+import com.example.bruschedule.domain.usecase.ScheduleLessonConflict
 import com.example.bruschedule.presentation.LessonUiItem
 import com.example.bruschedule.presentation.ScheduleUiState
 import com.example.bruschedule.presentation.ScheduleViewModel
@@ -83,6 +86,8 @@ fun ScheduleHomeScreen(
     var deadlineEditorVisible by remember { mutableStateOf(false) }
     var deadlineInitialLesson by remember { mutableStateOf<Lesson?>(null) }
     var deadlineLessonToPersist by remember { mutableStateOf<Lesson?>(null) }
+    var deadlineLessonRecurrence by remember { mutableStateOf(LessonRecurrence.NONE) }
+    var conflictToDelete by remember { mutableStateOf<Lesson?>(null) }
 
     Column(
         modifier = Modifier
@@ -134,21 +139,38 @@ fun ScheduleHomeScreen(
             )
             Spacer(Modifier.height(14.dp))
 
-            val syncError = state.syncState?.lastError?.takeIf(String::isNotBlank)
+            val syncError = state.syncState?.lastError
+                ?.takeIf(String::isNotBlank)
+                ?.let { ScheduleErrorInfo.decodeStored(it) }
             when {
                 !state.hasRemoteSchedule && state.isRefreshing -> ScheduleLoadingStatusCard(
                     title = "Загружаем расписание",
                     detail = "Получаем расписание и сохраняем его на устройстве. Это может занять несколько секунд.",
                 )
                 !state.hasRemoteSchedule && syncError != null -> ScheduleErrorStatusCard(
-                    message = syncError,
+                    error = syncError,
                     onRetry = viewModel::refreshSelectedProfile,
                 )
                 !state.hasRemoteSchedule -> ScheduleNotLoadedCard(onRetry = viewModel::refreshSelectedProfile)
                 state.isRefreshing -> ScheduleRefreshingBanner()
-                syncError != null -> CachedScheduleWarning(message = syncError, onRetry = viewModel::refreshSelectedProfile)
+                syncError != null -> CachedScheduleWarning(error = syncError, onRetry = viewModel::refreshSelectedProfile)
             }
             Spacer(Modifier.height(12.dp))
+
+            if (state.scheduleConflicts.isNotEmpty()) {
+                Text("НАКЛАДКИ ПАР", color = BruColors.amber, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+                state.scheduleConflicts.forEach { conflict ->
+                    ScheduleConflictCard(
+                        conflict = conflict,
+                        onMovePersonalLesson = {
+                            isNewLesson = false
+                            lessonInEditor = conflict.personalLesson
+                        },
+                        onDeletePersonalLesson = { conflictToDelete = conflict.personalLesson },
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+            }
 
             if (state.lessons.isEmpty() && state.hasRemoteSchedule) {
                 EmptyDayCard(
@@ -209,15 +231,42 @@ fun ScheduleHomeScreen(
         LessonActionBottomSheet(
             lesson = editingLesson,
             isNew = isNewLesson,
+            linkedDeadlineCount = state.deadlines.count { it.task.lessonId == editingLesson.id },
+            minimumLessonDate = state.scheduleCoverageStartDate,
+            maximumLessonDate = state.scheduleCoverageEndDate,
             onDismiss = { lessonInEditor = null },
-            onSaveLesson = { saved ->
-                viewModel.saveCustomLesson(saved)
+            onSaveLesson = { saved, moveDeadlinesWithPair, recurrence ->
+                val scheduleChanged = isNewLesson || saved.hasEditableChangesFrom(editingLesson)
+                if (scheduleChanged) {
+                    val locationChanged = saved.hasSchedulePositionChanged(editingLesson)
+                    viewModel.saveCustomLesson(
+                        lesson = saved,
+                        recurrence = recurrence,
+                        detachFromWebsiteSource = locationChanged,
+                        moveDeadlinesWithPair = moveDeadlinesWithPair,
+                    )
+                } else if (saved.notes != editingLesson.notes) {
+                    viewModel.saveLessonNotes(editingLesson.id, saved.notes)
+                }
                 lessonInEditor = null
             },
-            onCreateTask = { lesson ->
+            onCreateTask = { lesson, recurrence ->
                 val shouldPersistLesson = isNewLesson || editingLesson.isCustom || lesson.hasEditableChangesFrom(editingLesson)
-                deadlineInitialLesson = if (shouldPersistLesson) lesson else lesson.copy(isCustom = false)
-                deadlineLessonToPersist = lesson.takeIf { shouldPersistLesson }
+                val locationChanged = lesson.hasSchedulePositionChanged(editingLesson)
+                val lessonToPersist = if (shouldPersistLesson) {
+                    lesson.copy(
+                        isCustom = true,
+                        sourceKey = if (locationChanged) "custom:${lesson.id}" else lesson.sourceKey,
+                    )
+                } else {
+                    lesson.copy(isCustom = false)
+                }
+                if (!shouldPersistLesson && lesson.notes != editingLesson.notes) {
+                    viewModel.saveLessonNotes(editingLesson.id, lesson.notes)
+                }
+                deadlineInitialLesson = lessonToPersist
+                deadlineLessonToPersist = lessonToPersist.takeIf { shouldPersistLesson }
+                deadlineLessonRecurrence = if (isNewLesson && shouldPersistLesson) recurrence else LessonRecurrence.NONE
                 lessonInEditor = null
                 deadlineEditorVisible = true
             },
@@ -227,18 +276,51 @@ fun ScheduleHomeScreen(
         DeadlineEditorBottomSheet(
             state = state,
             initialLesson = deadlineInitialLesson,
+            initialLessonRecurrence = deadlineLessonRecurrence,
             lessonToPersist = deadlineLessonToPersist,
             onDismiss = {
                 deadlineEditorVisible = false
                 deadlineInitialLesson = null
                 deadlineLessonToPersist = null
+                deadlineLessonRecurrence = LessonRecurrence.NONE
             },
             onSave = { draft ->
                 viewModel.addTask(draft)
                 deadlineEditorVisible = false
                 deadlineInitialLesson = null
                 deadlineLessonToPersist = null
+                deadlineLessonRecurrence = LessonRecurrence.NONE
             },
+        )
+    }
+    conflictToDelete?.let { lesson ->
+        val linkedDeadlineCount = state.deadlines.count { it.task.lessonId == lesson.id }
+        AlertDialog(
+            onDismissRequest = { conflictToDelete = null },
+            title = { Text("Удалить личную пару?") },
+            text = {
+                Text(
+                    if (linkedDeadlineCount == 0) {
+                        "Пара «${lesson.subjectName}» будет удалена с устройства."
+                    } else {
+                        "Дедлайны ($linkedDeadlineCount) сохранятся. Их связь с парой будет заменена привязкой к предмету, если он известен; сама пара будет удалена."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteCustomLesson(lesson.id)
+                        conflictToDelete = null
+                    },
+                ) { Text("Удалить пару", color = BruColors.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { conflictToDelete = null }) { Text("Отмена", color = BruColors.muted) }
+            },
+            containerColor = BruColors.surface,
+            titleContentColor = BruColors.foreground,
+            textContentColor = BruColors.muted,
         )
     }
 }
@@ -785,6 +867,16 @@ private fun LessonCard(item: LessonUiItem, onClick: () -> Unit) {
                     if (lesson.classroom.isNotBlank()) {
                         Text("⌖  ${lesson.classroom}", color = BruColors.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    if (lesson.notes.isNotBlank()) {
+                        Text(
+                            "Заметка · ${lesson.notes}",
+                            color = BruColors.cyan,
+                            fontSize = 9.sp,
+                            lineHeight = 12.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 if (item.pendingTaskCount > 0) {
                     Surface(shape = CircleShape, color = accent.copy(alpha = 0.14f)) {
@@ -859,19 +951,12 @@ private fun ScheduleNotLoadedCard(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun ScheduleErrorStatusCard(message: String, onRetry: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = BruColors.danger.copy(alpha = 0.07f),
-        border = BorderStroke(1.dp, BruColors.danger.copy(alpha = 0.30f)),
-    ) {
-        Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("НЕ УДАЛОСЬ ЗАГРУЗИТЬ", color = BruColors.danger, fontSize = 8.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
-            Text(message, color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
-            TextButton(onClick = onRetry) { Text("Повторить", color = BruColors.danger, fontSize = 11.sp) }
-        }
-    }
+private fun ScheduleErrorStatusCard(error: ScheduleErrorInfo, onRetry: () -> Unit) {
+    ScheduleErrorPanel(
+        error = error,
+        context = "Локальная копия пока отсутствует. Проверьте источник или попробуйте позже.",
+        onRetry = onRetry,
+    )
 }
 
 @Composable
@@ -894,23 +979,12 @@ private fun ScheduleRefreshingBanner() {
 }
 
 @Composable
-private fun CachedScheduleWarning(message: String, onRetry: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = BruColors.amber.copy(alpha = 0.07f),
-        border = BorderStroke(1.dp, BruColors.amber.copy(alpha = 0.24f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 13.dp, top = 9.dp, bottom = 9.dp, end = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("!", color = BruColors.amber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text("Не удалось обновить. Показан локальный кэш: $message", modifier = Modifier.weight(1f), color = BruColors.muted, fontSize = 9.sp, lineHeight = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            TextButton(onClick = onRetry) { Text("Повтор", color = BruColors.amber, fontSize = 9.sp) }
-        }
-    }
+private fun CachedScheduleWarning(error: ScheduleErrorInfo, onRetry: () -> Unit) {
+    ScheduleErrorPanel(
+        error = error,
+        context = "Показана сохранённая локальная копия расписания.",
+        onRetry = onRetry,
+    )
 }
 
 @Composable
@@ -971,6 +1045,12 @@ private fun SectionEyebrow(text: String, trailing: String? = null) {
         trailing?.let { Text(it, color = BruColors.dim, fontSize = 9.sp) }
     }
 }
+
+private fun Lesson.hasSchedulePositionChanged(original: Lesson): Boolean =
+    lessonDate != original.lessonDate ||
+        startTime != original.startTime ||
+        endTime != original.endTime ||
+        slotNumber != original.slotNumber
 
 private fun Lesson.hasEditableChangesFrom(original: Lesson): Boolean =
     subjectName != original.subjectName ||

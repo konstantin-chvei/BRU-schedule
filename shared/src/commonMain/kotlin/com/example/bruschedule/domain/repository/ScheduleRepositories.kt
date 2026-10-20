@@ -28,6 +28,12 @@ interface ScheduleRepository {
 
     /** All user-authored edits, including a newly-added pair, are persisted as custom overrides. */
     suspend fun saveCustomLesson(lesson: Lesson)
+    suspend fun saveCustomLessons(lessons: List<Lesson>)
+    /** Updates a lesson note without turning a website lesson into a custom schedule override. */
+    suspend fun saveLessonNotes(lessonId: String, notes: String): Boolean
+
+    /** Deletes a custom lesson atomically, detaching but preserving its linked deadlines. */
+    suspend fun deleteCustomLessonAndPreserveTasks(lessonId: String): Boolean
 }
 
 /** Transactional website refresh, V-1 snapshots, error journal, and rollback. */
@@ -46,6 +52,8 @@ interface AcademicTaskRepository {
     fun observeTasks(): Flow<List<AcademicTask>>
     fun observeTasksForLesson(lessonId: String): Flow<List<AcademicTask>>
     suspend fun saveTask(task: AcademicTask)
+    /** Applies a related set of deadline changes atomically. */
+    suspend fun saveTasks(tasks: List<AcademicTask>)
     suspend fun setTaskCompleted(taskId: String, completed: Boolean)
     suspend fun deleteTask(taskId: String)
 }
@@ -69,7 +77,7 @@ interface SemesterSchedulePreferencesRepository {
     suspend fun update(preferences: SemesterSchedulePreferences)
 }
 
-/** Persisted global font-size multiplier used by the Compose density provider. */
+/** Persisted per-role font-size multipliers used by Compose text. */
 interface TypographyPreferencesRepository {
     fun observe(): Flow<TypographyPreferences>
     suspend fun update(preferences: TypographyPreferences)

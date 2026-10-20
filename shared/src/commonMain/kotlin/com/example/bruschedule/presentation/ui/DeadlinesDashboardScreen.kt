@@ -21,7 +21,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -238,14 +237,26 @@ private fun DeadlineCard(
                             Spacer(Modifier.size(7.dp).background(LessonThemeMapper.typeAccent(type), CircleShape))
                         }
                     }
-                    Text(item.linkLabel, color = BruColors.cyan, fontSize = 8.sp, letterSpacing = 0.6.sp)
+                    Text(
+                        item.linkLabel,
+                        color = if (item.linkedLessonMissing) BruColors.danger else BruColors.cyan,
+                        fontSize = 8.sp,
+                        letterSpacing = 0.6.sp,
+                        fontWeight = if (item.linkedLessonMissing) FontWeight.SemiBold else FontWeight.Normal,
+                    )
                     Text(item.subjectName, color = BruColors.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     item.profileName?.let {
                         Text("· $it", color = BruColors.dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 item.linkDetail?.let {
-                    Text(it, color = BruColors.dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        it,
+                        color = if (item.linkedLessonMissing) BruColors.danger else BruColors.dim,
+                        fontSize = 9.sp,
+                        maxLines = if (item.linkedLessonMissing) 2 else 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 Text(
                     task.taskTitle,

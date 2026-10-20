@@ -1,5 +1,6 @@
 package com.example.bruschedule.domain.usecase
 
+import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.repository.ScheduleRepository
@@ -22,7 +23,7 @@ sealed interface RefreshOutcome {
         val completedAtEpochMillis: Long,
     ) : RefreshOutcome
 
-    data class Failure(val message: String) : RefreshOutcome
+    data class Failure(val error: ScheduleErrorInfo) : RefreshOutcome
 }
 
 /**
@@ -81,12 +82,11 @@ class RefreshScheduleUseCase(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
-            val message = failure.message?.takeIf(String::isNotBlank)
-                ?: "Не удалось обновить расписание. Проверьте подключение и попробуйте ещё раз."
+            val error = ScheduleErrorInfo.fromThrowable(failure, operation = "SYNC")
             runCatching {
-                syncRepository.recordRefreshFailure(profileId, attemptedAt, message)
+                syncRepository.recordRefreshFailure(profileId, attemptedAt, error.encodeForStorage())
             }
-            RefreshOutcome.Failure(message)
+            RefreshOutcome.Failure(error)
         }
     }
 }

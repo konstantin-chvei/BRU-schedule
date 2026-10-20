@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
@@ -30,7 +32,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,13 +51,16 @@ import com.example.bruschedule.domain.model.DeadlineReminderIntervals
 import com.example.bruschedule.domain.model.DeadlineReminderPreferences
 import com.example.bruschedule.domain.model.AcademicTrack
 import com.example.bruschedule.domain.model.SemesterSchedulePreferences
+import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.TypographyPreferences
+import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleAppTheme
+import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.presentation.ScheduleUiState
 import com.example.bruschedule.presentation.ScheduleViewModel
 import com.example.bruschedule.ui.theme.BruColors
@@ -73,6 +77,7 @@ fun ScheduleSettingsScreen(
 ) {
     val sync = state.syncState
     var showDeleteConfirmation by remember(state.selectedProfile?.id) { mutableStateOf(false) }
+    var profileSelectorExpanded by remember(state.selectedProfile?.id, state.profiles.size) { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -94,8 +99,9 @@ fun ScheduleSettingsScreen(
         )
 
         TypographySettingsCard(
-            fontScale = state.typography.fontScale,
-            onFontScaleChanged = viewModel::setTypographyScale,
+            preferences = state.typography,
+            onScaleChanged = viewModel::setTypographyScale,
+            onResetAll = viewModel::resetTypographyScales,
         )
 
         SemesterScheduleSettingsCard(
@@ -111,21 +117,90 @@ fun ScheduleSettingsScreen(
 
         Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
             Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("АКТИВНЫЙ ИСТОЧНИК", color = BruColors.dim, fontSize = 8.sp, letterSpacing = 1.sp)
-                        Text(state.selectedProfile?.name ?: "Профиль не выбран", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("УПРАВЛЕНИЕ РАСПИСАНИЕМ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+                Box {
+                    Surface(
+                        onClick = { profileSelectorExpanded = state.profiles.isNotEmpty() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(13.dp),
+                        color = BruColors.elevatedSurface,
+                        border = BorderStroke(1.dp, BruColors.outline),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("Выбранное расписание", color = BruColors.dim, fontSize = 8.sp, letterSpacing = 0.6.sp)
+                                Text(
+                                    state.selectedProfile?.name ?: "Добавьте расписание",
+                                    color = BruColors.foreground,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    when {
+                                        state.isRefreshing -> "Обновляем"
+                                        sync?.lastError != null -> "Ошибка загрузки"
+                                        sync?.lastSuccessfulAtEpochMillis != null -> "Синхронизировано"
+                                        else -> "Не загружено"
+                                    },
+                                    color = when {
+                                        state.isRefreshing -> BruColors.amber
+                                        sync?.lastError != null -> BruColors.danger
+                                        sync?.lastSuccessfulAtEpochMillis != null -> BruColors.mint
+                                        else -> BruColors.dim
+                                    },
+                                    fontSize = 8.sp,
+                                )
+                                Text("⌄", color = BruColors.cyan, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
-                    Text(if (state.isRefreshing) "●" else if (sync?.lastSuccessfulAtEpochMillis != null) "●" else "○", color = if (state.isRefreshing) BruColors.amber else BruColors.mint, fontSize = 17.sp)
+                    DropdownMenu(
+                        expanded = profileSelectorExpanded,
+                        onDismissRequest = { profileSelectorExpanded = false },
+                    ) {
+                        state.profiles.forEach { profile ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(profile.name, color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            if (profile.type == ScheduleProfileType.GROUP) "Группа" else "Преподаватель",
+                                            color = BruColors.muted,
+                                            fontSize = 9.sp,
+                                        )
+                                    }
+                                },
+                                trailingIcon = {
+                                    if (profile.id == state.selectedProfile?.id) Text("✓", color = BruColors.cyan, fontSize = 13.sp)
+                                },
+                                onClick = {
+                                    profileSelectorExpanded = false
+                                    viewModel.selectProfile(profile.id)
+                                },
+                            )
+                        }
+                    }
+                }
+                if (state.profiles.isEmpty()) {
+                    Text("Сначала добавьте расписание на главном экране.", color = BruColors.dim, fontSize = 9.sp)
                 }
                 HorizontalDividerLine()
                 JournalLine("Последнее успешное обновление", sync?.lastSuccessfulAtEpochMillis?.let(::formatSyncTimestamp) ?: "Пока нет")
                 JournalLine("Последняя попытка", sync?.lastAttemptAtEpochMillis?.let(::formatSyncTimestamp) ?: "Ещё не запускали")
-                JournalLine("Снимок V−1", sync?.previousSnapshotAtEpochMillis?.let(::formatSyncTimestamp) ?: "Нет сохранённого снимка")
+                JournalLine("Локальный сейв", sync?.previousSnapshotAtEpochMillis?.let(::formatSyncTimestamp) ?: "Пока не создан")
                 sync?.lastError?.let { error ->
-                    Surface(shape = RoundedCornerShape(12.dp), color = BruColors.danger.copy(alpha = 0.10f)) {
-                        Text("Последняя ошибка: $error", modifier = Modifier.padding(11.dp), color = BruColors.danger, fontSize = 10.sp, lineHeight = 15.sp)
-                    }
+                    ScheduleErrorPanel(
+                        error = ScheduleErrorInfo.decodeStored(error),
+                        context = "Последняя попытка обновления. Сохранённое расписание не удалено.",
+                        onRetry = viewModel::refreshSelectedProfile,
+                    )
                 }
                 Button(
                     onClick = viewModel::refreshSelectedProfile,
@@ -144,7 +219,7 @@ fun ScheduleSettingsScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = BruColors.cyan),
                     border = BorderStroke(1.dp, if (sync?.canRollback == true) BruColors.cyan.copy(alpha = 0.5f) else BruColors.outline),
                 ) {
-                    Text("↶  Откатить к предыдущей версии", fontWeight = FontWeight.Medium)
+                    Text("↶  Восстановить локальный сейв", fontWeight = FontWeight.Medium)
                 }
                 OutlinedButton(
                     onClick = { showDeleteConfirmation = true },
@@ -197,56 +272,91 @@ fun ScheduleSettingsScreen(
 
 @Composable
 private fun TypographySettingsCard(
-    fontScale: Float,
-    onFontScaleChanged: (Float) -> Unit,
+    preferences: TypographyPreferences,
+    onScaleChanged: (TypographyRole, Float) -> Unit,
+    onResetAll: () -> Unit,
 ) {
     Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
-        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("ТИПОГРАФИКА", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
-                Text("Размер текста", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Настройте все надписи в приложении. Изменения видны сразу.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("Размеры текста", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Отдельные ползунки 100–150%; предпросмотр обновляется сразу.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
             Surface(shape = RoundedCornerShape(14.dp), color = BruColors.elevatedSurface) {
                 Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("BRU / SCHEDULE", color = BruColors.foreground, fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                    Text("Расписание на сегодня · ближайшая пара", color = BruColors.muted, fontSize = 13.sp)
-                    Text("Мелкая подпись и время · 09:40", color = BruColors.dim, fontSize = 11.sp)
+                    Text("BRU / SCHEDULE", color = BruColors.foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                    Text("Заголовок карточки", color = BruColors.foreground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Обычный текст расписания на день", color = BruColors.muted, fontSize = 13.sp)
+                    Text("Мелкая подпись · время 09:40", color = BruColors.dim, fontSize = 10.sp)
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Общий масштаб", color = BruColors.muted, fontSize = 11.sp)
-                Text(
-                    "${(fontScale * 100).roundToInt()}%",
-                    color = BruColors.cyan,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Slider(
-                value = fontScale,
-                onValueChange = onFontScaleChanged,
-                valueRange = TypographyPreferences.MIN_FONT_SCALE..TypographyPreferences.MAX_FONT_SCALE,
-                steps = 3,
-                colors = SliderDefaults.colors(
-                    thumbColor = BruColors.cyan,
-                    activeTrackColor = BruColors.indigo,
-                    inactiveTrackColor = BruColors.outline,
-                    activeTickColor = BruColors.cyan,
-                    inactiveTickColor = BruColors.muted,
-                ),
+
+            TypographyScaleControl(
+                role = TypographyRole.DISPLAY,
+                title = "Крупные заголовки · от 22 sp",
+                scale = preferences.displayScale,
+                onScaleChanged = onScaleChanged,
             )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Стандартный", color = BruColors.dim, fontSize = 9.sp)
-                Text("Крупный", color = BruColors.dim, fontSize = 9.sp)
+            HorizontalDividerLine()
+            TypographyScaleControl(
+                role = TypographyRole.HEADING,
+                title = "Заголовки · 15–21 sp",
+                scale = preferences.headingScale,
+                onScaleChanged = onScaleChanged,
+            )
+            HorizontalDividerLine()
+            TypographyScaleControl(
+                role = TypographyRole.BODY,
+                title = "Основной текст · 11–14 sp",
+                scale = preferences.bodyScale,
+                onScaleChanged = onScaleChanged,
+            )
+            HorizontalDividerLine()
+            TypographyScaleControl(
+                role = TypographyRole.CAPTION,
+                title = "Подписи · до 10 sp",
+                scale = preferences.captionScale,
+                onScaleChanged = onScaleChanged,
+            )
+            TextButton(onClick = onResetAll) {
+                Text("Сбросить все размеры к 100%", color = BruColors.cyan, fontSize = 11.sp)
             }
-            TextButton(onClick = { onFontScaleChanged(TypographyPreferences.DEFAULT_FONT_SCALE) }) {
-                Text("Сбросить к 110%", color = BruColors.cyan, fontSize = 11.sp)
-            }
+        }
+    }
+}
+
+@Composable
+private fun TypographyScaleControl(
+    role: TypographyRole,
+    title: String,
+    scale: Float,
+    onScaleChanged: (TypographyRole, Float) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(title, color = BruColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Text("${(scale * 100).roundToInt()}%", color = BruColors.cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Slider(
+            value = scale,
+            onValueChange = { onScaleChanged(role, it) },
+            valueRange = TypographyPreferences.MIN_FONT_SCALE..TypographyPreferences.MAX_FONT_SCALE,
+            steps = 0,
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = BruColors.cyan,
+                activeTrackColor = BruColors.indigo,
+                inactiveTrackColor = BruColors.outline,
+            ),
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("100%", color = BruColors.dim, fontSize = 9.sp)
+            Text("150%", color = BruColors.dim, fontSize = 9.sp)
         }
     }
 }
@@ -305,6 +415,7 @@ private fun SemesterScheduleSettingsCard(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
+                        textStyle = typographyTextStyle(TypographyRole.BODY),
                         label = { Text("Последний день сессии") },
                         placeholder = { Text("30.01.2027") },
                         singleLine = true,
