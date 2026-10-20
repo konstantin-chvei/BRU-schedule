@@ -4,7 +4,10 @@ import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.DeadlineReminderIntervals
 import com.example.bruschedule.domain.repository.DeadlineNotificationScheduler
 import kotlinx.coroutines.suspendCancellableCoroutine
-import platform.Foundation.NSDate
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import platform.UserNotifications.UNAuthorizationOptionAlert
 import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
@@ -31,16 +34,16 @@ class IosDeadlineNotificationScheduler : DeadlineNotificationScheduler {
         cancel(task.id)
         if (task.isCompleted || offsetsMinutes.isEmpty()) return true
 
-        val nowMillis = (NSDate().timeIntervalSince1970 * 1_000.0).toLong()
+        val nowMillis = Clock.System.now().toEpochMilliseconds()
         offsetsMinutes.distinct().forEach { offset ->
             val reminderAt = task.dueDate - offset * 60_000L
             val secondsUntilReminder = (reminderAt - nowMillis) / 1_000.0
             if (secondsUntilReminder <= 0.0) return@forEach
 
             val content = UNMutableNotificationContent().apply {
-                title = "Скоро дедлайн"
-                body = "${task.taskTitle} · срок ${formatDate(task.dueDate)}"
-                sound = UNNotificationSound.defaultSound()
+                setTitle("Скоро дедлайн")
+                setBody("${task.taskTitle} · срок ${formatDate(task.dueDate)}")
+                setSound(UNNotificationSound.defaultSound())
             }
             val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(
                 secondsUntilReminder,
@@ -65,11 +68,11 @@ class IosDeadlineNotificationScheduler : DeadlineNotificationScheduler {
     private fun notificationId(taskId: String, offset: Int): String = "deadline-$taskId-$offset"
 
     private fun formatDate(epochMillis: Long): String {
-        val date = NSDate(timeIntervalSince1970 = epochMillis / 1_000.0)
-        // Keep the notification's date compact and locale-independent for a predictable reminder.
-        val formatter = platform.Foundation.NSDateFormatter().apply {
-            dateFormat = "dd.MM.yyyy"
-        }
-        return formatter.stringFromDate(date)
+        val localDate = Instant.fromEpochMilliseconds(epochMillis)
+            .toLocalDateTime(TimeZone.currentSystemDefault())
+            .date
+        val day = localDate.dayOfMonth.toString().padStart(2, '0')
+        val month = localDate.monthNumber.toString().padStart(2, '0')
+        return "$day.$month.${localDate.year}"
     }
 }

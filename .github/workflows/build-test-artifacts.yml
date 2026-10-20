@@ -43,8 +43,12 @@ jobs:
             fi
             echo "Using Android SDK at $ANDROID_SDK"
             echo "Using sdkmanager at $SDKMANAGER"
-            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-            "$SDKMANAGER" --install "platforms;android-37"
+            echo "Preinstalled Android platforms:"
+            find "$ANDROID_SDK/platforms" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true
+            yes 2>/dev/null | "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --licenses >/dev/null 2>&1 || true
+            if [ ! -d "$ANDROID_SDK/platforms/android-37" ]; then
+              "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --verbose --install "platforms;android-37"
+            fi
             bash gradlew :androidApp:assembleDebug --no-daemon
           } 2>&1 | tee "$LOG_PATH"
 
