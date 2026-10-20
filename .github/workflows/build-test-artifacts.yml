@@ -36,16 +36,15 @@ jobs:
               exit 1
             fi
             echo "Using Android SDK at $ANDROID_SDK"
-            echo "Preinstalled Android platforms:"
-            find "$ANDROID_SDK/platforms" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true
-            if [ -d "$ANDROID_SDK/platforms/android-37" ]; then
-              echo "Building with Android API 37"
-            elif [ -d "$ANDROID_SDK/platforms/android-34" ]; then
-              echo "Android API 37 is unavailable on the hosted runner; using API 34 for this test APK"
-              sed -i 's/^android-compileSdk = "37"$/android-compileSdk = "34"/; s/^android-targetSdk = "37"$/android-targetSdk = "34"/' gradle/libs.versions.toml
-            else
-              echo "Neither Android API 37 nor API 34 is installed on this runner"
-              exit 1
+            SDKMANAGER="$(find "$ANDROID_SDK"/cmdline-tools -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+            if [ ! -d "$ANDROID_SDK/platforms/android-37" ]; then
+              if [ -z "$SDKMANAGER" ]; then
+                echo "sdkmanager was not found under $ANDROID_SDK/cmdline-tools"
+                exit 1
+              fi
+              echo "Installing Android API 37 from all SDK channels (including preview)"
+              yes 2>/dev/null | "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --licenses >/dev/null 2>&1 || true
+              "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --channel=3 --install "platforms;android-37"
             fi
             bash gradlew :androidApp:assembleDebug --no-daemon
           } 2>&1 | tee "$LOG_PATH"
