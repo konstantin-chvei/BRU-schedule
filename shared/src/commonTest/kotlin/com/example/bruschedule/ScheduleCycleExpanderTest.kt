@@ -68,6 +68,31 @@ class ScheduleCycleExpanderTest {
     }
 
     @Test
+    fun keepsOnlyDateLessonsOnceAndSkipsExceptDatesInWeeklyTemplates() {
+        val from = LocalDate(2026, 10, 19)
+        val through = LocalDate(2026, 11, 2)
+        val repeating = lesson(
+            "2026-10-19",
+            "group-mpr-261|2026-10-19|1|08:30-10:05|0|except:2026-10-26",
+        )
+        val oneOff = lesson(
+            "2026-10-26",
+            "group-mpr-261|2026-10-26|1|08:30-10:05|0|once",
+        ).copy(subjectName = "Разовая пара")
+
+        val expanded = ScheduleCycleExpander.expandWeekly(listOf(repeating, oneOff), from, through)
+
+        assertEquals(
+            listOf("2026-10-19", "2026-11-02"),
+            expanded.filter { it.subjectName == repeating.subjectName }.map { it.lessonDate },
+        )
+        assertEquals(
+            listOf("2026-10-26"),
+            expanded.filter { it.subjectName == "Разовая пара" }.map { it.lessonDate },
+        )
+    }
+
+    @Test
     fun datesBeforeTheCurrentDayAreSkippedWhenExpandingTheCurrentCycle() {
         val today = LocalDate(2026, 10, 22)
         val template = listOf(
