@@ -436,9 +436,10 @@ private fun SemesterScheduleSettingsCard(
             }
             if (selectedProfileId != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    val profileLabel = selectedProfileName ?: "выбранного расписания"
                     Text("ОТДЕЛЬНО ДЛЯ ЭТОГО РАСПИСАНИЯ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 0.9.sp)
                     Text(
-                        "Факультеты могут заканчивать сессию в разные даты. Для «${selectedProfileName ?: "выбранного расписания"}" можно задать свою; календарь захватит ещё 7 дней.",
+                        "Факультеты могут заканчивать сессию в разные даты. Для «$profileLabel» можно задать свою; календарь захватит ещё 7 дней.",
                         color = BruColors.muted,
                         fontSize = 10.sp,
                         lineHeight = 15.sp,
