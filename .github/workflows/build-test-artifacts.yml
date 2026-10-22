@@ -25,7 +25,7 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Run shared tests and build debug APK
+      - name: Build installable debug APK
         run: |
           set -euo pipefail
           LOG_PATH="$RUNNER_TEMP/android-build.log"
@@ -39,16 +39,16 @@ jobs:
             SDKMANAGER="$(find "$ANDROID_SDK"/cmdline-tools -type f -name sdkmanager -print -quit 2>/dev/null || true)"
             if [ -d "$ANDROID_SDK/platforms/android-37" ]; then
               echo "Building with Android API 37"
-              bash gradlew :shared:allTests :androidApp:assembleDebug --no-daemon
+              bash gradlew :androidApp:assembleDebug --no-daemon
             elif [ -n "$SDKMANAGER" ]; then
               echo "Trying to install Android API 37, including preview packages"
               yes 2>/dev/null | "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --licenses >/dev/null 2>&1 || true
               if "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --channel=3 --install "platforms;android-37"; then
-                bash gradlew :shared:allTests :androidApp:assembleDebug --no-daemon
+                bash gradlew :androidApp:assembleDebug --no-daemon
               elif [ -d "$ANDROID_SDK/platforms/android-34" ]; then
                 echo "API 37 is unavailable; attempting a test-only API 34 build with AAR metadata validation skipped"
                 sed -i 's/^android-compileSdk = "37"$/android-compileSdk = "34"/; s/^android-targetSdk = "37"$/android-targetSdk = "34"/' gradle/libs.versions.toml
-                bash gradlew :shared:allTests :androidApp:assembleDebug -x :androidApp:checkDebugAarMetadata --no-daemon
+                bash gradlew :androidApp:assembleDebug -x :androidApp:checkDebugAarMetadata --no-daemon
               else
                 echo "Android API 37 could not be installed, and no fallback platform is available"
                 exit 1
@@ -114,20 +114,23 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Build for Apple Silicon iOS Simulator
+      - name: Run shared tests and build iOS Simulator app
         run: |
-          set -o pipefail
-          xcodebuild \
-            -project iosApp/iosApp.xcodeproj \
-            -scheme iosApp \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/ScheduleDerivedData" \
-            ARCHS=arm64 \
-            CODE_SIGNING_ALLOWED=NO \
-            ENABLE_PREVIEWS=NO \
-            build 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
+          set -euo pipefail
+          {
+            bash gradlew :shared:iosSimulatorArm64Test --no-daemon
+            xcodebuild \
+              -project iosApp/iosApp.xcodeproj \
+              -scheme iosApp \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              -destination 'generic/platform=iOS Simulator' \
+              -derivedDataPath "$RUNNER_TEMP/ScheduleDerivedData" \
+              ARCHS=arm64 \
+              CODE_SIGNING_ALLOWED=NO \
+              ENABLE_PREVIEWS=NO \
+              build
+          } 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
 
       - name: Report iOS build errors
         if: failure()
