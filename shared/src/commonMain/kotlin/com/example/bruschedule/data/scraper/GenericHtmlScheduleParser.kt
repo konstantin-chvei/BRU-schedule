@@ -42,7 +42,7 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
 
         document.select("table").forEachIndexed { tableIndex, table ->
             val rows = table.select("tr").toList()
-            if (rows.size < 2) return@forEach
+            if (rows.size < 2) return@forEachIndexed
             val headerIndex = rows.indexOfFirst { row ->
                 val headers = row.select("th, td").map { normalize(it.text()) }
                 headers.count { weekdayNumber(it) != null || explicitDate(it, referenceDate) != null } >= 2
