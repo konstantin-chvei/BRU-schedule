@@ -205,6 +205,7 @@ class BsuScheduleProfileCatalogRepository(
         if (targetPath.startsWith("http://") || targetPath.startsWith("https://")) return targetPath
         val pathOnly = targetPath.substringBefore('?').substringBefore('#')
         val suffix = targetPath.removePrefix(pathOnly)
+        val hasTrailingSlash = pathOnly.endsWith('/')
         val stack = mutableListOf<String>()
         pathOnly.split('/').forEach { part ->
             when (part) {
@@ -213,7 +214,9 @@ class BsuScheduleProfileCatalogRepository(
                 else -> stack += part
             }
         }
-        return "$scheme://$authority/${stack.joinToString("/")}$suffix"
+        val normalizedPath = stack.joinToString("/")
+        val trailingSlash = if (hasTrailingSlash && normalizedPath.isNotEmpty()) "/" else ""
+        return "$scheme://$authority/$normalizedPath$trailingSlash$suffix"
     }
 
     private fun matchesQuery(value: String, normalizedQuery: String): Boolean =
