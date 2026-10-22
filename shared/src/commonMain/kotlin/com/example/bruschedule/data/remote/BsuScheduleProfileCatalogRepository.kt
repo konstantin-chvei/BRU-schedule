@@ -6,6 +6,7 @@ import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.supervisorScope
@@ -36,7 +37,7 @@ class BsuScheduleProfileCatalogRepository(
 
         val results = supervisorScope {
             FACULTIES.map { faculty ->
-                async {
+                async(start = CoroutineStart.UNDISPATCHED) {
                     try {
                         discoverFaculty(faculty, normalizedQuery)
                     } catch (cancelled: CancellationException) {
