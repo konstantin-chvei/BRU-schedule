@@ -185,7 +185,10 @@ class ScheduleArchitectureTest {
         assertEquals(autoUrl, matches.single().sourceUrl)
         assertTrue(managementUrl in requestedUrls)
         assertTrue(requestedUrls.indexOf(managementUrl) < requestedUrls.indexOf(autoUrl))
-        assertFalse(BruScheduleDirectoryParser.PART_TIME_INDEX in requestedUrls)
+        assertFalse(
+            BruScheduleDirectoryParser.PART_TIME_INDEX in requestedUrls,
+            "Unexpected directory requests: $requestedUrls; matches: ${matches.map { it.name to it.sourceUrl }}",
+        )
     }
 
     @Test
