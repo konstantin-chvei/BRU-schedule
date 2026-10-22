@@ -106,8 +106,11 @@ fun ScheduleSettingsScreen(
 
         SemesterScheduleSettingsCard(
             preferences = state.semesterSchedulePreferences,
+            selectedProfileId = state.selectedProfile?.id,
+            selectedProfileName = state.selectedProfile?.name,
             onTrackSelected = viewModel::setAcademicTrack,
             onIfzoDateChanged = viewModel::setIfzoSessionEndDate,
+            onProfileSessionEndDateChanged = viewModel::setProfileSessionEndDate,
         )
 
         DeadlineReminderSettingsCard(
@@ -366,11 +369,19 @@ private const val PROJECT_TELEGRAM_BOT_URL = "https://t.me/bru_schedule_suggesti
 @Composable
 private fun SemesterScheduleSettingsCard(
     preferences: SemesterSchedulePreferences,
+    selectedProfileId: String?,
+    selectedProfileName: String?,
     onTrackSelected: (AcademicTrack) -> Unit,
     onIfzoDateChanged: (String) -> Unit,
+    onProfileSessionEndDateChanged: (String, String?) -> Unit,
 ) {
+    val profileDateOverride = selectedProfileId?.let(preferences.profileSessionEndDatesIso::get)
+    val profileDate = profileDateOverride ?: preferences.sessionEndDateIso
     var ifzoDateText by remember(preferences.track, preferences.sessionEndDateIso) {
         mutableStateOf(formatIsoDateForInput(preferences.sessionEndDateIso))
+    }
+    var profileDateText by remember(selectedProfileId, profileDate) {
+        mutableStateOf(formatIsoDateForInput(profileDate))
     }
     Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
         Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -421,6 +432,39 @@ private fun SemesterScheduleSettingsCard(
                         singleLine = true,
                     )
                     Text("ИФЗО: введите вашу дату; календарь автоматически захватит ещё 7 дней.", color = BruColors.dim, fontSize = 9.sp, lineHeight = 13.sp)
+                }
+            }
+            if (selectedProfileId != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("ОТДЕЛЬНО ДЛЯ ЭТОГО РАСПИСАНИЯ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 0.9.sp)
+                    Text(
+                        "Факультеты могут заканчивать сессию в разные даты. Для «${selectedProfileName ?: "выбранного расписания"}" можно задать свою; календарь захватит ещё 7 дней.",
+                        color = BruColors.muted,
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp,
+                    )
+                    OutlinedTextField(
+                        value = profileDateText,
+                        onValueChange = { value ->
+                            val formatted = maskRussianDate(value)
+                            profileDateText = formatted
+                            if (formatted.length == 10) {
+                                parseRussianDate(formatted)?.let { date ->
+                                    onProfileSessionEndDateChanged(selectedProfileId, date)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = typographyTextStyle(TypographyRole.BODY),
+                        label = { Text("Последний день сессии") },
+                        placeholder = { Text("10.01.2027") },
+                        singleLine = true,
+                    )
+                    if (profileDateOverride != null) {
+                        TextButton(onClick = { onProfileSessionEndDateChanged(selectedProfileId, null) }) {
+                            Text("Использовать общую дату", color = BruColors.cyan, fontSize = 10.sp)
+                        }
+                    }
                 }
             }
         }

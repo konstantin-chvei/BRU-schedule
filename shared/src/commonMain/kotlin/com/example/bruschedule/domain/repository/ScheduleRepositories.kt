@@ -71,7 +71,7 @@ interface AppearancePreferencesRepository {
     suspend fun resetLessonColors()
 }
 
-/** Persisted session track and final session date used by the semester calendar. */
+/** Persisted session track and global/per-profile final dates used by the semester calendar. */
 interface SemesterSchedulePreferencesRepository {
     fun observe(): Flow<SemesterSchedulePreferences>
     suspend fun update(preferences: SemesterSchedulePreferences)

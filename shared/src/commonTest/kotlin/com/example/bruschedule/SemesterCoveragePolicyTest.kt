@@ -39,6 +39,36 @@ class SemesterCoveragePolicyTest {
     }
 
     @Test
+    fun profileSpecificSessionEndDatesAllowFacultiesToUseDifferentCoverageHorizons() {
+        val preferences = SemesterSchedulePreferences(
+            track = AcademicTrack.BELARUSIAN,
+            sessionEndDateIso = SemesterSchedulePreferences.DEFAULT_BELARUSIAN_SESSION_END,
+            profileSessionEndDatesIso = mapOf(
+                "bru-auto-profile" to "2027-02-05",
+                "bsu-economics-profile" to "2027-01-20",
+                "stale-profile" to "2026-10-01",
+            ),
+        )
+
+        assertEquals(
+            LocalDate(2027, 2, 12),
+            SemesterCoveragePolicy.coverageEndDate(LocalDate(2026, 10, 22), preferences, "bru-auto-profile"),
+        )
+        assertEquals(
+            LocalDate(2027, 1, 27),
+            SemesterCoveragePolicy.coverageEndDate(LocalDate(2026, 10, 22), preferences, "bsu-economics-profile"),
+        )
+        assertEquals(
+            LocalDate(2027, 1, 17),
+            SemesterCoveragePolicy.coverageEndDate(LocalDate(2026, 10, 22), preferences, "unknown-profile"),
+        )
+        assertEquals(
+            LocalDate(2026, 10, 22),
+            SemesterCoveragePolicy.coverageEndDate(LocalDate(2026, 10, 22), preferences, "stale-profile"),
+        )
+    }
+
+    @Test
     fun coverageCannotEndBeforeTodayWhenAStoredSessionDateHasExpired() {
         val preferences = SemesterSchedulePreferences(
             track = AcademicTrack.BELARUSIAN,

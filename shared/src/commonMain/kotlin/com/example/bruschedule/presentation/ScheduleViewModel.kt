@@ -306,7 +306,7 @@ class ScheduleViewModel(
         val todayDate = nowLocal.date
         val coverageStartDate = selectedProfile?.let { SemesterCoveragePolicy.coverageStartDate(todayDate) }
         val coverageEndDate = selectedProfile?.let {
-            SemesterCoveragePolicy.coverageEndDate(todayDate, preferences.semester)
+            SemesterCoveragePolicy.coverageEndDate(todayDate, preferences.semester, it.id)
         }
         val displayedDate = when {
             selection.core.date < todayDate -> todayDate
@@ -600,14 +600,33 @@ class ScheduleViewModel(
         )
     }
 
+    fun setProfileSessionEndDate(profileId: String, sessionEndDateIso: String?) {
+        if (uiState.value.profiles.none { it.id == profileId }) {
+            notice.value = "Выбранное расписание больше не доступно"
+            return
+        }
+        val normalizedDate = sessionEndDateIso?.let { value ->
+            runCatching { LocalDate.parse(value).toString() }.getOrNull()
+        }
+        if (sessionEndDateIso != null && normalizedDate == null) {
+            notice.value = "Введите дату последнего экзамена в формате ДД.ММ.ГГГГ"
+            return
+        }
+        val current = semesterPreferences.value
+        val profileDates = current.profileSessionEndDatesIso.toMutableMap()
+        if (normalizedDate == null) profileDates.remove(profileId) else profileDates[profileId] = normalizedDate
+        updateSemesterSchedulePreferences(current.copy(profileSessionEndDatesIso = profileDates))
+    }
+
     private fun updateSemesterSchedulePreferences(preferences: SemesterSchedulePreferences) {
         viewModelScope.launch {
             try {
                 semesterSchedulePreferencesRepository.update(preferences)
                 val today = today()
-                val end = SemesterCoveragePolicy.coverageEndDate(today, preferences)
+                val activeProfileId = selectedProfileId.value ?: uiState.value.selectedProfile?.id
+                val end = SemesterCoveragePolicy.coverageEndDate(today, preferences, activeProfileId)
                 if (selectedDate.value < today || selectedDate.value > end) selectedDate.value = today
-                selectedProfileId.value?.let(::launchRefresh)
+                activeProfileId?.let(::launchRefresh)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -648,6 +667,7 @@ class ScheduleViewModel(
             val desiredCoverageEnd = SemesterCoveragePolicy.coverageEndDate(
                 today,
                 semesterSchedulePreferencesRepository.observe().first(),
+                profileId,
             )
             val remoteDates = cachedLessons.asSequence()
                 .filterNot(Lesson::isCustom)

@@ -58,7 +58,7 @@ class RefreshScheduleUseCase(
                 .toLocalDateTime(TimeZone.currentSystemDefault())
                 .date
             val preferences = semesterSchedulePreferences.observe().first()
-            val semesterEnd = SemesterCoveragePolicy.coverageEndDate(today, preferences)
+            val semesterEnd = SemesterCoveragePolicy.coverageEndDate(today, preferences, profile.id)
             val websiteLessons = when {
                 scraper.hasAlternatingTwoWeekCycle(profile, html) ->
                     ScheduleCycleExpander.expand(parsed, today, semesterEnd)

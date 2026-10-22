@@ -9,10 +9,12 @@ enum class AcademicTrack(val label: String) {
 
 data class SemesterSchedulePreferences(
     val track: AcademicTrack = AcademicTrack.BELARUSIAN,
-    /** Last session day for the selected track, ISO-8601. */
+    /** Default last session day for the selected track, ISO-8601. */
     val sessionEndDateIso: String = DEFAULT_BELARUSIAN_SESSION_END,
     /** Keeps the personal IFZO date when the user temporarily switches to another track. */
     val ifzoSessionEndDateIso: String = DEFAULT_IFZO_SESSION_END,
+    /** Optional per-schedule last session dates; faculties can end at different times. */
+    val profileSessionEndDatesIso: Map<String, String> = emptyMap(),
 ) {
     companion object {
         const val DEFAULT_BELARUSIAN_SESSION_END = "2027-01-10"
