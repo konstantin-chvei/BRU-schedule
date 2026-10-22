@@ -140,6 +140,7 @@ jobs:
           python3 - <<'PY'
           import os
           import re
+          import xml.etree.ElementTree as ET
           from pathlib import Path
 
           log = Path(os.environ["BUILD_LOG"])
@@ -152,6 +153,19 @@ jobs:
               for line in tail:
                   escaped_lines.append(line[:900].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
               print("::error title=iOS build log tail::" + "%0A".join(escaped_lines))
+
+          report_dir = Path("shared/build/test-results/iosSimulatorArm64Test")
+          for report in sorted(report_dir.glob("TEST-*.xml")):
+              try:
+                  root = ET.parse(report).getroot()
+              except ET.ParseError:
+                  continue
+              for case in root.iter("testcase"):
+                  for failure in list(case.findall("failure")) + list(case.findall("error")):
+                      name = f"{case.get('classname', '')}.{case.get('name', 'unknown')}".strip(".")
+                      detail = " ".join(part.strip() for part in (failure.get("message", ""), failure.text or "") if part.strip())[:1800]
+                      escaped = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error title=KMP test failure::{name}: {escaped}")
           PY
 
       - name: Upload iOS build log

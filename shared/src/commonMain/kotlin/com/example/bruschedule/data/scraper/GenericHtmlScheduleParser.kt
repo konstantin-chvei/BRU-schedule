@@ -287,12 +287,16 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         .replace(WHITESPACE, " ")
         .trim()
 
-    private fun isTimeHeader(text: String): Boolean =
-        text.contains("время") || text.contains("час") || text.contains("time")
+    private fun isTimeHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return normalized.contains("время") || normalized.contains("час") || normalized.contains("time")
+    }
 
-    private fun isDayHeader(text: String): Boolean =
-        text.contains("день") || text.contains("дата") || text.contains("weekday") ||
-            weekdayNumber(text) != null
+    private fun isDayHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return normalized.contains("день") || normalized.contains("дата") ||
+            normalized.contains("weekday") || weekdayNumber(normalized) != null
+    }
 
     private fun weekdayNumber(text: String): Int? {
         val normalized = normalize(text).lowercase().replace('ё', 'е')

@@ -27,7 +27,11 @@ class DailyMessageSelectorTest {
 
     @Test
     fun blankRemoteEntriesAreIgnoredAndEmptyListsFallBackLocally() {
-        assertEquals("Фраза", DailyMessageSelector.forDate(LocalDate(2026, 10, 19), listOf("", " Фраза ")))
-        assertEquals(DEFAULT_DAILY_MESSAGES.first(), DailyMessageSelector.forDate(LocalDate(2026, 10, 19), emptyList()))
+        val date = LocalDate(2026, 10, 19)
+        assertEquals("Фраза", DailyMessageSelector.forDate(date, listOf("", " Фраза ")))
+        assertEquals(
+            DailyMessageSelector.forDate(date, DEFAULT_DAILY_MESSAGES),
+            DailyMessageSelector.forDate(date, emptyList()),
+        )
     }
 }
