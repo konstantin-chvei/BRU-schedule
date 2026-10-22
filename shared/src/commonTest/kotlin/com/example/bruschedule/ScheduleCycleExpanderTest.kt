@@ -55,6 +55,19 @@ class ScheduleCycleExpanderTest {
     }
 
     @Test
+    fun expandsSingleWeekTemplatesWeeklyThroughTheConfiguredSemesterEnd() {
+        val from = LocalDate(2026, 10, 19)
+        val through = LocalDate(2026, 11, 2)
+        val template = listOf(lesson("2026-10-12", "group-mpr-261|2026-10-12|1|08:30-10:05|0"))
+
+        val expanded = ScheduleCycleExpander.expandWeekly(template, from, through)
+
+        assertEquals(listOf("2026-10-19", "2026-10-26", "2026-11-02"), expanded.map { it.lessonDate })
+        assertEquals(expanded.size, expanded.map { it.sourceKey }.distinct().size)
+        assertTrue(expanded.all { it.sourceKey.contains("|${it.lessonDate}|1|08:30-10:05|0") })
+    }
+
+    @Test
     fun datesBeforeTheCurrentDayAreSkippedWhenExpandingTheCurrentCycle() {
         val today = LocalDate(2026, 10, 22)
         val template = listOf(

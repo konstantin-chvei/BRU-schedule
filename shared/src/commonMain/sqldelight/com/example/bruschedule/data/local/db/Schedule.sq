@@ -1,9 +1,17 @@
+CREATE TABLE university (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    website_url TEXT NOT NULL,
+    source_type TEXT NOT NULL
+);
+
 CREATE TABLE schedule_profile (
     id TEXT NOT NULL PRIMARY KEY,
     profile_type TEXT NOT NULL,
     name TEXT NOT NULL,
     source_url TEXT,
-    source_key TEXT
+    source_key TEXT,
+    university_id TEXT NOT NULL DEFAULT 'bru'
 );
 
 CREATE TABLE lesson (
@@ -85,13 +93,41 @@ CREATE TABLE profile_sync_state (
     previous_snapshot_at_epoch_ms INTEGER
 );
 
+selectUniversities:
+SELECT
+    id AS id,
+    name AS name,
+    website_url AS websiteUrl,
+    source_type AS sourceType
+FROM university
+ORDER BY name COLLATE NOCASE;
+
+getUniversity:
+SELECT
+    id AS id,
+    name AS name,
+    website_url AS websiteUrl,
+    source_type AS sourceType
+FROM university
+WHERE id = ?;
+
+insertUniversity:
+INSERT OR IGNORE INTO university(id, name, website_url, source_type)
+VALUES (?, ?, ?, ?);
+
+updateUniversity:
+UPDATE university
+SET name = ?, website_url = ?, source_type = ?
+WHERE id = ?;
+
 selectProfiles:
 SELECT
     id AS id,
     profile_type AS profileType,
     name AS name,
     source_url AS sourceUrl,
-    source_key AS sourceKey
+    source_key AS sourceKey,
+    university_id AS universityId
 FROM schedule_profile
 ORDER BY name COLLATE NOCASE;
 
@@ -101,17 +137,18 @@ SELECT
     profile_type AS profileType,
     name AS name,
     source_url AS sourceUrl,
-    source_key AS sourceKey
+    source_key AS sourceKey,
+    university_id AS universityId
 FROM schedule_profile
 WHERE id = ?;
 
 insertProfile:
-INSERT OR IGNORE INTO schedule_profile(id, profile_type, name, source_url, source_key)
-VALUES (?, ?, ?, ?, ?);
+INSERT OR IGNORE INTO schedule_profile(id, profile_type, name, source_url, source_key, university_id)
+VALUES (?, ?, ?, ?, ?, ?);
 
 updateProfile:
 UPDATE schedule_profile
-SET profile_type = ?, name = ?, source_url = ?, source_key = ?
+SET profile_type = ?, name = ?, source_url = ?, source_key = ?, university_id = ?
 WHERE id = ?;
 
 deleteProfile:

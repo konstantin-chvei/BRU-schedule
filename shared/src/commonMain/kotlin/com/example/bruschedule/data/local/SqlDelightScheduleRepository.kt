@@ -38,6 +38,7 @@ class SqlDelightScheduleRepository(
                     name = row.name,
                     sourceUrl = row.sourceUrl,
                     sourceKey = row.sourceKey,
+                    universityId = row.universityId,
                 )
             }
         }
@@ -100,6 +101,7 @@ class SqlDelightScheduleRepository(
                 name = row.name,
                 sourceUrl = row.sourceUrl,
                 sourceKey = row.sourceKey,
+                universityId = row.universityId,
             )
         }
 
@@ -123,8 +125,22 @@ class SqlDelightScheduleRepository(
 
     override suspend fun saveProfile(profile: ScheduleProfile) {
         database.transaction {
-            queries.insertProfile(profile.id, profile.type.name, profile.name.trim(), profile.sourceUrl, profile.sourceKey)
-            queries.updateProfile(profile.type.name, profile.name.trim(), profile.sourceUrl, profile.sourceKey, profile.id)
+            queries.insertProfile(
+                profile.id,
+                profile.type.name,
+                profile.name.trim(),
+                profile.sourceUrl,
+                profile.sourceKey,
+                profile.universityId,
+            )
+            queries.updateProfile(
+                profile.type.name,
+                profile.name.trim(),
+                profile.sourceUrl,
+                profile.sourceKey,
+                profile.universityId,
+                profile.id,
+            )
         }
     }
 

@@ -32,6 +32,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,6 +62,8 @@ import com.example.bruschedule.domain.model.LessonRecurrence
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.ScheduleProfileType
+import com.example.bruschedule.domain.model.University
+import com.example.bruschedule.domain.model.UniversitySourceType
 import com.example.bruschedule.domain.usecase.ScheduleLessonConflict
 import com.example.bruschedule.presentation.LessonUiItem
 import com.example.bruschedule.presentation.ScheduleUiState
@@ -88,6 +91,10 @@ fun ScheduleHomeScreen(
     var deadlineLessonToPersist by remember { mutableStateOf<Lesson?>(null) }
     var deadlineLessonRecurrence by remember { mutableStateOf(LessonRecurrence.NONE) }
     var conflictToDelete by remember { mutableStateOf<Lesson?>(null) }
+    var showUniversityPicker by remember { mutableStateOf(false) }
+    var showAddUniversity by remember { mutableStateOf(false) }
+    var newUniversityName by remember { mutableStateOf("") }
+    var newUniversityUrl by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -103,7 +110,12 @@ fun ScheduleHomeScreen(
             refreshing = state.isRefreshing,
             onRefresh = viewModel::refreshSelectedProfile,
         )
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(18.dp))
+        UniversitySelectionPanel(
+            university = state.selectedUniversity,
+            onClick = { showUniversityPicker = true },
+        )
+        Spacer(Modifier.height(18.dp))
 
         if (state.isLoading) {
             ScheduleLoadingStatusCard(title = "Загружаем сохранённые данные", detail = "Поднимаем расписание из локальной базы.")
@@ -213,6 +225,7 @@ fun ScheduleHomeScreen(
     if (addProfileVisible) {
         AddProfileBottomSheet(
             searchState = state.profileSearch,
+            university = state.selectedUniversity,
             onClose = { addProfileVisible = false },
             onSearch = viewModel::searchProfiles,
             onAddManual = { type, name, url ->
@@ -223,6 +236,98 @@ fun ScheduleHomeScreen(
                 viewModel.addProfileCandidate(candidate)
                 addProfileVisible = false
             },
+        )
+    }
+
+    if (showUniversityPicker) {
+        AlertDialog(
+            onDismissRequest = { showUniversityPicker = false },
+            title = { Text("Выберите вуз") },
+            text = {
+                Column(
+                    modifier = Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.universities.forEach { university ->
+                        UniversityChoiceRow(
+                            university = university,
+                            selected = university.id == state.selectedUniversity.id,
+                            onClick = {
+                                viewModel.selectUniversity(university.id)
+                                showUniversityPicker = false
+                            },
+                        )
+                    }
+                    TextButton(
+                        onClick = {
+                            showUniversityPicker = false
+                            showAddUniversity = true
+                        },
+                    ) { Text("＋ Добавить вуз", color = BruColors.cyan) }
+                    Text(
+                        "Добавьте название и сайт вуза; затем укажите прямую ссылку на HTML-страницу расписания.",
+                        color = BruColors.dim,
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showUniversityPicker = false }) { Text("Готово", color = BruColors.cyan) }
+            },
+            containerColor = BruColors.surface,
+            titleContentColor = BruColors.foreground,
+            textContentColor = BruColors.muted,
+        )
+    }
+
+    if (showAddUniversity) {
+        AlertDialog(
+            onDismissRequest = { showAddUniversity = false },
+            title = { Text("Добавить вуз") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newUniversityName,
+                        onValueChange = { newUniversityName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Название вуза") },
+                        placeholder = { Text("Например, БГУ") },
+                    )
+                    OutlinedTextField(
+                        value = newUniversityUrl,
+                        onValueChange = { newUniversityUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Сайт вуза · HTTPS") },
+                        placeholder = { Text("https://bsu.by") },
+                    )
+                    Text(
+                        "Сайт сохранится в списке. Страницу конкретной группы добавьте следующим шагом.",
+                        color = BruColors.muted,
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newUniversityName.trim().length >= 2 && newUniversityUrl.trim().startsWith("https://", ignoreCase = true),
+                    onClick = {
+                        viewModel.addUniversity(newUniversityName, newUniversityUrl)
+                        newUniversityName = ""
+                        newUniversityUrl = ""
+                        showAddUniversity = false
+                    },
+                ) { Text("Добавить", color = BruColors.cyan) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddUniversity = false }) { Text("Отмена", color = BruColors.muted) }
+            },
+            containerColor = BruColors.surface,
+            titleContentColor = BruColors.foreground,
+            textContentColor = BruColors.muted,
         )
     }
 
@@ -343,7 +448,7 @@ private fun ScheduleTopBar(
         ) {
             BrandCalendarGlyph()
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("BRU / SCHEDULE", color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                Text("РАСПИСАНИЕ", color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                 Text(
                     dailyMessage,
                     color = BruColors.muted,
@@ -369,6 +474,80 @@ private fun ScheduleTopBar(
                 Text(if (refreshing) "···" else "↻", color = BruColors.cyan, fontSize = 17.sp)
                 Text(if (refreshing) "Загрузка" else "Обновить", color = BruColors.foreground, fontSize = 11.sp)
             }
+        }
+    }
+}
+
+@Composable
+private fun UniversitySelectionPanel(
+    university: University,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(17.dp),
+        color = BruColors.surface,
+        border = BorderStroke(1.dp, BruColors.outline),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(shape = RoundedCornerShape(11.dp), color = BruColors.indigo.copy(alpha = 0.13f)) {
+                Text("ВУЗ", modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp), color = BruColors.cyan, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    university.name,
+                    color = BruColors.foreground,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    if (university.sourceType == UniversitySourceType.BRU_CATALOG) "КАТАЛОГ ПОДКЛЮЧЁН"
+                    else "ПРОФИЛИ ПО ПРЯМОЙ ССЫЛКЕ",
+                    color = BruColors.dim,
+                    fontSize = 8.sp,
+                    letterSpacing = 0.8.sp,
+                )
+            }
+            Text("СМЕНИТЬ  ⌄", color = BruColors.cyan, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun UniversityChoiceRow(
+    university: University,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(13.dp),
+        color = if (selected) BruColors.indigo.copy(alpha = 0.13f) else BruColors.elevatedSurface,
+        border = BorderStroke(1.dp, if (selected) BruColors.indigo else BruColors.outline),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(university.name, color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (university.sourceType == UniversitySourceType.BRU_CATALOG) "Каталог и адаптер подключены"
+                    else "Источник расписания задаётся ссылкой",
+                    color = BruColors.muted,
+                    fontSize = 9.sp,
+                )
+            }
+            if (selected) Text("✓", color = BruColors.cyan, fontSize = 16.sp)
         }
     }
 }

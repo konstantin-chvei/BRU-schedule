@@ -3,20 +3,30 @@ package com.example.bruschedule.data.remote
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
+import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
 import kotlinx.coroutines.CancellationException
 
 /**
- * Resolves a profile through the live site hierarchy on every refresh. Group profiles store a
- * faculty directory as a hint, but the group code is authoritative: if that hint is stale or points
- * at an unrelated faculty, resolve the group again from the full-time/part-time indexes.
+ * Uses the configured direct HTML page for user-added universities. BRU profiles are resolved
+ * through the live directory hierarchy; group profiles store a faculty page as a hint, but the group
+ * code is authoritative if the hint is stale or points at an unrelated faculty.
  */
 class BruScheduleRemoteDataSource(
     private val transport: HtmlTransport,
     private val directoryParser: BruScheduleDirectoryParser = BruScheduleDirectoryParser(),
 ) : ScheduleRemoteDataSource {
     override suspend fun fetchHtml(profile: ScheduleProfile, window: ScheduleWindow): String {
+        if (profile.universityId != UniversityIds.BRU) {
+            val timetableUrl = profile.sourceUrl?.trim()?.takeIf(String::isNotBlank)
+                ?: error("Для этого вуза укажите прямую ссылку на страницу расписания")
+            require(timetableUrl.startsWith("https://", ignoreCase = true)) {
+                "Ссылка на расписание должна начинаться с https://"
+            }
+            return transport.get(timetableUrl)
+        }
+
         var lastNetworkError: String? = null
         suspend fun fetchOrNull(url: String): String? = try {
             transport.get(url)

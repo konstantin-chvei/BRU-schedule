@@ -68,6 +68,7 @@ fun App(graph: AppGraph) {
                     semesterSchedulePreferencesRepository = graph.semesterSchedulePreferences,
                     dailyMessagesRepository = graph.dailyMessages,
                     typographyPreferencesRepository = graph.typographyPreferences,
+                    universityRepository = graph.universityRepository,
                     deadlineNotificationScheduler = graph.deadlineNotificationScheduler,
                 )
             }

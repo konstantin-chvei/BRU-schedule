@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.TypographyRole
+import com.example.bruschedule.domain.model.University
+import com.example.bruschedule.domain.model.UniversitySourceType
 import com.example.bruschedule.presentation.ProfileSearchUiState
 import com.example.bruschedule.ui.theme.BruColors
 
@@ -42,14 +44,16 @@ import com.example.bruschedule.ui.theme.BruColors
 @Composable
 fun AddProfileBottomSheet(
     searchState: ProfileSearchUiState,
+    university: University,
     onClose: () -> Unit,
     onSearch: (ScheduleProfileType, String) -> Unit,
     onAddManual: (ScheduleProfileType, String, String?) -> Unit,
     onSelectCandidate: (ProfileCandidate) -> Unit,
 ) {
-    var selectedType by remember { mutableStateOf(searchState.type) }
-    var query by remember { mutableStateOf(searchState.query) }
-    var sourceUrl by remember { mutableStateOf("") }
+    val hasBruCatalog = university.sourceType == UniversitySourceType.BRU_CATALOG
+    var selectedType by remember(university.id) { mutableStateOf(searchState.type) }
+    var query by remember(university.id) { mutableStateOf(searchState.query) }
+    var sourceUrl by remember(university.id) { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -70,7 +74,11 @@ fun AddProfileBottomSheet(
             Text("НОВЫЙ ПРОФИЛЬ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
             Text("Подключить расписание", color = BruColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "Найдите группу или преподавателя в каталоге rasp.bru.by. У групп показан факультет — проверьте его перед добавлением. Источник обновляется автоматически, расписание хранится локально.",
+                if (hasBruCatalog) {
+                    "Ищите группу или преподавателя в каталоге rasp.bru.by. Для других вузов добавьте открытую HTML-страницу расписания напрямую. Сохранённые пары доступны офлайн."
+                } else {
+                    "Вуз: ${university.name}. Каталог этого сайта пока не подключён. Вставьте прямую HTTPS-ссылку на открытую HTML-страницу с таблицей расписания; страницы, которые строятся только JavaScript, не поддерживаются."
+                },
                 color = BruColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
@@ -85,47 +93,76 @@ fun AddProfileBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
-                label = { Text(if (selectedType == ScheduleProfileType.GROUP) "Номер группы" else "Фамилия преподавателя") },
-                placeholder = { Text(if (selectedType == ScheduleProfileType.GROUP) "Например, МПР-261" else "Например, Агеева") },
+                label = {
+                    Text(
+                        when {
+                            hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Номер группы"
+                            hasBruCatalog -> "Фамилия преподавателя"
+                            selectedType == ScheduleProfileType.GROUP -> "Название группы или профиля"
+                            else -> "Название преподавателя или профиля"
+                        },
+                    )
+                },
+                placeholder = {
+                    Text(
+                        when {
+                            hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Например, МПР-261"
+                            hasBruCatalog -> "Например, Агеева"
+                            selectedType == ScheduleProfileType.GROUP -> "Например, ИС-241"
+                            else -> "Фамилия преподавателя"
+                        },
+                    )
+                },
                 shape = RoundedCornerShape(14.dp),
             )
-            Button(
-                onClick = { onSearch(selectedType, query.trim()) },
-                enabled = query.trim().length >= 2 && !searchState.loading,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),
-            ) {
-                if (searchState.loading) {
-                    CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = BruColors.background)
-                    Spacer(Modifier.width(9.dp))
+
+            if (hasBruCatalog) {
+                Button(
+                    onClick = { onSearch(selectedType, query.trim()) },
+                    enabled = query.trim().length >= 2 && !searchState.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),
+                ) {
+                    if (searchState.loading) {
+                        CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = BruColors.background)
+                        Spacer(Modifier.width(9.dp))
+                    }
+                    Text(if (searchState.loading) "Ищем в каталоге" else "Искать в каталоге", fontWeight = FontWeight.SemiBold)
                 }
-                Text(if (searchState.loading) "Ищем в каталоге" else "Искать на сайте", fontWeight = FontWeight.SemiBold)
-            }
 
-            searchState.error?.let { error ->
-                ScheduleErrorPanel(
-                    error = error,
-                    onRetry = { onSearch(selectedType, query.trim()) },
+                searchState.error?.let { error ->
+                    ScheduleErrorPanel(
+                        error = error,
+                        onRetry = { onSearch(selectedType, query.trim()) },
+                    )
+                }
+                searchState.candidates.take(14).forEach { candidate ->
+                    ProfileCandidateRow(candidate, onClick = { onSelectCandidate(candidate) })
+                }
+                Text(
+                    if (searchState.candidates.isNotEmpty()) "ИЛИ ДОБАВИТЬ ПО ССЫЛКЕ"
+                    else "Если профиль не найден, его можно добавить вручную.",
+                    color = BruColors.dim,
+                    fontSize = 9.sp,
+                    letterSpacing = 0.8.sp,
                 )
-            }
-            searchState.candidates.take(14).forEach { candidate ->
-                ProfileCandidateRow(candidate, onClick = { onSelectCandidate(candidate) })
+            } else {
+                Text("УКАЖИТЕ ПРЯМУЮ ССЫЛКУ НА РАСПИСАНИЕ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 0.8.sp)
             }
 
-            if (searchState.candidates.isNotEmpty()) {
-                Text("ИЛИ ДОБАВИТЬ ПО ССЫЛКЕ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.1.sp)
-            } else {
-                Text("Если каталог временно недоступен — добавьте профиль вручную; ссылку можно вставить ниже.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
-            }
             OutlinedTextField(
                 value = sourceUrl,
                 onValueChange = { sourceUrl = it },
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
-                label = { Text("Ссылка на страницу rasp.bru.by · необязательно") },
-                placeholder = { Text("https://rasp.bru.by/…") },
+                label = {
+                    Text(if (hasBruCatalog) "Ссылка на rasp.bru.by · необязательно" else "Прямая ссылка на HTML-страницу · обязательно")
+                },
+                placeholder = {
+                    Text(if (hasBruCatalog) "https://rasp.bru.by/…" else "https://university.by/schedule/…")
+                },
                 shape = RoundedCornerShape(14.dp),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
@@ -134,7 +171,7 @@ fun AddProfileBottomSheet(
                 }
                 Button(
                     onClick = { onAddManual(selectedType, query.trim(), sourceUrl.trim().ifBlank { null }) },
-                    enabled = query.trim().isNotBlank(),
+                    enabled = query.trim().isNotBlank() && (hasBruCatalog || sourceUrl.trim().startsWith("https://", ignoreCase = true)),
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BruColors.elevatedSurface, contentColor = BruColors.cyan),
@@ -142,7 +179,13 @@ fun AddProfileBottomSheet(
                     Text("Добавить вручную", fontWeight = FontWeight.SemiBold)
                 }
             }
-            Text("Подсказка: для обновления без устаревшей ссылки лучше выбирать результат из каталога.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
+            Text(
+                if (hasBruCatalog) "Для БРУ источник обновляется через каталог; прямые ссылки можно заменить позднее."
+                else "Если сайт изменит разметку или требует входа, расписание может не загрузиться.",
+                color = BruColors.dim,
+                fontSize = 10.sp,
+                lineHeight = 15.sp,
+            )
         }
     }
 }

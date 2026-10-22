@@ -2,13 +2,14 @@ package com.example.bruschedule.data
 
 import app.cash.sqldelight.db.SqlDriver
 import com.example.bruschedule.data.local.SqlDelightScheduleRepository
+import com.example.bruschedule.data.local.SqlDelightUniversityRepository
 import com.example.bruschedule.data.local.db.ScheduleDatabase
 import com.example.bruschedule.data.remote.BruScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
 import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.remote.createPlatformHtmlTransport
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
-import com.example.bruschedule.data.scraper.BruScheduleScraper
+import com.example.bruschedule.data.scraper.UniversityScheduleHtmlParser
 import com.example.bruschedule.data.settings.KmpSettingsAppearanceRepository
 import com.example.bruschedule.data.settings.KmpSettingsDeadlineReminderRepository
 import com.example.bruschedule.data.settings.KmpSettingsSemesterScheduleRepository
@@ -20,6 +21,7 @@ import com.example.bruschedule.domain.repository.AppearancePreferencesRepository
 import com.example.bruschedule.domain.repository.DailyMessagesRepository
 import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepository
 import com.example.bruschedule.domain.repository.TypographyPreferencesRepository
+import com.example.bruschedule.domain.repository.UniversityRepository
 import com.example.bruschedule.domain.repository.DeadlineNotificationScheduler
 import com.example.bruschedule.domain.repository.DeadlineReminderPreferencesRepository
 import com.example.bruschedule.domain.repository.NoOpDeadlineNotificationScheduler
@@ -44,6 +46,7 @@ data class AppGraph(
     val semesterSchedulePreferences: SemesterSchedulePreferencesRepository,
     val dailyMessages: DailyMessagesRepository,
     val typographyPreferences: TypographyPreferencesRepository,
+    val universityRepository: UniversityRepository,
     val deadlineNotificationScheduler: DeadlineNotificationScheduler,
 )
 
@@ -55,6 +58,7 @@ fun createAppGraph(
 ): AppGraph {
     val database = ScheduleDatabase(driver)
     val localRepository = SqlDelightScheduleRepository(database)
+    val universityRepository = SqlDelightUniversityRepository(database, settings)
     val versionFlags = KmpSettingsParserVersionFlags(settings)
     val appearancePreferences = KmpSettingsAppearanceRepository(settings)
     val deadlineReminderPreferences = KmpSettingsDeadlineReminderRepository(settings)
@@ -72,7 +76,7 @@ fun createAppGraph(
     }
 
     val directoryParser = BruScheduleDirectoryParser()
-    val scraper = BruScheduleScraper()
+    val scraper = UniversityScheduleHtmlParser()
     val remote = BruScheduleRemoteDataSource(transport, directoryParser)
     return AppGraph(
         scheduleRepository = localRepository,
@@ -93,8 +97,9 @@ fun createAppGraph(
         semesterSchedulePreferences = semesterSchedulePreferences,
         dailyMessages = dailyMessages,
         typographyPreferences = typographyPreferences,
+        universityRepository = universityRepository,
         deadlineNotificationScheduler = deadlineNotificationScheduler,
     )
 }
 
-private const val CURRENT_DATABASE_MARKER = 2
+private const val CURRENT_DATABASE_MARKER = 3

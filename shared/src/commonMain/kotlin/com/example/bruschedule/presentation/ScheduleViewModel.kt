@@ -9,6 +9,9 @@ import com.example.bruschedule.domain.model.DEFAULT_DAILY_MESSAGES
 import com.example.bruschedule.domain.model.SemesterSchedulePreferences
 import com.example.bruschedule.domain.model.TypographyPreferences
 import com.example.bruschedule.domain.model.TypographyRole
+import com.example.bruschedule.domain.model.University
+import com.example.bruschedule.domain.model.UniversitySourceType
+import com.example.bruschedule.domain.model.DefaultUniversities
 import com.example.bruschedule.domain.model.DomainIds
 import com.example.bruschedule.domain.model.DeadlineLinkType
 import com.example.bruschedule.domain.model.DeadlineReminderPreferences
@@ -33,6 +36,7 @@ import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
 import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepository
 import com.example.bruschedule.domain.repository.TypographyPreferencesRepository
+import com.example.bruschedule.domain.repository.UniversityRepository
 import com.example.bruschedule.domain.usecase.DailyMessageSelector
 import com.example.bruschedule.domain.usecase.DeadlineReminderPolicy
 import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
@@ -71,6 +75,10 @@ import kotlinx.datetime.toLocalDateTime
 enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS }
 
 private const val STARTUP_REFRESH_RETRY_COOLDOWN_MILLIS = 12 * 60 * 60 * 1000L
+private val PUBLIC_HTTPS_URL = Regex(
+    """^https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$""",
+    RegexOption.IGNORE_CASE,
+)
 
 data class LessonUiItem(
     val lesson: Lesson,
@@ -99,6 +107,8 @@ data class ProfileSearchUiState(
 data class ScheduleUiState(
     val profiles: List<ScheduleProfile> = emptyList(),
     val selectedProfile: ScheduleProfile? = null,
+    val universities: List<University> = listOf(DefaultUniversities.BRU),
+    val selectedUniversity: University = DefaultUniversities.BRU,
     val selectedDate: LocalDate = LocalDate(2026, 1, 1),
     val todayDate: LocalDate = LocalDate(2026, 1, 1),
     val weekDatesWithLessons: Set<String> = emptySet(),
@@ -152,6 +162,7 @@ class ScheduleViewModel(
     private val semesterSchedulePreferencesRepository: SemesterSchedulePreferencesRepository,
     private val dailyMessagesRepository: DailyMessagesRepository,
     private val typographyPreferencesRepository: TypographyPreferencesRepository,
+    private val universityRepository: UniversityRepository,
     private val deadlineNotificationScheduler: DeadlineNotificationScheduler,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
@@ -212,6 +223,8 @@ class ScheduleViewModel(
         val profiles: List<ScheduleProfile>,
         val lessons: List<Lesson>,
         val tasks: List<AcademicTask>,
+        val universities: List<University>,
+        val selectedUniversityId: String,
     )
 
     private data class CoreSelection(
@@ -237,8 +250,10 @@ class ScheduleViewModel(
         schedules.observeProfiles(),
         schedules.observeAllLessons(),
         tasks.observeTasks(),
-    ) { profiles, lessons, academicTasks ->
-        BaseState(profiles, lessons, academicTasks)
+        universityRepository.observeUniversities(),
+        universityRepository.observeSelectedUniversityId(),
+    ) { profiles, lessons, academicTasks, universities, selectedUniversityId ->
+        BaseState(profiles, lessons, academicTasks, universities, selectedUniversityId)
     }
 
     private val syncState: Flow<ProfileSyncState?> = selectedProfileId.flatMapLatest { id ->
@@ -271,9 +286,18 @@ class ScheduleViewModel(
     }
 
     val uiState = combine(baseState, selectionState, screenPreferences) { base, selection, preferences ->
-        val selectedId = selection.core.profileId ?: base.profiles.firstOrNull()?.id
-        val selectedProfile = base.profiles.firstOrNull { it.id == selectedId }
-        val profileLessons = if (selectedProfile == null) emptyList() else base.lessons.filter {
+        val selectedUniversity = base.universities.firstOrNull { it.id == base.selectedUniversityId }
+            ?: base.universities.firstOrNull()
+            ?: DefaultUniversities.BRU
+        val universityProfiles = base.profiles.filter { it.universityId == selectedUniversity.id }
+        val selectedId = selection.core.profileId
+            ?.takeIf { profileId -> universityProfiles.any { it.id == profileId } }
+            ?: universityProfiles.firstOrNull()?.id
+        val selectedProfile = universityProfiles.firstOrNull { it.id == selectedId }
+        val universityProfileIds = universityProfiles.mapTo(mutableSetOf(), ScheduleProfile::id)
+        val universityLessons = base.lessons.filter { it.profileId in universityProfileIds }
+        val universityTasks = base.tasks.filter { it.profileId == null || it.profileId in universityProfileIds }
+        val profileLessons = if (selectedProfile == null) emptyList() else universityLessons.filter {
             it.profileId == selectedProfile.id
         }
         val now = selection.transient.now
@@ -306,13 +330,13 @@ class ScheduleViewModel(
             .map { lesson ->
                 LessonUiItem(
                     lesson = lesson,
-                    pendingTaskCount = base.tasks.count { it.lessonId == lesson.id && !it.isCompleted },
+                    pendingTaskCount = universityTasks.count { it.lessonId == lesson.id && !it.isCompleted },
                     isCurrent = lesson.isCurrentAt(nowLocal),
                 )
             }
-        val lessonById = base.lessons.associateBy(Lesson::id)
-        val profileById = base.profiles.associateBy(ScheduleProfile::id)
-        val orderedDeadlines = base.tasks
+        val lessonById = universityLessons.associateBy(Lesson::id)
+        val profileById = universityProfiles.associateBy(ScheduleProfile::id)
+        val orderedDeadlines = universityTasks
             .sortedWith(compareBy<AcademicTask>({ it.dueDate }, { it.isCompleted }, { it.taskTitle }))
             .map { task ->
                 val linkedLesson = task.lessonId?.let(lessonById::get)
@@ -342,15 +366,17 @@ class ScheduleViewModel(
                 )
             }
         ScheduleUiState(
-            profiles = base.profiles,
+            profiles = universityProfiles,
             selectedProfile = selectedProfile,
+            universities = base.universities,
+            selectedUniversity = selectedUniversity,
             selectedDate = displayedDate,
             todayDate = todayDate,
             weekDatesWithLessons = datesWithLessons,
             allScheduleDatesWithLessons = visibleProfileLessons.mapTo(mutableSetOf()) { it.lessonDate },
             lessons = lessonsForDate,
-            availableLessons = base.lessons,
-            scheduleConflicts = ScheduleConflictDetector.find(visibleProfileLessons, base.tasks),
+            availableLessons = universityLessons,
+            scheduleConflicts = ScheduleConflictDetector.find(visibleProfileLessons, universityTasks),
             deadlines = orderedDeadlines,
             deadlineReminderPreferences = preferences.deadlineReminders,
             semesterSchedulePreferences = preferences.semester,
@@ -382,17 +408,24 @@ class ScheduleViewModel(
             dailyMessagesRepository.refresh()
         }
         viewModelScope.launch {
-            schedules.observeProfiles().collect { profiles ->
-                val activeId = selectedProfileId.value
-                if (profiles.isEmpty()) {
-                    selectedProfileId.value = null
-                } else if (activeId == null || profiles.none { it.id == activeId }) {
-                    selectedProfileId.value = profiles.first().id
+            combine(
+                schedules.observeProfiles(),
+                universityRepository.observeSelectedUniversityId(),
+            ) { profiles, universityId -> profiles.filter { it.universityId == universityId } }
+                .collect { profiles ->
+                    val activeId = selectedProfileId.value
+                    if (profiles.isEmpty()) {
+                        selectedProfileId.value = null
+                    } else if (activeId == null || profiles.none { it.id == activeId }) {
+                        selectedProfileId.value = profiles.first().id
+                    }
                 }
-            }
         }
         viewModelScope.launch {
-            val storedProfile = schedules.observeProfiles().first().firstOrNull() ?: return@launch
+            val initialBase = baseState.first()
+            val storedProfile = initialBase.profiles.firstOrNull {
+                it.universityId == initialBase.selectedUniversityId
+            } ?: return@launch
             refreshIfSemesterCoverageIsMissing(storedProfile.id)
         }
         viewModelScope.launch {
@@ -410,6 +443,71 @@ class ScheduleViewModel(
         }
         selectedProfileId.value = profileId
         viewModelScope.launch { refreshIfSemesterCoverageIsMissing(profileId) }
+    }
+
+    fun selectUniversity(universityId: String) {
+        if (uiState.value.universities.none { it.id == universityId }) {
+            notice.value = "Этот вуз больше не доступен. Выберите другой или добавьте его заново."
+            return
+        }
+        viewModelScope.launch {
+            try {
+                universityRepository.selectUniversity(universityId)
+                profileSearch.value = ProfileSearchUiState()
+                val profile = schedules.observeProfiles().first().firstOrNull {
+                    it.universityId == universityId
+                }
+                selectedProfileId.value = profile?.id
+                selectedDate.value = today()
+                profile?.let { refreshIfSemesterCoverageIsMissing(it.id) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось выбрать вуз", failure, "UNIVERSITY")
+            }
+        }
+    }
+
+    fun addUniversity(name: String, websiteUrl: String) {
+        val cleanName = name.trim()
+        val cleanUrl = websiteUrl.trim().trimEnd('/')
+        if (cleanName.length < 2) {
+            notice.value = "Введите название вуза"
+            return
+        }
+        if (!PUBLIC_HTTPS_URL.matches(cleanUrl)) {
+            notice.value = "Укажите публичную HTTPS-ссылку сайта вуза"
+            return
+        }
+        val existing = uiState.value.universities.firstOrNull {
+            it.name.equals(cleanName, ignoreCase = true) || it.websiteUrl.trimEnd('/').equals(cleanUrl, ignoreCase = true)
+        }
+        if (existing != null) {
+            selectUniversity(existing.id)
+            notice.value = "Этот вуз уже добавлен — выбран «${existing.name}»"
+            return
+        }
+
+        val university = University(
+            id = DomainIds.new("university"),
+            name = cleanName,
+            websiteUrl = cleanUrl,
+            sourceType = UniversitySourceType.DIRECT_HTML,
+        )
+        viewModelScope.launch {
+            try {
+                universityRepository.saveUniversity(university)
+                universityRepository.selectUniversity(university.id)
+                selectedProfileId.value = null
+                selectedDate.value = today()
+                profileSearch.value = ProfileSearchUiState()
+                notice.value = "Вуз добавлен. Теперь укажите прямую ссылку на HTML-страницу расписания."
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось добавить вуз", failure, "UNIVERSITY")
+            }
+        }
     }
 
     fun selectDate(date: LocalDate) {
@@ -636,19 +734,35 @@ class ScheduleViewModel(
     fun saveManualProfile(type: ScheduleProfileType, name: String, sourceUrl: String?) {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
-            notice.value = "Укажите название группы или преподавателя"
+            notice.value = "Укажите название группы или расписания"
             return
         }
+        val university = uiState.value.selectedUniversity
         val enteredUrl = sourceUrl?.trim()?.takeIf(String::isNotBlank)
-        val rootUrl = "https://rasp.bru.by"
-        if (enteredUrl != null &&
-            !enteredUrl.startsWith("$rootUrl/", ignoreCase = true) &&
-            !enteredUrl.equals(rootUrl, ignoreCase = true)
-        ) {
-            notice.value = "Можно добавить только ссылку rasp.bru.by"
-            return
+        val url = when (university.sourceType) {
+            UniversitySourceType.BRU_CATALOG -> {
+                val rootUrl = "https://rasp.bru.by"
+                if (enteredUrl != null &&
+                    !enteredUrl.startsWith("$rootUrl/", ignoreCase = true) &&
+                    !enteredUrl.equals(rootUrl, ignoreCase = true)
+                ) {
+                    notice.value = "Для БРУ можно добавить только ссылку rasp.bru.by"
+                    return
+                }
+                enteredUrl?.let { if (it.equals(rootUrl, ignoreCase = true)) "$rootUrl/" else it }
+            }
+            UniversitySourceType.DIRECT_HTML -> {
+                if (enteredUrl == null) {
+                    notice.value = "Для этого вуза укажите прямую ссылку на страницу расписания"
+                    return
+                }
+                if (!PUBLIC_HTTPS_URL.matches(enteredUrl)) {
+                    notice.value = "Ссылка на расписание должна быть публичной и начинаться с https://"
+                    return
+                }
+                enteredUrl
+            }
         }
-        val url = enteredUrl?.let { if (it.equals(rootUrl, ignoreCase = true)) "$rootUrl/" else it }
         val id = DomainIds.new("profile")
         val profile = ScheduleProfile(
             id = id,
@@ -656,6 +770,7 @@ class ScheduleViewModel(
             name = cleanName,
             sourceUrl = url,
             sourceKey = cleanName,
+            universityId = university.id,
         )
         viewModelScope.launch {
             try {
@@ -672,6 +787,11 @@ class ScheduleViewModel(
     }
 
     fun searchProfiles(type: ScheduleProfileType, query: String) {
+        if (uiState.value.selectedUniversity.sourceType != UniversitySourceType.BRU_CATALOG) {
+            profileSearch.value = ProfileSearchUiState(query = query, type = type)
+            notice.value = "Для этого вуза поиск по каталогу не подключён — добавьте профиль по прямой ссылке"
+            return
+        }
         profileSearch.value = ProfileSearchUiState(query = query, type = type, loading = true)
         viewModelScope.launch {
             try {
@@ -697,6 +817,7 @@ class ScheduleViewModel(
             name = candidate.name,
             sourceUrl = candidate.sourceUrl,
             sourceKey = candidate.sourceKey,
+            universityId = candidate.universityId,
         )
         viewModelScope.launch {
             try {

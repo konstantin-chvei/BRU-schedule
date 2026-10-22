@@ -1,6 +1,6 @@
 package com.example.bruschedule.data.remote
 
-/** Fetches allow-listed remote documents (schedule HTML and the public GitHub messages text file). */
+/** Fetches public HTTPS schedule pages and the project's public GitHub messages file. */
 interface HtmlTransport {
     suspend fun get(url: String): String
 }

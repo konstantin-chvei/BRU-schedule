@@ -11,13 +11,14 @@ class KtorHtmlTransport(
     private val client: HttpClient,
 ) : HtmlTransport {
     override suspend fun get(url: String): String {
-        val isSchedulePage = url.startsWith("https://rasp.bru.by/")
+        val isBruSchedulePage = url.startsWith("https://rasp.bru.by/", ignoreCase = true)
         val isDailyMessagesFile = url == GitHubDailyMessagesRemoteDataSource.DAILY_MESSAGES_API_URL
-        require(isSchedulePage || isDailyMessagesFile) {
-            "Разрешены только страницы расписания rasp.bru.by и список фраз проекта на GitHub"
+        val isDirectHttpsPage = HTTPS_PAGE_URL.matches(url)
+        require(isBruSchedulePage || isDailyMessagesFile || isDirectHttpsPage) {
+            "Для расписания принимаются только публичные HTTPS-ссылки"
         }
         val response = client.get(url) {
-            header(HttpHeaders.UserAgent, "BRU-Schedule/1.0 (student timetable app)")
+            header(HttpHeaders.UserAgent, "Schedule/1.0 (student timetable app)")
             header(
                 HttpHeaders.Accept,
                 if (isDailyMessagesFile) "application/vnd.github.raw+json" else "text/html,application/xhtml+xml",
@@ -25,9 +26,16 @@ class KtorHtmlTransport(
             if (isDailyMessagesFile) header("X-GitHub-Api-Version", "2022-11-28")
         }
         if (!response.status.isSuccess()) {
-            val host = if (isDailyMessagesFile) "GitHub" else "rasp.bru.by"
-            error("$host ответил кодом ${response.status.value} при запросе $url")
+            val host = if (isDailyMessagesFile) "GitHub" else url.substringAfter("://").substringBefore('/')
+            error("$host ответил кодом ${response.status.value}")
         }
         return response.bodyAsText()
+    }
+
+    private companion object {
+        val HTTPS_PAGE_URL = Regex(
+            """^https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$""",
+            RegexOption.IGNORE_CASE,
+        )
     }
 }

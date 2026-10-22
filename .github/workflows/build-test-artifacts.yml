@@ -94,7 +94,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: bru-schedule-android-debug-apk
+          name: schedule-android-debug-apk
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -123,7 +123,7 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/BRUScheduleDerivedData" \
+            -derivedDataPath "$RUNNER_TEMP/ScheduleDerivedData" \
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             ENABLE_PREVIEWS=NO \
@@ -163,13 +163,13 @@ jobs:
       - name: Package Simulator app
         run: >-
           ditto -c -k --sequesterRsrc --keepParent
-          "$RUNNER_TEMP/BRUScheduleDerivedData/Build/Products/Debug-iphonesimulator/BRUSchedule.app"
-          "$RUNNER_TEMP/BRUSchedule-iOS-Simulator.zip"
+          "$RUNNER_TEMP/ScheduleDerivedData/Build/Products/Debug-iphonesimulator/Schedule.app"
+          "$RUNNER_TEMP/Schedule-iOS-Simulator.zip"
 
       - name: Upload Simulator app
         uses: actions/upload-artifact@v7
         with:
-          name: bru-schedule-ios-simulator-app
-          path: ${{ runner.temp }}/BRUSchedule-iOS-Simulator.zip
+          name: schedule-ios-simulator-app
+          path: ${{ runner.temp }}/Schedule-iOS-Simulator.zip
           if-no-files-found: error
           retention-days: 30

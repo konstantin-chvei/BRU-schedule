@@ -189,6 +189,30 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun customUniversityProfileLoadsItsDirectTimetableUrl() {
+        var requestedUrl: String? = null
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestedUrl = url
+                return "<html><body>schedule</body></html>"
+            }
+        }
+        val customProfile = ScheduleProfile(
+            id = "custom-group",
+            type = ScheduleProfileType.GROUP,
+            name = "ИС-241",
+            sourceUrl = "https://schedule.example.edu/groups/is-241.html",
+            universityId = "custom-university",
+        )
+        val window = ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 11, 1))
+
+        val html = runSuspending { BruScheduleRemoteDataSource(transport).fetchHtml(customProfile, window) }
+
+        assertEquals(customProfile.sourceUrl, requestedUrl)
+        assertEquals("<html><body>schedule</body></html>", html)
+    }
+
+    @Test
     fun groupRefreshRecoversFromStaleFacultyUrlAndResolvesTheMatchingFaculty() {
         val parser = BruScheduleDirectoryParser()
         val staleFacultyInput = "https://rasp.bru.by/full_time/Факультет управления и инноваций/index.html"

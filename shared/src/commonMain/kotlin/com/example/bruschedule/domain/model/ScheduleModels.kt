@@ -20,10 +20,12 @@ data class ScheduleProfile(
     val type: ScheduleProfileType,
     /** Student-facing label, e.g. "МПР-261" or "Агеева Т.Н.". */
     val name: String,
-    /** Stable rasp.bru.by directory/details page. Prefer this to a dated weeks_*.html URL. */
+    /** Stable university directory/details page or direct timetable URL. */
     val sourceUrl: String? = null,
-    /** Exact label/slug used to find this item on its directory page. */
+    /** Exact label/slug used to find this item on its university directory page. */
     val sourceKey: String? = null,
+    /** University whose adapter/source owns this profile. Existing profiles migrate to BRU. */
+    val universityId: String = UniversityIds.BRU,
 )
 
 enum class LessonType {
@@ -59,7 +61,7 @@ data class Lesson(
     val dayOfWeek: Int,
     val slotNumber: Int = 0,
     val sourceKey: String = id,
-    /** Original CSS color from rasp.bru.by, useful for parser diagnostics and future remapping. */
+    /** Original CSS color from the source page, when provided, for diagnostics/remapping. */
     val sourceColorHex: String? = null,
     /** Optional user-authored reminder or preparation note for this specific lesson occurrence. */
     val notes: String = "",
@@ -127,6 +129,7 @@ data class ProfileCandidate(
     val sourceUrl: String,
     val sourceKey: String,
     val subtitle: String = "",
+    val universityId: String = UniversityIds.BRU,
 )
 
 data class ProfileSyncState(

@@ -27,8 +27,8 @@ sealed interface RefreshOutcome {
 }
 
 /**
- * Coordinates network -> Ksoup parser -> validation -> one database transaction. No cache is ever
- * deleted on fetch/parse failure, so the app remains useful while rasp.bru.by is unavailable.
+ * Coordinates network -> university HTML parser -> validation -> one database transaction. No cache
+ * is ever deleted on fetch/parse failure, so saved schedules remain available while a source is down.
  */
 class RefreshScheduleUseCase(
     private val schedules: ScheduleRepository,
@@ -54,15 +54,17 @@ class RefreshScheduleUseCase(
             if (parsed.isEmpty()) {
                 error("На странице не найдено ни одной пары. Локальное расписание не изменено.")
             }
-            val websiteLessons = if (scraper.hasAlternatingTwoWeekCycle(html)) {
-                val today = clock.now()
-                    .toLocalDateTime(TimeZone.currentSystemDefault())
-                    .date
-                val preferences = semesterSchedulePreferences.observe().first()
-                val semesterEnd = SemesterCoveragePolicy.coverageEndDate(today, preferences)
-                ScheduleCycleExpander.expand(parsed, today, semesterEnd)
-            } else {
-                parsed
+            val today = clock.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .date
+            val preferences = semesterSchedulePreferences.observe().first()
+            val semesterEnd = SemesterCoveragePolicy.coverageEndDate(today, preferences)
+            val websiteLessons = when {
+                scraper.hasAlternatingTwoWeekCycle(html) ->
+                    ScheduleCycleExpander.expand(parsed, today, semesterEnd)
+                scraper.hasWeeklyScheduleTemplate(profile, html) ->
+                    ScheduleCycleExpander.expandWeekly(parsed, today, semesterEnd)
+                else -> parsed
             }
             if (websiteLessons.isEmpty()) {
                 error("Не удалось развернуть пары на семестровый период. Локальное расписание не изменено.")

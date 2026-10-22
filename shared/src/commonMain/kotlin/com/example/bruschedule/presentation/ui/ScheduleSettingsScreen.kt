@@ -285,7 +285,7 @@ private fun TypographySettingsCard(
             }
             Surface(shape = RoundedCornerShape(14.dp), color = BruColors.elevatedSurface) {
                 Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("BRU / SCHEDULE", color = BruColors.foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                    Text("РАСПИСАНИЕ", color = BruColors.foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
                     Text("Заголовок карточки", color = BruColors.foreground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                     Text("Обычный текст расписания на день", color = BruColors.muted, fontSize = 13.sp)
                     Text("Мелкая подпись · время 09:40", color = BruColors.dim, fontSize = 10.sp)

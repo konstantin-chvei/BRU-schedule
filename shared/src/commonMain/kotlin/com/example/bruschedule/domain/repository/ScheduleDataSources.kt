@@ -14,8 +14,11 @@ interface ScheduleHtmlParser {
     val formatVersion: Int
     fun parse(profile: ScheduleProfile, html: String, referenceDate: LocalDate): List<Lesson>
 
-    /** True only for regular timetable pages with explicit alternating week-one/week-two headers. */
+    /** True only for timetable pages with an explicit alternating week-one/week-two cycle. */
     fun hasAlternatingTwoWeekCycle(html: String): Boolean = false
+
+    /** True when a one-week template for this profile should repeat through the configured term. */
+    fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean = false
 }
 
 /** Key-value metadata port; SQLDelight remains responsible for database schema migrations. */
