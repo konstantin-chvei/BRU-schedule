@@ -66,8 +66,11 @@ class BruScheduleDirectoryParser {
         return document.select("a.group-link[href], a[href*=_weeks_], a[href*=_session_]")
             .mapNotNull { anchor ->
                 val label = normalizeSpaces(anchor.text())
-                val name = label.substringBefore('(').split(Regex("\\s+\\d{1,2}\\.\\d{1,2}"), limit = 2)
-                    .first().trim().trimEnd('—', '-', '•')
+                val name = anchor.select("strong, b").firstOrNull()?.text()
+                    ?.let(::normalizeSpaces)
+                    ?.takeIf(String::isNotBlank)
+                    ?: label.substringBefore('(').split(Regex("\\s+\\d{1,2}\\.\\d{1,2}"), limit = 2)
+                        .first().trim().trimEnd('—', '-', '•')
                 if (name.isBlank()) return@mapNotNull null
                 val period = anchor.select(".period-label").firstOrNull()?.text()?.let(::normalizeSpaces).orEmpty()
                 val subtitle = listOfNotNull(facultyName, period.takeIf(String::isNotBlank)).joinToString(" · ")

@@ -181,6 +181,7 @@ class ScheduleArchitectureTest {
         }
 
         assertEquals(1, matches.size)
+        assertEquals("МПР-261", matches.single().name)
         assertEquals("Автомеханический факультет", matches.single().subtitle.substringBefore(" ·"))
         assertEquals(autoUrl, matches.single().sourceUrl)
         assertTrue(managementUrl in requestedUrls)
