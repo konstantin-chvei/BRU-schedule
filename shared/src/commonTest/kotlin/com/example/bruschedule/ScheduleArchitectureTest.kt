@@ -236,7 +236,7 @@ class ScheduleArchitectureTest {
         )
         val window = ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 11, 1))
 
-        BruScheduleRemoteDataSource(transport).fetchHtml(bsuProfile, window)
+        runSuspending { BruScheduleRemoteDataSource(transport).fetchHtml(bsuProfile, window) }
 
         assertEquals(
             "https://docs.google.com/spreadsheets/d/example/gviz/tq?tqx=out:html&gid=795046734",
