@@ -20,7 +20,7 @@ import kotlinx.datetime.plus
  * layout; those require a dedicated adapter.
  */
 class GenericHtmlScheduleParser : ScheduleHtmlParser {
-    override val formatVersion: Int = 1
+    override val formatVersion: Int = 2
 
     override fun parse(
         profile: ScheduleProfile,
@@ -141,7 +141,7 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         }
     }
 
-    /** Supports the common vertical layout: one row per lesson with day, time and subject columns. */
+    /** Supports vertical tables with merged day/date cells and separate subject metadata columns. */
     private fun parseDayRows(
         profile: ScheduleProfile,
         rows: List<Element>,
@@ -152,23 +152,44 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
     ) {
         val headerIndex = rows.indexOfFirst { row ->
             val labels = row.select("th, td").map { normalize(it.text()) }
-            labels.any(::isTimeHeader) && labels.any(::isDayHeader)
+            labels.any(::isTimeHeader) && labels.any { isWeekdayHeader(it) || isDateHeader(it) }
         }
         if (headerIndex < 0) return
 
         val headers = rows[headerIndex].select("th, td").map { normalize(it.text()) }
         val timeColumn = headers.indexOfFirst(::isTimeHeader)
-        val dayColumn = headers.indexOfFirst(::isDayHeader)
-        val subjectColumns = headers.indices.filter { it != timeColumn && it != dayColumn }
+        val dayColumn = headers.indexOfFirst(::isWeekdayHeader)
+            .takeIf { it >= 0 }
+            ?: headers.indexOfFirst(::isDateHeader)
+        val dateColumn = headers.indices.firstOrNull { it != dayColumn && isDateHeader(headers[it]) } ?: -1
+        val subjectColumn = headers.indexOfFirst(::isSubjectHeader)
+        val teacherColumn = headers.indexOfFirst(::isTeacherHeader)
+        val roomColumn = headers.indexOfFirst(::isRoomHeader)
+        val typeColumn = headers.indexOfFirst(::isTypeHeader)
+        val groupColumn = headers.indexOfFirst(::isGroupHeader)
+        val metadataColumns = setOf(timeColumn, dayColumn, dateColumn, teacherColumn, roomColumn, typeColumn, groupColumn)
+        val subjectColumns = if (subjectColumn >= 0) {
+            listOf(subjectColumn)
+        } else {
+            headers.indices.filter { it !in metadataColumns }
+        }
         if (timeColumn < 0 || dayColumn < 0 || subjectColumns.isEmpty()) return
 
+        var currentDate: LocalDate? = null
         rows.drop(headerIndex + 1).forEachIndexed { rowOffset, row ->
             val cells = row.select("th, td").toList()
-            val timeCell = cells.getOrNull(timeColumn) ?: return@forEachIndexed
-            val timeText = timeCell.text()
+            val dayText = cells.getOrNull(dayColumn)?.text().orEmpty()
+            val dateText = cells.getOrNull(dateColumn)?.text().orEmpty()
+            val explicitRowDate = explicitDate("$dayText $dateText", referenceDate)
+            val weekday = weekdayNumber(dayText)
+            when {
+                explicitRowDate != null -> currentDate = explicitRowDate
+                weekday != null -> currentDate = dayDate(dayText, monday, referenceDate)
+                currentDate == null -> currentDate = dayDate(dateText, monday, referenceDate)
+            }
+            val date = currentDate ?: return@forEachIndexed
+            val timeText = cells.getOrNull(timeColumn)?.text().orEmpty()
             val time = TIME_RANGE.find(timeText) ?: return@forEachIndexed
-            val dayCell = cells.getOrNull(dayColumn) ?: return@forEachIndexed
-            val date = dayDate(dayCell.text(), monday, referenceDate) ?: return@forEachIndexed
             val start = normalizeTime(time.groupValues[1])
             val end = normalizeTime(time.groupValues[2])
             val slot = PAIR_NUMBER.find(timeText)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: rowOffset + 1
@@ -184,6 +205,13 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
                 slot = slot,
                 ordinal = tableIndex * 1000 + rowOffset,
                 target = target,
+                teacherText = if (teacherColumn >= 0 && teacherColumn != subjectColumn) {
+                    cells.getOrNull(teacherColumn)?.text().orEmpty()
+                } else {
+                    ""
+                },
+                roomText = cells.getOrNull(roomColumn)?.text().orEmpty(),
+                typeText = cells.getOrNull(typeColumn)?.text().orEmpty(),
             )
         }
     }
@@ -198,6 +226,9 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         slot: Int,
         ordinal: Int,
         target: MutableList<Lesson>,
+        teacherText: String = "",
+        roomText: String = "",
+        typeText: String = "",
     ) {
         val lines = contentLines(content)
         if (lines.isEmpty()) return
@@ -205,25 +236,30 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
             !TIME_RANGE.containsMatchIn(line) &&
                 !EXPLICIT_DATE.containsMatchIn(line) &&
                 weekdayNumber(line) == null &&
-                !TEACHER_LINE.containsMatchIn(line) &&
-                !ROOM_LINE.containsMatchIn(line)
+                teacherFromLine(line) == null &&
+                roomFromLine(line) == null &&
+                !TYPE_ONLY_LINE.matches(line)
         } ?: return
-        val subject = subjectLine
+        val inlineTeacher = splitInlineTeacher(subjectLine)
+        val subject = (inlineTeacher?.first ?: subjectLine)
             .replaceFirst(SUBJECT_PREFIX, "")
             .trim(' ', ':', '–', '-')
             .takeIf(String::isNotBlank)
             ?: return
-        val teacher = lines.firstNotNullOfOrNull { line ->
-            TEACHER_LINE.find(line)?.groupValues?.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
-        }.orEmpty()
-        val room = lines.firstNotNullOfOrNull { line ->
-            ROOM_LINE.find(line)?.groupValues?.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
-        }.orEmpty()
-        val typeText = (lines + timeText + content.attr("class")).joinToString(" ").lowercase()
+        val teacher = lines.firstNotNullOfOrNull(::teacherFromLine)
+            ?: teacherFromLine(teacherText)
+            ?: teacherText.trim().takeIf(String::isNotBlank)
+            ?: inlineTeacher?.second
+            ?: ""
+        val room = lines.firstNotNullOfOrNull(::roomFromLine)
+            ?: roomFromLine(roomText)
+            ?: roomText.trim().takeIf(String::isNotBlank)
+            ?: ""
+        val allTypeText = (lines + timeText + typeText + content.attr("class")).joinToString(" ").lowercase()
         val type = when {
-            "лекц" in typeText || "lecture" in typeText -> LessonType.LECTURE
-            "лаб" in typeText || "laboratory" in typeText -> LessonType.LABORATORY
-            "практ" in typeText || "practice" in typeText -> LessonType.PRACTICE
+            "лекц" in allTypeText || "lecture" in allTypeText || LECTURE_CODE.containsMatchIn(allTypeText) -> LessonType.LECTURE
+            "лаб" in allTypeText || "laboratory" in allTypeText -> LessonType.LABORATORY
+            "практ" in allTypeText || "practice" in allTypeText || PRACTICE_CODE.containsMatchIn(allTypeText) -> LessonType.PRACTICE
             else -> LessonType.UNKNOWN
         }
         val sourceKey = "${profile.id}|$date|$slot|$start-$end|$ordinal"
@@ -292,10 +328,59 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         return normalized.contains("время") || normalized.contains("час") || normalized.contains("time")
     }
 
-    private fun isDayHeader(text: String): Boolean {
+    private fun isWeekdayHeader(text: String): Boolean {
         val normalized = normalize(text).lowercase().replace('ё', 'е')
-        return normalized.contains("день") || normalized.contains("дата") ||
-            normalized.contains("weekday") || weekdayNumber(normalized) != null
+        return normalized.contains("день") || normalized.contains("weekday") || weekdayNumber(normalized) != null
+    }
+
+    private fun isDateHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return normalized.contains("дата") || normalized.contains("число") || normalized.contains("date")
+    }
+
+    private fun isSubjectHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return listOf("предмет", "дисциплин", "наимен", "subject", "lesson").any { normalized.contains(it) }
+    }
+
+    private fun isTeacherHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return listOf("преподав", "teacher", "лектор", "педагог").any { normalized.contains(it) }
+    }
+
+    private fun isRoomHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return listOf("ауд", "каб", "room", "корпус").any { normalized.contains(it) }
+    }
+
+    private fun isTypeHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return listOf("тип", "вид", "форма", "type").any { normalized.contains(it) }
+    }
+
+    private fun isGroupHeader(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return normalized.contains("групп") || normalized.contains("group")
+    }
+
+    private fun splitInlineTeacher(text: String): Pair<String, String>? {
+        val match = INLINE_TEACHER_LINE.matchEntire(normalize(text)) ?: return null
+        val subject = match.groupValues.getOrNull(1)?.trim().orEmpty()
+        val teacher = match.groupValues.getOrNull(2)?.trim().orEmpty()
+        return if (subject.isNotBlank() && teacher.isNotBlank()) subject to teacher else null
+    }
+
+    private fun teacherFromLine(text: String): String? {
+        val normalized = normalize(text)
+        return TEACHER_LINE.find(normalized)?.groupValues?.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
+            ?: TEACHER_TITLE_LINE.matchEntire(normalized)?.groupValues?.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
+            ?: PLAIN_TEACHER_LINE.matchEntire(normalized)?.value?.takeIf(String::isNotBlank)
+    }
+
+    private fun roomFromLine(text: String): String? {
+        val normalized = normalize(text)
+        return ROOM_LINE.find(normalized)?.groupValues?.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
+            ?: NUMERIC_ROOM_LINE.matchEntire(normalized)?.value?.takeIf(String::isNotBlank)
     }
 
     private fun weekdayNumber(text: String): Int? {
@@ -313,19 +398,32 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
     }
 
     private fun normalizeTime(value: String): String {
-        val parts = value.split(':', limit = 2)
+        val parts = value.replace('.', ':').split(':', limit = 2)
         return "${parts[0].padStart(2, '0')}:${parts.getOrElse(1) { "00" }}"
     }
 
     private companion object {
-        val TIME_RANGE = Regex("(\\d{1,2}:\\d{2})\\s*[-–—−]\\s*(\\d{1,2}:\\d{2})")
+        val TIME_RANGE = Regex("(\\d{1,2}[:.]\\d{2})\\s*[-–—−]\\s*(\\d{1,2}[:.]\\d{2})")
         val PAIR_NUMBER = Regex("(\\d+)\\s*(?:пара|занятие|pair)", RegexOption.IGNORE_CASE)
         val EXPLICIT_DATE = Regex("(\\d{1,2})\\.(\\d{1,2})(?:\\.(\\d{4}))?")
         val WEEK_ONE = Regex("недел[ья]\\s*1|week\\s*1", RegexOption.IGNORE_CASE)
         val WEEK_TWO = Regex("недел[ья]\\s*2|week\\s*2", RegexOption.IGNORE_CASE)
         val TEACHER_LINE = Regex("(?:преподаватель|преп\\.?|teacher|викладчык)\\s*[:–-]?\\s*(.+)", RegexOption.IGNORE_CASE)
+        val LECTURE_CODE = Regex("(^|\\s)лк\\.?($|\\s)", RegexOption.IGNORE_CASE)
+        val PRACTICE_CODE = Regex("(^|\\s)пз\\.?($|\\s)", RegexOption.IGNORE_CASE)
+        val INLINE_TEACHER_LINE = Regex(
+            "^(.+?)\\s+((?:(?:проф(?:ессор)?|доц(?:ент)?|ст\\.?\\s*преп\\.?|ассистент)\\s+)?[А-ЯЁ][а-яё-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.?)$",
+            RegexOption.IGNORE_CASE,
+        )
+        val TEACHER_TITLE_LINE = Regex(
+            "^(?:(?:проф(?:ессор)?\\.?|доц(?:ент)?\\.?|ст\\.?\\s*преп\\.?|ассистент|старший\\s+преподаватель)\\s+)?([А-ЯЁ][а-яё-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.?)$",
+            RegexOption.IGNORE_CASE,
+        )
+        val PLAIN_TEACHER_LINE = Regex("^[А-ЯЁ][а-яё-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.?$", RegexOption.IGNORE_CASE)
         val ROOM_LINE = Regex("(?:ауд(?:итория)?\\.?|каб(?:инет)?\\.?|room|корпус)\\s*[:№–-]?\\s*(.+)", RegexOption.IGNORE_CASE)
-        val SUBJECT_PREFIX = Regex("^(?:лекция|лекц\\.?|лабораторная|лаб\\.?|практика|практ\\.?)\\s*[:–-]?\\s*", RegexOption.IGNORE_CASE)
+        val NUMERIC_ROOM_LINE = Regex("^\\d{1,4}[a-zа-яё]?(?:\\s+[a-zа-яё-]+)?$", RegexOption.IGNORE_CASE)
+        val TYPE_ONLY_LINE = Regex("^(?:лекц(?:ия)?\\.?|лаб(?:ораторн(?:ая)?)?\\.?|практ(?:ика)?\\.?|лк\\.?|пз\\.?|семинар|зачет|экзамен|lecture|laboratory|practice)$", RegexOption.IGNORE_CASE)
+        val SUBJECT_PREFIX = Regex("^(?:лекция|лекц\\.?|лабораторная|лаб\\.?|практика|практ\\.?|лк\\.?|пз\\.?)\\s*[:–-]?\\s*", RegexOption.IGNORE_CASE)
         val WHITESPACE = Regex("\\s+")
         val BR_TAG = Regex("(?i)<br\\s*/?>")
         val BLOCK_START_TAG = Regex("(?i)<(?:div|p|li)[^>]*>")

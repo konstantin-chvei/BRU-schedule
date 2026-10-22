@@ -26,7 +26,9 @@ class SqlDelightUniversityRepository(
 
     init {
         val bru = DefaultUniversities.BRU
+        val bsu = DefaultUniversities.BSU
         queries.insertUniversity(bru.id, bru.name, bru.websiteUrl, bru.sourceType.name)
+        queries.insertUniversity(bsu.id, bsu.name, bsu.websiteUrl, bsu.sourceType.name)
         if (queries.getUniversity(mutableSelectedUniversityId.value).executeAsOneOrNull() == null) {
             settings.putString(SELECTED_UNIVERSITY_KEY, bru.id)
             mutableSelectedUniversityId.value = bru.id
@@ -42,7 +44,7 @@ class SqlDelightUniversityRepository(
                     websiteUrl = row.websiteUrl,
                     sourceType = runCatching { UniversitySourceType.valueOf(row.sourceType) }
                         .getOrDefault(UniversitySourceType.DIRECT_HTML),
-                    isBuiltIn = row.id == DefaultUniversities.BRU.id,
+                    isBuiltIn = row.id == DefaultUniversities.BRU.id || row.id == DefaultUniversities.BSU.id,
                 )
             }
         }
@@ -52,8 +54,13 @@ class SqlDelightUniversityRepository(
     override suspend fun saveUniversity(university: University) {
         require(university.id.isNotBlank()) { "У вуза отсутствует идентификатор" }
         require(university.name.isNotBlank()) { "Укажите название вуза" }
-        require(university.sourceType != UniversitySourceType.BRU_CATALOG || university.isBuiltIn) {
-            "Каталог БРУ можно подключить только как встроенный источник"
+        require(
+            university.sourceType !in setOf(
+                UniversitySourceType.BRU_CATALOG,
+                UniversitySourceType.BSU_HTML_AND_SHEETS,
+            ) || university.isBuiltIn,
+        ) {
+            "Встроенные адаптеры БРУ и БГУ нельзя подключить как пользовательские источники"
         }
         database.transaction {
             queries.insertUniversity(

@@ -24,7 +24,12 @@ class BruScheduleRemoteDataSource(
             require(timetableUrl.startsWith("https://", ignoreCase = true)) {
                 "Ссылка на расписание должна начинаться с https://"
             }
-            return transport.get(timetableUrl)
+            val fetchUrl = if (profile.universityId == UniversityIds.BSU) {
+                GoogleSheetsScheduleUrl.toHtmlTableUrl(timetableUrl) ?: timetableUrl
+            } else {
+                timetableUrl
+            }
+            return transport.get(fetchUrl)
         }
 
         var lastNetworkError: String? = null

@@ -508,8 +508,11 @@ private fun UniversitySelectionPanel(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    if (university.sourceType == UniversitySourceType.BRU_CATALOG) "КАТАЛОГ ПОДКЛЮЧЁН"
-                    else "ПРОФИЛИ ПО ПРЯМОЙ ССЫЛКЕ",
+                    when (university.sourceType) {
+                        UniversitySourceType.BRU_CATALOG -> "КАТАЛОГ ПОДКЛЮЧЁН"
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "HTML И GOOGLE SHEETS"
+                        UniversitySourceType.DIRECT_HTML -> "ПРОФИЛИ ПО ПРЯМОЙ ССЫЛКЕ"
+                    },
                     color = BruColors.dim,
                     fontSize = 8.sp,
                     letterSpacing = 0.8.sp,
@@ -541,8 +544,11 @@ private fun UniversityChoiceRow(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(university.name, color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    if (university.sourceType == UniversitySourceType.BRU_CATALOG) "Каталог и адаптер подключены"
-                    else "Источник расписания задаётся ссылкой",
+                    when (university.sourceType) {
+                        UniversitySourceType.BRU_CATALOG -> "Каталог и адаптер подключены"
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "Поддерживаются HTML-таблицы и Google Sheets"
+                        UniversitySourceType.DIRECT_HTML -> "Источник расписания задаётся ссылкой"
+                    },
                     color = BruColors.muted,
                     fontSize = 9.sp,
                 )

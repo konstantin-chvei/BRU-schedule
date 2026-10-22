@@ -11,6 +11,7 @@ import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.ScheduleWindow
+import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.usecase.ScheduleMergeStrategy
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.Continuation
@@ -214,6 +215,33 @@ class ScheduleArchitectureTest {
 
         assertEquals(customProfile.sourceUrl, requestedUrl)
         assertEquals("<html><body>schedule</body></html>", html)
+    }
+
+    @Test
+    fun bsuGoogleSheetsProfileFetchesGvizHtmlForTheSelectedWorksheet() {
+        var requestedUrl: String? = null
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestedUrl = url
+                return "<table><tr><td>schedule</td></tr></table>"
+            }
+        }
+        val bsuProfile = ScheduleProfile(
+            id = "bsu-group-1-11",
+            type = ScheduleProfileType.GROUP,
+            name = "1-11",
+            sourceUrl = "https://docs.google.com/spreadsheets/d/example/edit?usp=sharing#gid=795046734",
+            sourceKey = "1-11",
+            universityId = UniversityIds.BSU,
+        )
+        val window = ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 11, 1))
+
+        BruScheduleRemoteDataSource(transport).fetchHtml(bsuProfile, window)
+
+        assertEquals(
+            "https://docs.google.com/spreadsheets/d/example/gviz/tq?tqx=out:html&gid=795046734",
+            requestedUrl,
+        )
     }
 
     @Test

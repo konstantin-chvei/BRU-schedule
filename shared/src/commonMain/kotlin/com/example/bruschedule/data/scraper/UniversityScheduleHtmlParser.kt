@@ -8,6 +8,7 @@ import kotlinx.datetime.LocalDate
 /** Routes a saved profile to the parser for its selected university. */
 class UniversityScheduleHtmlParser(
     private val bruParser: ScheduleHtmlParser = BruScheduleScraper(),
+    private val bsuParser: ScheduleHtmlParser = BsuScheduleHtmlParser(),
     private val genericParser: ScheduleHtmlParser = GenericHtmlScheduleParser(),
 ) : ScheduleHtmlParser {
     override val formatVersion: Int = DISPATCHER_FORMAT_VERSION
@@ -18,13 +19,19 @@ class UniversityScheduleHtmlParser(
     override fun hasAlternatingTwoWeekCycle(html: String): Boolean =
         bruParser.hasAlternatingTwoWeekCycle(html) || genericParser.hasAlternatingTwoWeekCycle(html)
 
+    override fun hasAlternatingTwoWeekCycle(profile: ScheduleProfile, html: String): Boolean =
+        parserFor(profile).hasAlternatingTwoWeekCycle(html)
+
     override fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean =
         parserFor(profile).hasWeeklyScheduleTemplate(profile, html)
 
-    private fun parserFor(profile: ScheduleProfile): ScheduleHtmlParser =
-        if (profile.universityId == UniversityIds.BRU) bruParser else genericParser
+    private fun parserFor(profile: ScheduleProfile): ScheduleHtmlParser = when (profile.universityId) {
+        UniversityIds.BRU -> bruParser
+        UniversityIds.BSU -> bsuParser
+        else -> genericParser
+    }
 
     private companion object {
-        const val DISPATCHER_FORMAT_VERSION = 4
+        const val DISPATCHER_FORMAT_VERSION = 5
     }
 }

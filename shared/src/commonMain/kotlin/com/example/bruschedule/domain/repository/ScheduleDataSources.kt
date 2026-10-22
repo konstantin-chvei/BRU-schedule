@@ -17,6 +17,10 @@ interface ScheduleHtmlParser {
     /** True only for timetable pages with an explicit alternating week-one/week-two cycle. */
     fun hasAlternatingTwoWeekCycle(html: String): Boolean = false
 
+    /** Profile-aware variant lets university adapters interpret their own week labels safely. */
+    fun hasAlternatingTwoWeekCycle(profile: ScheduleProfile, html: String): Boolean =
+        hasAlternatingTwoWeekCycle(html)
+
     /** True when a one-week template for this profile should repeat through the configured term. */
     fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean = false
 }

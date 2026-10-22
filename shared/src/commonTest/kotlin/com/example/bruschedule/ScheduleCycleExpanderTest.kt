@@ -87,6 +87,31 @@ class ScheduleCycleExpanderTest {
     }
 
     @Test
+    fun keepsOnlyDateLessonsOnceAndSkipsAnExplicitExceptDateInAnAlternatingCycle() {
+        val from = LocalDate(2026, 10, 19)
+        val through = LocalDate(2026, 11, 16)
+        val repeating = lesson(
+            "2026-10-19",
+            "group-mpr-261|2026-10-19|1|08:30-10:05|0|except:2026-10-19",
+        )
+        val oneOff = lesson(
+            "2026-10-19",
+            "group-mpr-261|2026-10-19|1|08:30-10:05|0|once",
+        ).copy(subjectName = "Только одна дата")
+
+        val expanded = ScheduleCycleExpander.expand(listOf(repeating, oneOff), from, through)
+
+        assertEquals(
+            listOf("2026-11-02", "2026-11-16"),
+            expanded.filter { it.subjectName == repeating.subjectName }.map { it.lessonDate },
+        )
+        assertEquals(
+            listOf("2026-10-19"),
+            expanded.filter { it.subjectName == "Только одна дата" }.map { it.lessonDate },
+        )
+    }
+
+    @Test
     fun customLessonsAreNeverRepeatedWithTheWebsiteCycle() {
         val start = LocalDate(2026, 10, 19)
         val custom = lesson("2026-10-19", "manual:one-off").copy(isCustom = true)

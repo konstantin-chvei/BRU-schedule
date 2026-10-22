@@ -51,7 +51,10 @@ fun AddProfileBottomSheet(
     onSelectCandidate: (ProfileCandidate) -> Unit,
 ) {
     val hasBruCatalog = university.sourceType == UniversitySourceType.BRU_CATALOG
-    var selectedType by remember(university.id) { mutableStateOf(searchState.type) }
+    val hasBsuHtmlAndSheets = university.sourceType == UniversitySourceType.BSU_HTML_AND_SHEETS
+    var selectedType by remember(university.id) {
+        mutableStateOf(if (hasBsuHtmlAndSheets) ScheduleProfileType.GROUP else searchState.type)
+    }
     var query by remember(university.id) { mutableStateOf(searchState.query) }
     var sourceUrl by remember(university.id) { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -74,18 +77,20 @@ fun AddProfileBottomSheet(
             Text("НОВЫЙ ПРОФИЛЬ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
             Text("Подключить расписание", color = BruColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                if (hasBruCatalog) {
-                    "Ищите группу или преподавателя в каталоге rasp.bru.by. Для других вузов добавьте открытую HTML-страницу расписания напрямую. Сохранённые пары доступны офлайн."
-                } else {
-                    "Вуз: ${university.name}. Каталог этого сайта пока не подключён. Вставьте прямую HTTPS-ссылку на открытую HTML-страницу с таблицей расписания; страницы, которые строятся только JavaScript, не поддерживаются."
+                when {
+                    hasBruCatalog -> "Ищите группу или преподавателя в каталоге rasp.bru.by. Для других вузов добавьте открытую HTML-страницу расписания напрямую. Сохранённые пары доступны офлайн."
+                    hasBsuHtmlAndSheets -> "Для БГУ поддерживаются HTML-таблицы Мехмата и открытые Google Sheets Экономического факультета и ФПМИ. Вставьте ссылку на таблицу и укажите точный код группы из её заголовка. PDF, Excel, DOC и динамические страницы подключаются отдельными адаптерами позже."
+                    else -> "Вуз: ${university.name}. Каталог этого сайта пока не подключён. Вставьте прямую HTTPS-ссылку на открытую HTML-страницу с таблицей расписания; страницы, которые строятся только JavaScript, не поддерживаются."
                 },
                 color = BruColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ProfileTypeChip("Группа", selectedType == ScheduleProfileType.GROUP) { selectedType = ScheduleProfileType.GROUP }
-                ProfileTypeChip("Преподаватель", selectedType == ScheduleProfileType.TEACHER) { selectedType = ScheduleProfileType.TEACHER }
+            if (!hasBsuHtmlAndSheets) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProfileTypeChip("Группа", selectedType == ScheduleProfileType.GROUP) { selectedType = ScheduleProfileType.GROUP }
+                    ProfileTypeChip("Преподаватель", selectedType == ScheduleProfileType.TEACHER) { selectedType = ScheduleProfileType.TEACHER }
+                }
             }
             OutlinedTextField(
                 value = query,
@@ -98,6 +103,7 @@ fun AddProfileBottomSheet(
                         when {
                             hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Номер группы"
                             hasBruCatalog -> "Фамилия преподавателя"
+                            hasBsuHtmlAndSheets && selectedType == ScheduleProfileType.GROUP -> "Код группы в таблице"
                             selectedType == ScheduleProfileType.GROUP -> "Название группы или профиля"
                             else -> "Название преподавателя или профиля"
                         },
@@ -108,6 +114,7 @@ fun AddProfileBottomSheet(
                         when {
                             hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Например, МПР-261"
                             hasBruCatalog -> "Например, Агеева"
+                            hasBsuHtmlAndSheets && selectedType == ScheduleProfileType.GROUP -> "Например, 1-11 или 1 группа А"
                             selectedType == ScheduleProfileType.GROUP -> "Например, ИС-241"
                             else -> "Фамилия преподавателя"
                         },
@@ -148,7 +155,13 @@ fun AddProfileBottomSheet(
                     letterSpacing = 0.8.sp,
                 )
             } else {
-                Text("УКАЖИТЕ ПРЯМУЮ ССЫЛКУ НА РАСПИСАНИЕ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 0.8.sp)
+                Text(
+                    if (hasBsuHtmlAndSheets) "ССЫЛКА НА СТРАНИЦУ МЕХМАТА ИЛИ GOOGLE SHEETS"
+                    else "УКАЖИТЕ ПРЯМУЮ ССЫЛКУ НА РАСПИСАНИЕ",
+                    color = BruColors.dim,
+                    fontSize = 9.sp,
+                    letterSpacing = 0.8.sp,
+                )
             }
 
             OutlinedTextField(
@@ -158,10 +171,22 @@ fun AddProfileBottomSheet(
                 textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
                 label = {
-                    Text(if (hasBruCatalog) "Ссылка на rasp.bru.by · необязательно" else "Прямая ссылка на HTML-страницу · обязательно")
+                    Text(
+                        when {
+                            hasBruCatalog -> "Ссылка на rasp.bru.by · необязательно"
+                            hasBsuHtmlAndSheets -> "Ссылка на HTML или Google Sheets · обязательно"
+                            else -> "Прямая ссылка на HTML-страницу · обязательно"
+                        },
+                    )
                 },
                 placeholder = {
-                    Text(if (hasBruCatalog) "https://rasp.bru.by/…" else "https://university.by/schedule/…")
+                    Text(
+                        when {
+                            hasBruCatalog -> "https://rasp.bru.by/…"
+                            hasBsuHtmlAndSheets -> "https://mmf.bsu.by/… или docs.google.com/…"
+                            else -> "https://university.by/schedule/…"
+                        },
+                    )
                 },
                 shape = RoundedCornerShape(14.dp),
             )
@@ -180,8 +205,11 @@ fun AddProfileBottomSheet(
                 }
             }
             Text(
-                if (hasBruCatalog) "Для БРУ источник обновляется через каталог; прямые ссылки можно заменить позднее."
-                else "Если сайт изменит разметку или требует входа, расписание может не загрузиться.",
+                when {
+                    hasBruCatalog -> "Для БРУ источник обновляется через каталог; прямые ссылки можно заменить позднее."
+                    hasBsuHtmlAndSheets -> "Профиль фильтрует Google Sheets по указанному коду группы. Сохраняется локально; сервер приложения не используется."
+                    else -> "Если сайт изменит разметку или требует входа, расписание может не загрузиться."
+                },
                 color = BruColors.dim,
                 fontSize = 10.sp,
                 lineHeight = 15.sp,

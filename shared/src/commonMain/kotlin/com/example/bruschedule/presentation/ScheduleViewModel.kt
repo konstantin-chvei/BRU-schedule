@@ -751,9 +751,10 @@ class ScheduleViewModel(
                 }
                 enteredUrl?.let { if (it.equals(rootUrl, ignoreCase = true)) "$rootUrl/" else it }
             }
+            UniversitySourceType.BSU_HTML_AND_SHEETS,
             UniversitySourceType.DIRECT_HTML -> {
                 if (enteredUrl == null) {
-                    notice.value = "Для этого вуза укажите прямую ссылку на страницу расписания"
+                    notice.value = "Укажите прямую HTTPS-ссылку на таблицу расписания"
                     return
                 }
                 if (!PUBLIC_HTTPS_URL.matches(enteredUrl)) {

@@ -70,6 +70,41 @@ class GenericHtmlScheduleParserTest {
     }
 
     @Test
+    fun parsesMmfStyleTableWithSeparateGroupTeacherTypeRoomAndInheritedDateCells() {
+        val html = """
+            <table>
+              <thead>
+                <tr>
+                  <th>День</th><th>Дата</th><th>Время</th><th>Группа</th>
+                  <th>Предмет, преподаватель</th><th>Тип</th><th>Аудитория</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Понедельник</td><td>19.10.2026</td><td>09.45–11.05</td><td>1 группа</td>
+                  <td>Теория вероятностей<br>доц. Иванова Н.В.</td><td>Лекция</td><td>Ауд. 530</td>
+                </tr>
+                <tr>
+                  <td></td><td></td><td>11.25–12.45</td><td>1 группа</td>
+                  <td>Линейная алгебра</td><td>Практика</td><td>531</td>
+                </tr>
+              </tbody>
+            </table>
+        """.trimIndent()
+
+        val lessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
+
+        assertEquals(2, lessons.size)
+        assertEquals("Теория вероятностей", lessons[0].subjectName)
+        assertEquals("Иванова Н.В.", lessons[0].teacherName)
+        assertEquals("530", lessons[0].classroom)
+        assertEquals("09:45", lessons[0].startTime)
+        assertEquals("11:05", lessons[0].endTime)
+        assertEquals("2026-10-19", lessons[1].lessonDate)
+        assertEquals("531", lessons[1].classroom)
+    }
+
+    @Test
     fun recognizesWeeklyTemplatesOnlyForNonBruSources() {
         val html = """
             <table>
