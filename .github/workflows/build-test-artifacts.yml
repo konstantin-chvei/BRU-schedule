@@ -148,11 +148,23 @@ jobs:
               print("::error::iOS build failed before a log file was created")
           else:
               lines = log.read_text(errors="replace").splitlines()
-              tail = lines[-45:]
-              escaped_lines = []
-              for line in tail:
-                  escaped_lines.append(line[:900].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
-              print("::error title=iOS build log tail::" + "%0A".join(escaped_lines))
+              anchors = [
+                  index for index, line in enumerate(lines)
+                  if re.search(
+                      r"(^e:\s|error:|FAILURE:|BUILD FAILED|Execution failed|failed with an exception|Could not|Cannot|Unresolved reference|Type mismatch)",
+                      line,
+                      re.I,
+                  )
+              ]
+              selected_indices = sorted({
+                  adjacent
+                  for index in anchors[-12:]
+                  for adjacent in range(max(0, index - 1), min(len(lines), index + 2))
+              })
+              selected = [lines[index] for index in selected_indices] if selected_indices else lines[-20:]
+              for line in selected[-24:]:
+                  escaped = line[:900].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                  print(f"::error title=iOS build log::{escaped}")
 
           report_dir = Path("shared/build/test-results/iosSimulatorArm64Test")
           for report in sorted(report_dir.glob("TEST-*.xml")):
