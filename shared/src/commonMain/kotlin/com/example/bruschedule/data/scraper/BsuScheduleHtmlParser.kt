@@ -37,6 +37,42 @@ class BsuScheduleHtmlParser(
         }
     }
 
+    fun discoverGroupLabelsFromText(text: String): List<String> = groupLabelsIn(text)
+
+    /** Returns group labels found in matrix table headers. */
+    fun discoverTableGroupLabels(html: String): List<String> {
+        val document = Ksoup.parse(html)
+        val labels = linkedSetOf<String>()
+        document.select("table").forEach { table ->
+            val rows = expandTableRows(table).take(MAX_HEADER_ROWS)
+            rows.forEach { row ->
+                val texts = row.map { cell -> cell?.text()?.let(::normalize).orEmpty() }
+                texts.forEachIndexed { index, text ->
+                    groupLabelsIn(text).forEach { labels += it }
+                    val descriptor = parseGroupDescriptor(text) ?: return@forEachIndexed
+                    if (descriptor.subgroup != null) return@forEachIndexed
+                    texts.drop(index + 1).take(2)
+                        .filter { SUBGROUP_HEADER.matches(it) }
+                        .map(::normalizeSubgroup)
+                        .map(::displaySubgroup)
+                        .forEach { subgroup -> labels += "${descriptor.number} группа $subgroup" }
+                }
+            }
+        }
+        return labels.toList()
+    }
+
+    /** Returns group labels found in matrix headers and group links for the picker. */
+    fun discoverGroupLabels(html: String): List<String> {
+        val document = Ksoup.parse(html)
+        val labels = linkedSetOf<String>()
+        discoverTableGroupLabels(html).forEach { labels += it }
+        document.select("a[href]").forEach { link ->
+            groupLabelsIn(link.text()).forEach { labels += it }
+        }
+        return labels.toList()
+    }
+
     override fun hasAlternatingTwoWeekCycle(html: String): Boolean {
         val document = Ksoup.parse(html)
         val pageText = normalize(document.text()).lowercase().replace('ё', 'е')
@@ -404,11 +440,27 @@ class BsuScheduleHtmlParser(
         ROOM_LINE.find(line)?.groupValues?.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
             ?: NUMERIC_ROOM_LINE.matchEntire(line)?.value?.takeIf(String::isNotBlank)
 
+    private fun groupLabelsIn(text: String): List<String> {
+        val codes = GROUP_CODE.findAll(text).map { it.value }.toList()
+        val descriptor = parseGroupDescriptor(text)
+        val descriptorLabel = descriptor?.let { group ->
+            if (group.subgroup == null) "${group.number} группа"
+            else "${group.number} группа ${displaySubgroup(group.subgroup)}"
+        }
+        return (codes + listOfNotNull(descriptorLabel)).distinct()
+    }
+
     private fun parseGroupDescriptor(text: String): GroupDescriptor? {
         val match = GROUP_DESCRIPTOR.find(normalize(text)) ?: return null
         val number = match.groupValues[1].takeIf(String::isNotBlank) ?: return null
         val subgroup = match.groupValues.getOrNull(2)?.takeIf(String::isNotBlank)?.let(::normalizeSubgroup)
         return GroupDescriptor(number, subgroup)
+    }
+
+    private fun displaySubgroup(text: String): String = when (text) {
+        "a" -> "А"
+        "b" -> "Б"
+        else -> text.uppercase()
     }
 
     private fun normalizeSubgroup(text: String): String = normalize(text)
@@ -561,6 +613,7 @@ class BsuScheduleHtmlParser(
         val DATE_CONDITION = Regex("(?:только|кроме)\\s+\\d{1,2}\\.\\d{1,2}(?:\\.\\d{4})?\\.?", RegexOption.IGNORE_CASE)
         val GROUP_DESCRIPTOR = Regex("(\\d{1,2})\\s*(?:групп[аы]?|group)\\s*([а-яёa-z])?", RegexOption.IGNORE_CASE)
         val GROUP_CODE = Regex("\\b\\d{1,2}-\\d{1,3}\\b")
+        val SUBGROUP_HEADER = Regex("^[а-яёa-z]$", RegexOption.IGNORE_CASE)
         val TEACHER_LINE = Regex("(?:преподаватель|преп\\.?|teacher|викладчык)\\s*[:–-]?\\s*(.+)", RegexOption.IGNORE_CASE)
         val LECTURE_CODE = Regex("(^|\\s)лк\\.?($|\\s)", RegexOption.IGNORE_CASE)
         val PRACTICE_CODE = Regex("(^|\\s)пз\\.?($|\\s)", RegexOption.IGNORE_CASE)

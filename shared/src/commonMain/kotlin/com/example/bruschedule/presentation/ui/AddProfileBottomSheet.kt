@@ -51,9 +51,10 @@ fun AddProfileBottomSheet(
     onSelectCandidate: (ProfileCandidate) -> Unit,
 ) {
     val hasBruCatalog = university.sourceType == UniversitySourceType.BRU_CATALOG
-    val hasBsuHtmlAndSheets = university.sourceType == UniversitySourceType.BSU_HTML_AND_SHEETS
+    val hasBsuCatalog = university.sourceType == UniversitySourceType.BSU_HTML_AND_SHEETS
+    val hasProfileCatalog = hasBruCatalog || hasBsuCatalog
     var selectedType by remember(university.id) {
-        mutableStateOf(if (hasBsuHtmlAndSheets) ScheduleProfileType.GROUP else searchState.type)
+        mutableStateOf(if (hasBsuCatalog) ScheduleProfileType.GROUP else searchState.type)
     }
     var query by remember(university.id) { mutableStateOf(searchState.query) }
     var sourceUrl by remember(university.id) { mutableStateOf("") }
@@ -79,14 +80,14 @@ fun AddProfileBottomSheet(
             Text(
                 when {
                     hasBruCatalog -> "Ищите группу или преподавателя в каталоге rasp.bru.by. Для других вузов добавьте открытую HTML-страницу расписания напрямую. Сохранённые пары доступны офлайн."
-                    hasBsuHtmlAndSheets -> "Для БГУ поддерживаются HTML-таблицы Мехмата и открытые Google Sheets Экономического факультета и ФПМИ. Вставьте ссылку на таблицу и укажите точный код группы из её заголовка. PDF, Excel, DOC и динамические страницы подключаются отдельными адаптерами позже."
+                    hasBsuCatalog -> "Для БГУ поиск сканирует страницы факультетов, HTML-таблицы и открытые Google Sheets. Выберите группу из результатов; файлы PDF, Excel, Word и динамические расписания требуют отдельных адаптеров."
                     else -> "Вуз: ${university.name}. Каталог этого сайта пока не подключён. Вставьте прямую HTTPS-ссылку на открытую HTML-страницу с таблицей расписания; страницы, которые строятся только JavaScript, не поддерживаются."
                 },
                 color = BruColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
             )
-            if (!hasBsuHtmlAndSheets) {
+            if (!hasBsuCatalog) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProfileTypeChip("Группа", selectedType == ScheduleProfileType.GROUP) { selectedType = ScheduleProfileType.GROUP }
                     ProfileTypeChip("Преподаватель", selectedType == ScheduleProfileType.TEACHER) { selectedType = ScheduleProfileType.TEACHER }
@@ -103,7 +104,7 @@ fun AddProfileBottomSheet(
                         when {
                             hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Номер группы"
                             hasBruCatalog -> "Фамилия преподавателя"
-                            hasBsuHtmlAndSheets && selectedType == ScheduleProfileType.GROUP -> "Код группы в таблице"
+                            hasBsuCatalog && selectedType == ScheduleProfileType.GROUP -> "Код или название группы"
                             selectedType == ScheduleProfileType.GROUP -> "Название группы или профиля"
                             else -> "Название преподавателя или профиля"
                         },
@@ -114,7 +115,7 @@ fun AddProfileBottomSheet(
                         when {
                             hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Например, МПР-261"
                             hasBruCatalog -> "Например, Агеева"
-                            hasBsuHtmlAndSheets && selectedType == ScheduleProfileType.GROUP -> "Например, 1-11 или 1 группа А"
+                            hasBsuCatalog && selectedType == ScheduleProfileType.GROUP -> "Например, 1-11 или 1 группа А"
                             selectedType == ScheduleProfileType.GROUP -> "Например, ИС-241"
                             else -> "Фамилия преподавателя"
                         },
@@ -123,7 +124,7 @@ fun AddProfileBottomSheet(
                 shape = RoundedCornerShape(14.dp),
             )
 
-            if (hasBruCatalog) {
+            if (hasProfileCatalog) {
                 Button(
                     onClick = { onSearch(selectedType, query.trim()) },
                     enabled = query.trim().length >= 2 && !searchState.loading,
@@ -135,7 +136,15 @@ fun AddProfileBottomSheet(
                         CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = BruColors.background)
                         Spacer(Modifier.width(9.dp))
                     }
-                    Text(if (searchState.loading) "Ищем в каталоге" else "Искать в каталоге", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        when {
+                            searchState.loading && hasBsuCatalog -> "Ищем расписания факультетов"
+                            searchState.loading -> "Ищем в каталоге"
+                            hasBsuCatalog -> "Искать группу БГУ"
+                            else -> "Искать в каталоге"
+                        },
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
 
                 searchState.error?.let { error ->
@@ -156,8 +165,7 @@ fun AddProfileBottomSheet(
                 )
             } else {
                 Text(
-                    if (hasBsuHtmlAndSheets) "ССЫЛКА НА СТРАНИЦУ МЕХМАТА ИЛИ GOOGLE SHEETS"
-                    else "УКАЖИТЕ ПРЯМУЮ ССЫЛКУ НА РАСПИСАНИЕ",
+                    "УКАЖИТЕ ПРЯМУЮ ССЫЛКУ НА РАСПИСАНИЕ",
                     color = BruColors.dim,
                     fontSize = 9.sp,
                     letterSpacing = 0.8.sp,
@@ -174,7 +182,7 @@ fun AddProfileBottomSheet(
                     Text(
                         when {
                             hasBruCatalog -> "Ссылка на rasp.bru.by · необязательно"
-                            hasBsuHtmlAndSheets -> "Ссылка на HTML или Google Sheets · обязательно"
+                            hasBsuCatalog -> "Ссылка на HTML или Google Sheets · для ручного добавления"
                             else -> "Прямая ссылка на HTML-страницу · обязательно"
                         },
                     )
@@ -183,7 +191,7 @@ fun AddProfileBottomSheet(
                     Text(
                         when {
                             hasBruCatalog -> "https://rasp.bru.by/…"
-                            hasBsuHtmlAndSheets -> "https://mmf.bsu.by/… или docs.google.com/…"
+                            hasBsuCatalog -> "https://mmf.bsu.by/… или docs.google.com/…"
                             else -> "https://university.by/schedule/…"
                         },
                     )
@@ -207,7 +215,7 @@ fun AddProfileBottomSheet(
             Text(
                 when {
                     hasBruCatalog -> "Для БРУ источник обновляется через каталог; прямые ссылки можно заменить позднее."
-                    hasBsuHtmlAndSheets -> "Профиль фильтрует Google Sheets по указанному коду группы. Сохраняется локально; сервер приложения не используется."
+                    hasBsuCatalog -> "Выбранный профиль сохраняется локально и обновляется напрямую с сайта факультета; сервер приложения не используется."
                     else -> "Если сайт изменит разметку или требует входа, расписание может не загрузиться."
                 },
                 color = BruColors.dim,

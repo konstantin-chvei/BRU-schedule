@@ -58,9 +58,13 @@ interface AcademicTaskRepository {
     suspend fun deleteTask(taskId: String)
 }
 
-/** Searchable catalogue backed by the Group and Teachers directories on rasp.bru.by. */
+/** University-specific searchable catalogue of group and, where available, teacher profiles. */
 interface ScheduleProfileCatalogRepository {
     suspend fun search(type: ScheduleProfileType, query: String): List<ProfileCandidate>
+
+    /** University-aware extension keeps the original BRU call source-compatible. */
+    suspend fun search(universityId: String, type: ScheduleProfileType, query: String): List<ProfileCandidate> =
+        search(type, query)
 }
 
 /** Persisted appearance settings for the Compose shell and lesson-type accents. */

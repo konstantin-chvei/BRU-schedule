@@ -10,6 +10,7 @@ import com.example.bruschedule.domain.model.SemesterSchedulePreferences
 import com.example.bruschedule.domain.model.TypographyPreferences
 import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.domain.model.University
+import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.model.UniversitySourceType
 import com.example.bruschedule.domain.model.DefaultUniversities
 import com.example.bruschedule.domain.model.DomainIds
@@ -808,20 +809,35 @@ class ScheduleViewModel(
     }
 
     fun searchProfiles(type: ScheduleProfileType, query: String) {
-        if (uiState.value.selectedUniversity.sourceType != UniversitySourceType.BRU_CATALOG) {
+        val university = uiState.value.selectedUniversity
+        if (university.sourceType !in setOf(
+                UniversitySourceType.BRU_CATALOG,
+                UniversitySourceType.BSU_HTML_AND_SHEETS,
+            )
+        ) {
             profileSearch.value = ProfileSearchUiState(query = query, type = type)
-            notice.value = "Для этого вуза поиск по каталогу не подключён — добавьте профиль по прямой ссылке"
+            notice.value = "Для этого вуза поиск групп не подключён — добавьте профиль по прямой ссылке"
             return
         }
         profileSearch.value = ProfileSearchUiState(query = query, type = type, loading = true)
         viewModelScope.launch {
             try {
-                val candidates = withContext(Dispatchers.Default) { profileCatalog.search(type, query) }
+                val candidates = withContext(Dispatchers.Default) {
+                    profileCatalog.search(university.id, type, query)
+                }
+                if (uiState.value.selectedUniversity.id != university.id) return@launch
                 profileSearch.value = ProfileSearchUiState(query, type, candidates = candidates)
-                if (candidates.isEmpty()) notice.value = "Совпадений не найдено — можно добавить профиль по ссылке вручную"
+                if (candidates.isEmpty()) {
+                    notice.value = if (university.id == UniversityIds.BSU) {
+                        "Группа не найдена в открытых HTML/Sheets источниках факультетов; проверьте код или добавьте ссылку вручную"
+                    } else {
+                        "Совпадений не найдено — можно добавить профиль по ссылке вручную"
+                    }
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
+                if (uiState.value.selectedUniversity.id != university.id) return@launch
                 profileSearch.value = ProfileSearchUiState(
                     query = query,
                     type = type,

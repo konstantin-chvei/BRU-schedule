@@ -5,6 +5,8 @@ import com.example.bruschedule.data.local.SqlDelightScheduleRepository
 import com.example.bruschedule.data.local.SqlDelightUniversityRepository
 import com.example.bruschedule.data.local.db.ScheduleDatabase
 import com.example.bruschedule.data.remote.BruScheduleProfileCatalogRepository
+import com.example.bruschedule.data.remote.BsuScheduleProfileCatalogRepository
+import com.example.bruschedule.data.remote.UniversityScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
 import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.remote.createPlatformHtmlTransport
@@ -27,6 +29,7 @@ import com.example.bruschedule.domain.repository.DeadlineReminderPreferencesRepo
 import com.example.bruschedule.domain.repository.NoOpDeadlineNotificationScheduler
 import com.example.bruschedule.domain.repository.ParserVersionRepository
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
+import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
@@ -78,11 +81,17 @@ fun createAppGraph(
     val directoryParser = BruScheduleDirectoryParser()
     val scraper = UniversityScheduleHtmlParser()
     val remote = BruScheduleRemoteDataSource(transport, directoryParser)
+    val profileCatalog = UniversityScheduleProfileCatalogRepository(
+        catalogues = mapOf(
+            UniversityIds.BRU to BruScheduleProfileCatalogRepository(transport, directoryParser),
+            UniversityIds.BSU to BsuScheduleProfileCatalogRepository(transport),
+        ),
+    )
     return AppGraph(
         scheduleRepository = localRepository,
         syncRepository = localRepository,
         taskRepository = localRepository,
-        profileCatalog = BruScheduleProfileCatalogRepository(transport, directoryParser),
+        profileCatalog = profileCatalog,
         refreshSchedule = RefreshScheduleUseCase(
             schedules = localRepository,
             syncRepository = localRepository,

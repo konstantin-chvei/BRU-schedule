@@ -510,7 +510,7 @@ private fun UniversitySelectionPanel(
                 Text(
                     when (university.sourceType) {
                         UniversitySourceType.BRU_CATALOG -> "КАТАЛОГ ПОДКЛЮЧЁН"
-                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "HTML И GOOGLE SHEETS"
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "ПОИСК ПО САЙТАМ ФАКУЛЬТЕТОВ"
                         UniversitySourceType.DIRECT_HTML -> "ПРОФИЛИ ПО ПРЯМОЙ ССЫЛКЕ"
                     },
                     color = BruColors.dim,
@@ -546,7 +546,7 @@ private fun UniversityChoiceRow(
                 Text(
                     when (university.sourceType) {
                         UniversitySourceType.BRU_CATALOG -> "Каталог и адаптер подключены"
-                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "Поддерживаются HTML-таблицы и Google Sheets"
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "Поиск групп в доступных HTML-страницах и Google Sheets"
                         UniversitySourceType.DIRECT_HTML -> "Источник расписания задаётся ссылкой"
                     },
                     color = BruColors.muted,

@@ -3,6 +3,7 @@ package com.example.bruschedule.data.remote
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ScheduleProfileType
+import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import kotlinx.coroutines.CancellationException
 
@@ -11,6 +12,15 @@ class BruScheduleProfileCatalogRepository(
     private val transport: HtmlTransport,
     private val parser: BruScheduleDirectoryParser = BruScheduleDirectoryParser(),
 ) : ScheduleProfileCatalogRepository {
+    override suspend fun search(
+        universityId: String,
+        type: ScheduleProfileType,
+        query: String,
+    ): List<ProfileCandidate> {
+        require(universityId == UniversityIds.BRU) { "Каталог расписаний БРУ не подходит выбранному вузу" }
+        return search(type, query)
+    }
+
     override suspend fun search(type: ScheduleProfileType, query: String): List<ProfileCandidate> {
         require(query.trim().length >= 2) { "Введите не менее двух символов для поиска" }
         val candidates = when (type) {

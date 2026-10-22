@@ -14,6 +14,28 @@ class BsuScheduleHtmlParserTest {
     private val parser = BsuScheduleHtmlParser()
 
     @Test
+    fun discoversGroupLabelsFromTableHeadersAndSplitSubgroupColumns() {
+        val html = """
+            <table>
+              <tr><th>День</th><th>Дата</th><th>Время</th><th>1-11</th></tr>
+            </table>
+            <table>
+              <tr><th>Время</th><th>1 группа</th><th>А</th><th>Б</th></tr>
+            </table>
+            <a href="/group/2-12">Группа 2-12</a>
+        """.trimIndent()
+
+        assertEquals(
+            listOf("1-11", "1 группа", "1 группа А", "1 группа Б"),
+            parser.discoverTableGroupLabels(html),
+        )
+        assertEquals(
+            listOf("1-11", "1 группа", "1 группа А", "1 группа Б", "2-12"),
+            parser.discoverGroupLabels(html),
+        )
+    }
+
+    @Test
     fun filtersGoogleSheetMatrixToTheSelectedGroupAndCarriesMergedDayDateAndMetadataRows() {
         val profile = ScheduleProfile(
             id = "bsu-econ-1-11",

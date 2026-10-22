@@ -3,6 +3,7 @@ package com.example.bruschedule
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.data.remote.BruScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
+import com.example.bruschedule.data.remote.BsuScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.scraper.BruScheduleScraper
 import com.example.bruschedule.domain.model.Lesson
@@ -242,6 +243,61 @@ class ScheduleArchitectureTest {
             "https://docs.google.com/spreadsheets/d/example/gviz/tq?tqx=out:html&gid=795046734",
             requestedUrl,
         )
+    }
+
+    @Test
+    fun bsuCatalogueSearchDiscoversSelectableGroupsFromPublicGoogleSheets() {
+        val sheetUrl = "https://docs.google.com/spreadsheets/d/econ-sheet/edit?gid=123"
+        val gvizUrl = "https://docs.google.com/spreadsheets/d/econ-sheet/gviz/tq?tqx=out:html&gid=123"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/" ->
+                    "<a href=\"$sheetUrl\">Расписание дневного отделения</a>"
+                gvizUrl -> """
+                    <table><tr><th>День</th><th>Дата</th><th>Время</th><th>1-11</th></tr>
+                    <tr><td>Понедельник</td><td>19.10.2026</td><td>08:15–09:40</td><td>Математика</td></tr></table>
+                """.trimIndent()
+                else -> error("No public fixture for $url")
+            }
+        }
+
+        val matches = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport)
+                .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "1-11")
+        }
+
+        assertEquals(1, matches.size)
+        assertEquals("1-11", matches.single().name)
+        assertEquals(sheetUrl, matches.single().sourceUrl)
+        assertEquals("1-11", matches.single().sourceKey)
+        assertTrue(matches.single().subtitle.contains("Экономический факультет"))
+        assertEquals(UniversityIds.BSU, matches.single().universityId)
+    }
+
+    @Test
+    fun bsuCatalogueSearchFollowsFacultyGroupLinksToHtmlTimetables() {
+        val facultyUrl = "https://mmf.bsu.by/ru/raspisanie-zanyatij/"
+        val groupUrl = "https://mmf.bsu.by/ru/raspisanie-zanyatij/dnevnoe-otdelenie/1-kurs/1-gruppa/"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                facultyUrl -> "<a href=\"/ru/raspisanie-zanyatij/dnevnoe-otdelenie/1-kurs/1-gruppa/\">1 группа А</a>"
+                groupUrl -> """
+                    <table><tr><th>День</th><th>Время</th><th>Предмет</th></tr>
+                    <tr><td>Понедельник</td><td>08:30–09:50</td><td>Математика</td></tr></table>
+                """.trimIndent()
+                else -> error("No public fixture for $url")
+            }
+        }
+
+        val matches = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport)
+                .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "1 группа А")
+        }
+
+        assertEquals(1, matches.size)
+        assertEquals("1 группа А", matches.single().name)
+        assertEquals(groupUrl, matches.single().sourceUrl)
+        assertEquals("Механико-математический факультет · HTML", matches.single().subtitle)
     }
 
     @Test
