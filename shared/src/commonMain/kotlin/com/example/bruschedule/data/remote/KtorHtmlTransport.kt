@@ -3,7 +3,7 @@ package com.example.bruschedule.data.remote
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.statement.body
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
@@ -45,7 +45,7 @@ class KtorHtmlTransport(
             val host = url.substringAfter("://").substringBefore('/')
             error("$host ответил кодом ${response.status.value}")
         }
-        return response.body<ByteArray>().also { bytes ->
+        return response.bodyAsBytes().also { bytes ->
             require(bytes.size <= MAX_BINARY_RESPONSE_BYTES) {
                 "Файл расписания превышает допустимый размер 30 МБ"
             }
