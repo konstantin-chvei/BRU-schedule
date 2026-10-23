@@ -43,7 +43,22 @@ class BsuBiologyKtorLiveSmokeTest {
             val lessons = parser.parse(profile, html, LocalDate(2026, 10, 23))
 
             assertTrue(lessons.isNotEmpty(), "The live Ktor response contained no parsed Biology lessons")
-            assertTrue(lessons.any { it.subjectName.contains("Физическая культура") })
+            assertTrue(
+                lessons.any {
+                    it.subjectName == "Физическая культура" &&
+                        it.teacherName == "Микитченко Надежда Владимировна" &&
+                        it.classroom == "Курчатова 10" &&
+                        it.startTime == "09:00"
+                },
+                "The live group-41 page did not preserve the first lesson's teacher, time, and building-only room",
+            )
+            assertTrue(
+                lessons.any {
+                    it.subjectName == "Общая и неорганическая химия" &&
+                        it.classroom == "3 · Курчатова 10"
+                },
+                "The live group-41 page did not preserve the room number and building together",
+            )
         } finally {
             (transport as? KtorHtmlTransport)?.close()
         }
