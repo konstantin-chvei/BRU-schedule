@@ -1,5 +1,6 @@
 package com.example.bruschedule.data.remote
 
+import com.example.bruschedule.data.scraper.BsuBiologyGroup
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
 import com.example.bruschedule.data.scraper.ScheduleDocumentFormat
@@ -58,12 +59,20 @@ class BsuScheduleProfileCatalogRepository(
         require(universityId == UniversityIds.BSU) { "Каталог расписаний БГУ не подходит выбранному вузу" }
         require(type == ScheduleProfileType.GROUP) { "В каталоге БГУ пока доступен поиск учебных групп" }
         val normalizedQuery = normalize(query)
-        require(normalizedQuery.length >= MIN_QUERY_LENGTH) { "Введите не менее двух символов для поиска" }
+        val singleSymbolBiologyQuery = normalizedQuery.length == BIOLOGY_SINGLE_SYMBOL_QUERY_LENGTH
+        require(normalizedQuery.length >= MIN_QUERY_LENGTH || singleSymbolBiologyQuery) {
+            "Введите не менее двух символов для поиска; для Биофака допускается односимвольный код"
+        }
 
+        val facultiesToSearch = if (singleSymbolBiologyQuery) {
+            FACULTIES.filter { it.url == BIOLOGY_ROOT }
+        } else {
+            FACULTIES
+        }
         val progressLock = Mutex()
         val partialByFaculty = linkedMapOf<String, FacultyResult>()
         val results = supervisorScope {
-            FACULTIES.map { faculty ->
+            facultiesToSearch.map { faculty ->
                 async(start = CoroutineStart.UNDISPATCHED) {
                     suspend fun publish(partial: FacultyResult) {
                         progressLock.withLock {
@@ -299,7 +308,7 @@ class BsuScheduleProfileCatalogRepository(
                 val matches = groups.mapNotNull { group ->
                     val mode = response.request.studyMode
                     val searchable = "${group.name} ${group.programme} ${mode.label} ${response.request.course}"
-                    if (!matchesQuery(searchable, normalizedQuery)) return@mapNotNull null
+                    if (!matchesBiologyGroup(group, searchable, normalizedQuery)) return@mapNotNull null
                     val sourceUrl = "$BIOLOGY_ROOT?study=${mode.code}&course=${response.request.course}" +
                         "&group=${group.id}&date=$weekDate"
                     candidate(
@@ -408,6 +417,23 @@ class BsuScheduleProfileCatalogRepository(
         return "$scheme://$authority/$normalizedPath$trailingSlash$suffix"
     }
 
+    private fun matchesBiologyGroup(
+        group: BsuBiologyGroup,
+        searchable: String,
+        normalizedQuery: String,
+    ): Boolean {
+        if (normalizedQuery.length != BIOLOGY_SINGLE_SYMBOL_QUERY_LENGTH) {
+            return matchesQuery(searchable, normalizedQuery)
+        }
+        val normalizedNumber = normalize(group.number)
+        val visibleCode = when {
+            normalizedNumber.length == BIOLOGY_SINGLE_SYMBOL_QUERY_LENGTH -> normalizedNumber
+            else -> BIOLOGY_GROUP_LABEL_CODE.find(group.number)?.groupValues?.getOrNull(1)?.let(::normalize)
+        }
+        return visibleCode == normalizedQuery ||
+            visibleCode == null && normalize(group.id) == normalizedQuery
+    }
+
     private fun matchesQuery(value: String, normalizedQuery: String): Boolean =
         normalize(value).contains(normalizedQuery)
 
@@ -473,6 +499,7 @@ class BsuScheduleProfileCatalogRepository(
 
     private companion object {
         const val MIN_QUERY_LENGTH = 2
+        const val BIOLOGY_SINGLE_SYMBOL_QUERY_LENGTH = 1
         const val MAX_LINK_DEPTH = 2
         const val MAX_LINKS_PER_PAGE = 12
         const val MAX_PAGES_PER_FACULTY = 10
@@ -481,6 +508,10 @@ class BsuScheduleProfileCatalogRepository(
         const val BIOLOGY_MAX_COURSES = 5
         const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 5
 
+        val BIOLOGY_GROUP_LABEL_CODE = Regex(
+            "^группа\\s*(?:№|#)?\\s*([0-9]+[a-zа-яё]?|[a-zа-яё])$",
+            RegexOption.IGNORE_CASE,
+        )
         val BIOLOGY_STUDY_MODES = listOf(
             BiologyStudyMode("d", "Дневная"),
             BiologyStudyMode("z", "Заочная"),

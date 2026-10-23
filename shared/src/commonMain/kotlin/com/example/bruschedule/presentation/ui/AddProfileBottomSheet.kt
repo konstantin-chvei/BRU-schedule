@@ -80,7 +80,7 @@ fun AddProfileBottomSheet(
             Text(
                 when {
                     hasBruCatalog -> "Ищите группу или преподавателя в каталоге rasp.bru.by. Для других вузов добавьте открытую HTML-страницу расписания напрямую. Сохранённые пары доступны офлайн."
-                    hasBsuCatalog -> "Для БГУ поиск сканирует страницы факультетов, HTML-таблицы и открытые Google Sheets. Выберите группу из результатов; файлы PDF, Excel, Word и динамические расписания требуют отдельных адаптеров."
+                    hasBsuCatalog -> "Для БГУ поиск сканирует страницы факультетов, HTML-таблицы и открытые Google Sheets. Для Биофака можно искать по односимвольному коду группы; PDF, Excel, Word и динамические расписания требуют отдельных адаптеров."
                     else -> "Вуз: ${university.name}. Каталог этого сайта пока не подключён. Вставьте прямую HTTPS-ссылку на открытую HTML-страницу с таблицей расписания; страницы, которые строятся только JavaScript, не поддерживаются."
                 },
                 color = BruColors.muted,
@@ -127,7 +127,10 @@ fun AddProfileBottomSheet(
             if (hasProfileCatalog) {
                 Button(
                     onClick = { onSearch(selectedType, query.trim()) },
-                    enabled = query.trim().length >= 2 && !searchState.loading,
+                    enabled = !searchState.loading && (
+                        query.trim().length >= 2 ||
+                            hasBsuCatalog && selectedType == ScheduleProfileType.GROUP && query.trim().length == 1
+                        ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),

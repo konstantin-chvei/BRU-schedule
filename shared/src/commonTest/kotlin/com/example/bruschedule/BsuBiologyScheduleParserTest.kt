@@ -246,6 +246,69 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
+    fun biologyCatalogueFindsASingleSymbolGroupWithoutMatchingLongerCodes() = runTest {
+        val indexUrl = "https://bsu.bio/schedule.php?study=d&course=1&date=2026-10-19"
+        val requested = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return when (url) {
+                    BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL -> "<html><body>catalogue</body></html>"
+                    indexUrl -> """
+                        <html><body>
+                          <a href="/schedule.php?study=d&amp;course=1&amp;group=41&amp;date=2026-10-19">Группа 41</a>
+                          <a href="/schedule.php?study=d&amp;course=1&amp;group=1&amp;date=2026-10-19">Группа 1</a>
+                        </body></html>
+                    """.trimIndent()
+                    else -> "<html><body>no matching groups</body></html>"
+                }
+            }
+        }
+        val fixedClock = object : Clock {
+            override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
+        }
+
+        val matches = BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
+            .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "1") { }
+
+        assertEquals(1, matches.size)
+        assertEquals("Группа 1", matches.single().name)
+        assertEquals("bio-group-number:1", matches.single().sourceKey)
+        assertEquals(
+            "https://bsu.bio/schedule.php?study=d&course=1&group=1&date=2026-10-19",
+            matches.single().sourceUrl,
+        )
+        assertTrue(requested.contains(indexUrl))
+        assertTrue(requested.all { it.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL) })
+
+        val candidate = matches.single()
+        val profile = ScheduleProfile(
+            id = "bsu-bio-single-symbol-1",
+            type = ScheduleProfileType.GROUP,
+            name = candidate.name,
+            sourceUrl = candidate.sourceUrl,
+            sourceKey = candidate.sourceKey,
+            universityId = UniversityIds.BSU,
+        )
+        val lessons = BsuBiologyScheduleHtmlParser().parse(
+            profile,
+            """
+                <div class="schedule-heading"><h2>Группа №1 — Первый курс</h2><div class="week">19–25 октября 2026</div></div>
+                <section class="day"><h2 class="day-title">Понедельник</h2>
+                  <div class="lesson"><div class="lesson-time"><div class="lesson-number">1 пара</div><div class="lesson-hours">09:00-10:25</div></div>
+                    <div class="lesson-main"><div class="lesson-entry">
+                      <div class="discipline-line lesson-type-practice"><span class="discipline">Физическая культура</span><span class="lesson-type">Практика</span></div>
+                    </div></div>
+                  </div>
+                </section>
+            """.trimIndent(),
+            LocalDate(2026, 10, 19),
+        )
+        assertEquals("Физическая культура", lessons.single().subjectName)
+        assertTrue(lessons.single().sourceKey.contains("bio:1:"))
+    }
+
+    @Test
     fun biologyCataloguePublishesMatchingGroupsBeforeTheRemainingCoursePagesFinish() = runTest {
         val indexUrl = "https://bsu.bio/schedule.php?study=d&course=3&date=2026-10-19"
         val releaseRemainingPages = CompletableDeferred<Unit>()
