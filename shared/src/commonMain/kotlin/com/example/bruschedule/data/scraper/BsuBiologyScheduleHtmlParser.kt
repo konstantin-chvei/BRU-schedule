@@ -140,7 +140,8 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
 
     fun isBiologyProfile(profile: ScheduleProfile): Boolean =
         profile.sourceKey?.let { sourceKey ->
-            sourceKey.startsWith(BIO_GROUP_SOURCE_KEY_PREFIX) ||
+            sourceKey == BIOLOGY_FACULTY_SOURCE_KEY ||
+                sourceKey.startsWith(BIO_GROUP_SOURCE_KEY_PREFIX) ||
                 sourceKey.startsWith(BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX)
         } == true || profile.sourceUrl?.let { sourceUrl ->
             sourceUrl.contains(BIOLOGY_HOST_PATH, ignoreCase = true) ||
@@ -158,7 +159,9 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         html: String,
         referenceDate: LocalDate,
     ): List<Lesson> {
-        val targetTeacher = BsuTeacherProfileSourceKey.teacherName(profile.sourceKey)
+        val rawSourceKey = profile.sourceKey?.takeIf(String::isNotBlank)
+        val targetTeacher = BsuTeacherProfileSourceKey.teacherName(rawSourceKey)
+            ?: rawSourceKey?.takeIf { it !in BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames }
             ?: profile.name
         val markers = TEACHER_PAGE_MARKER.findAll(html).toList()
         val lessons = if (markers.isNotEmpty()) {
@@ -697,6 +700,7 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
     private fun hasWeeklyEnvelope(html: String): Boolean = WEEK_MARKER.containsMatchIn(html)
 
     companion object {
+        const val BIOLOGY_FACULTY_SOURCE_KEY = "Биологический факультет"
         const val BIOLOGY_SCHEDULE_URL = "https://bsu.bio/schedule.php"
         const val BIOLOGY_HOST_PATH = "bio.bsu.by/schedule"
         const val BIOLOGY_GROUP_PAGE_PATH = "bsu.bio/schedule.php"

@@ -176,7 +176,9 @@ private fun parseFacultyTeacherSchedule(
     genericParser: GenericHtmlScheduleParser,
     preferGeneric: Boolean,
 ): List<Lesson> {
-    val teacherName = BsuTeacherProfileSourceKey.teacherName(profile.sourceKey)
+    val rawSourceKey = profile.sourceKey?.takeIf(String::isNotBlank)
+    val teacherName = BsuTeacherProfileSourceKey.teacherName(rawSourceKey)
+        ?: rawSourceKey?.takeIf { it !in BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames }
         ?: profile.name
 
     fun matching(lessons: List<Lesson>): List<Lesson> = lessons

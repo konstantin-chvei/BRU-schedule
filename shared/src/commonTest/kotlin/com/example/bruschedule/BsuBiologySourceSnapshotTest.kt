@@ -58,6 +58,16 @@ class BsuBiologySourceSnapshotTest {
         val biologyParser = BsuBiologyScheduleHtmlParser()
 
         assertTrue(biologyParser.isBiologyProfile(profile))
+        assertTrue(
+            biologyParser.isBiologyProfile(
+                profile.copy(
+                    type = ScheduleProfileType.TEACHER,
+                    name = "Иванова И.И.",
+                    sourceUrl = "https://konstantin-chvei.github.io/BRU-schedule/schedule-data/universities/bsu/schedules/teachers/ivanova-ii.html",
+                    sourceKey = BsuBiologyScheduleHtmlParser.BIOLOGY_FACULTY_SOURCE_KEY,
+                ),
+            ),
+        )
         assertTrue(biologyParser.hasScheduleGrid(LEGACY_GROUP_41_HTML))
         val lessons = BsuScheduleHtmlParser().parse(profile, LEGACY_GROUP_41_HTML, LocalDate(2026, 10, 19))
 
