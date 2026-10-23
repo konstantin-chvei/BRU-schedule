@@ -41,7 +41,7 @@ class ScheduleErrorInfoTest {
             ),
         )
 
-        assertTrue(error.message.contains("безопасности соединения"))
+        assertTrue(error.message.contains("безопасность соединения"))
         assertTrue(error.message.contains("данные не изменены"))
         assertFalse(error.message.contains("https://"))
         assertTrue(error.code.contains("TLS"))
