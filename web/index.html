@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1426">
+  <meta name="theme-color" content="#0A0D12">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Расписание">
-  <meta name="description" content="Расписание университетов из статического GitHub-каталога. Доступно офлайн после первого поиска.">
+  <meta name="description" content="Расписание, дедлайны и настройки — мобильное приложение для iPhone и iPad.">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <link rel="icon" href="./icons/icon-192.png" type="image/png">
@@ -15,80 +15,9 @@
   <title>Расписание</title>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="./" aria-label="Расписание — главная">
-      <span class="brand-mark" aria-hidden="true">▦</span>
-      <span>Расписание</span>
-    </a>
-    <a class="install-link" href="./ios-install.html">На экран «Домой»</a>
-  </header>
-
-  <main class="shell">
-    <section class="hero">
-      <p class="eyebrow">РАСПИСАНИЯ УНИВЕРСИТЕТОВ</p>
-      <h1>Найдите своё расписание</h1>
-      <p class="hero-copy">Введите группу или преподавателя. Данные берутся из подготовленных файлов GitHub — приложение не обращается к сайтам вузов.</p>
-    </section>
-
-    <section class="search-card" aria-labelledby="search-title">
-      <h2 id="search-title">Поиск</h2>
-      <form id="search-form">
-        <label for="university">Университет</label>
-        <select id="university" name="university" required>
-          <option value="bru">Белорусско-Российский университет</option>
-          <option value="bsu">Белорусский государственный университет</option>
-        </select>
-
-        <div class="segmented" role="group" aria-label="Что искать">
-          <button type="button" class="segment is-active" data-type="groups" aria-pressed="true">Группа</button>
-          <button type="button" class="segment" data-type="teachers" aria-pressed="false">Преподаватель</button>
-        </div>
-        <input id="profile-type" type="hidden" value="groups">
-
-        <label for="query" id="query-label">Код или название группы</label>
-        <div class="search-row">
-          <input id="query" name="query" type="search" placeholder="Например, МПР-261 или 41" autocomplete="off" required>
-          <button id="search-button" class="primary-button" type="submit">Найти</button>
-        </div>
-        <p id="source-hint" class="field-hint">Поиск загружает только компактный индекс GitHub и сохраняет его для повторных запросов.</p>
-      </form>
-      <div id="status" class="status" role="status" aria-live="polite">Готово к поиску.</div>
-    </section>
-
-    <section id="results-section" class="results-section" hidden>
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">КАТАЛОГ GITHUB</p>
-          <h2>Совпадения</h2>
-        </div>
-        <span id="result-count" class="count-pill">0</span>
-      </div>
-      <div id="results" class="results-list"></div>
-    </section>
-
-    <section id="schedule-section" class="schedule-section" hidden>
-      <div class="section-heading schedule-heading">
-        <div>
-          <p class="eyebrow" id="schedule-subtitle">РАСПИСАНИЕ</p>
-          <h2 id="schedule-title">Группа</h2>
-        </div>
-        <button id="close-schedule" class="icon-button" type="button" aria-label="Закрыть расписание">×</button>
-      </div>
-      <div id="schedule-meta" class="schedule-meta"></div>
-      <div id="schedule-content" class="schedule-content"></div>
-    </section>
-
-    <section class="offline-note">
-      <span class="offline-dot" aria-hidden="true"></span>
-      <p><strong>Офлайн:</strong> после первого поиска при подключении к интернету приложение кэширует интерфейс, списки и открытые расписания.</p>
-    </section>
-  </main>
-
-  <footer class="footer">
-    <span>Расписание · каталог GitHub</span>
-    <a href="./ios-install.html">Инструкция для iPhone и iPad</a>
-  </footer>
-
+  <div id="app" class="theme-blue"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./schedule-engine.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
