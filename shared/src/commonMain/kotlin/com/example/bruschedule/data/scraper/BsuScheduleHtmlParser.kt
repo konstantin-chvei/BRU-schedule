@@ -527,7 +527,7 @@ class BsuScheduleHtmlParser(
                 row.any { cell -> cell?.text()?.let(::isTimeHeader) == true } &&
                     row.any { cell -> cell?.text()?.let(::isDayHeader) == true }
             }
-            if (headerRow < 0) return@mapNotNull null
+            if (headerRow < 0 || groupRow > headerRow) return@mapNotNull null
             val headerCells = rows[headerRow]
             val timeColumn = headerCells.indexOfFirst { cell -> cell?.text()?.let(::isTimeHeader) == true }
             val dayColumn = headerCells.indexOfFirst { cell -> cell?.text()?.let(::isWeekdayHeader) == true }
