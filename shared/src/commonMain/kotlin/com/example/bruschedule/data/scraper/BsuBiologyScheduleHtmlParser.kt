@@ -173,7 +173,6 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
                     start = start,
                     end = end,
                     lines = lines.subList(timeIndex + 1, boundary),
-                    ordinalBase = result.size,
                 )
             }
             index = boundary
@@ -189,7 +188,6 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         start: String,
         end: String,
         lines: List<String>,
-        ordinalBase: Int,
     ): List<Lesson> {
         val separators = lines.indices.filter { lines[it] == "/" }
         return separators.mapIndexedNotNull { separatorIndex, separator ->
@@ -218,7 +216,7 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
                 .filter(String::isNotBlank)
                 .joinToString(" · ")
             val type = lessonType(lines[typeIndex])
-            val ordinal = ordinalBase + separatorIndex
+            val ordinal = separatorIndex
             val sourceKey = "${profile.id}|$date|$slot|$start-$end|bio:$groupId:$ordinal"
             Lesson(
                 id = "web:$sourceKey",
