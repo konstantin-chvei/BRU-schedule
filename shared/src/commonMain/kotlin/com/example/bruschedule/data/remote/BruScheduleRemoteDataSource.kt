@@ -10,11 +10,10 @@ import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
@@ -145,21 +144,37 @@ class BruScheduleRemoteDataSource(
             "Период расписания Биофака превышает допустимый диапазон"
         }
         val responses = coroutineScope {
-            val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
-            mondays.map { week ->
-                async(start = CoroutineStart.UNDISPATCHED) {
-                    semaphore.withPermit {
-                        try {
-                            week to transport.get(withWeekDate(sourceUrl, week.toString()))
+            val pendingWeeks = Channel<kotlinx.datetime.LocalDate>(capacity = mondays.size)
+            mondays.forEach { pendingWeeks.send(it) }
+            pendingWeeks.close()
+            val completedWeeks = Channel<Pair<kotlinx.datetime.LocalDate, Result<String>>>()
+            val workers = List(minOf(MAX_BIOLOGY_REQUESTS_IN_FLIGHT, mondays.size)) {
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    for (week in pendingWeeks) {
+                        val result = try {
+                            Result.success(transport.get(withWeekDate(sourceUrl, week.toString())))
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (failure: Throwable) {
-                            val detail = failure.message?.takeIf(String::isNotBlank) ?: failure.toString()
-                            error("Не удалось загрузить расписание Биофака на неделю $week: $detail")
+                            Result.failure(failure)
                         }
+                        completedWeeks.send(week to result)
                     }
                 }
-            }.awaitAll()
+            }
+            val pages = mutableListOf<Pair<kotlinx.datetime.LocalDate, String>>()
+            repeat(mondays.size) {
+                val (week, result) = completedWeeks.receive()
+                val html = result.getOrElse { failure ->
+                    val detail = failure.message?.takeIf(String::isNotBlank) ?: failure.toString()
+                    error("Не удалось загрузить расписание Биофака на неделю $week: $detail")
+                }
+                pages += week to html
+            }
+            workers.joinAll()
+            pendingWeeks.close()
+            completedWeeks.close()
+            pages
         }
         return biologyScheduleParser.combineWeeklyPages(responses)
     }
