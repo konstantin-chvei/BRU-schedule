@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "bsu",
+  "name": "Белорусский государственный университет",
+  "website_url": "https://bsu.by",
+  "generated_at": "2026-10-23T21:26:29Z",
+  "profiles": {
+    "groups": 1,
+    "teachers": 0
+  }
+}

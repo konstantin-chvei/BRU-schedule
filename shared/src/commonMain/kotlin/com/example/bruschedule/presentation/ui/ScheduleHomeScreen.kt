@@ -32,7 +32,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -93,9 +92,6 @@ fun ScheduleHomeScreen(
     var deadlineLessonRecurrence by remember { mutableStateOf(LessonRecurrence.NONE) }
     var conflictToDelete by remember { mutableStateOf<Lesson?>(null) }
     var showUniversityPicker by remember { mutableStateOf(false) }
-    var showAddUniversity by remember { mutableStateOf(false) }
-    var newUniversityName by remember { mutableStateOf("") }
-    var newUniversityUrl by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -230,10 +226,6 @@ fun ScheduleHomeScreen(
             university = state.selectedUniversity,
             onClose = { addProfileVisible = false },
             onSearch = viewModel::searchProfiles,
-            onAddManual = { type, name, url ->
-                viewModel.saveManualProfile(type, name, url)
-                addProfileVisible = false
-            },
             onSelectCandidate = { candidate ->
                 viewModel.addProfileCandidate(candidate)
                 addProfileVisible = false
@@ -260,14 +252,8 @@ fun ScheduleHomeScreen(
                             },
                         )
                     }
-                    TextButton(
-                        onClick = {
-                            showUniversityPicker = false
-                            showAddUniversity = true
-                        },
-                    ) { Text("＋ Добавить вуз", color = BruColors.cyan) }
                     Text(
-                        "Добавьте название и сайт вуза; затем укажите прямую ссылку на HTML-страницу расписания.",
+                        "Поиск расписаний доступен только для вузов, внесённых в каталог GitHub.",
                         color = BruColors.dim,
                         fontSize = 10.sp,
                         lineHeight = 15.sp,
@@ -276,56 +262,6 @@ fun ScheduleHomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showUniversityPicker = false }) { Text("Готово", color = BruColors.cyan) }
-            },
-            containerColor = BruColors.surface,
-            titleContentColor = BruColors.foreground,
-            textContentColor = BruColors.muted,
-        )
-    }
-
-    if (showAddUniversity) {
-        AlertDialog(
-            onDismissRequest = { showAddUniversity = false },
-            title = { Text("Добавить вуз") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = newUniversityName,
-                        onValueChange = { newUniversityName = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Название вуза") },
-                        placeholder = { Text("Например, БГУ") },
-                    )
-                    OutlinedTextField(
-                        value = newUniversityUrl,
-                        onValueChange = { newUniversityUrl = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Сайт вуза · HTTPS") },
-                        placeholder = { Text("https://bsu.by") },
-                    )
-                    Text(
-                        "Сайт сохранится в списке. Страницу конкретной группы добавьте следующим шагом.",
-                        color = BruColors.muted,
-                        fontSize = 10.sp,
-                        lineHeight = 15.sp,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = newUniversityName.trim().length >= 2 && newUniversityUrl.trim().startsWith("https://", ignoreCase = true),
-                    onClick = {
-                        viewModel.addUniversity(newUniversityName, newUniversityUrl)
-                        newUniversityName = ""
-                        newUniversityUrl = ""
-                        showAddUniversity = false
-                    },
-                ) { Text("Добавить", color = BruColors.cyan) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddUniversity = false }) { Text("Отмена", color = BruColors.muted) }
             },
             containerColor = BruColors.surface,
             titleContentColor = BruColors.foreground,
@@ -485,9 +421,9 @@ private fun UniversitySelectionPanel(
                 )
                 Text(
                     when (university.sourceType) {
-                        UniversitySourceType.BRU_CATALOG -> "КАТАЛОГ ПОДКЛЮЧЁН"
-                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "ПОИСК ПО САЙТАМ ФАКУЛЬТЕТОВ"
-                        UniversitySourceType.DIRECT_HTML -> "ПРОФИЛИ ПО ПРЯМОЙ ССЫЛКЕ"
+                        UniversitySourceType.BRU_CATALOG -> "КАТАЛОГ GITHUB · БРУ"
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "КАТАЛОГ GITHUB · БГУ"
+                        UniversitySourceType.DIRECT_HTML -> "КАТАЛОГ GITHUB НЕ НАСТРОЕН"
                     },
                     color = BruColors.dim,
                     fontSize = 8.sp,
@@ -521,9 +457,9 @@ private fun UniversityChoiceRow(
                 Text(university.name, color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     when (university.sourceType) {
-                        UniversitySourceType.BRU_CATALOG -> "Каталог и адаптер подключены"
-                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "Поиск групп в доступных HTML-страницах и Google Sheets"
-                        UniversitySourceType.DIRECT_HTML -> "Источник расписания задаётся ссылкой"
+                        UniversitySourceType.BRU_CATALOG -> "Опубликованные расписания и списки групп в GitHub"
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "Опубликованные расписания и списки групп в GitHub"
+                        UniversitySourceType.DIRECT_HTML -> "Каталог GitHub для этого вуза не настроен"
                     },
                     color = BruColors.muted,
                     fontSize = 9.sp,

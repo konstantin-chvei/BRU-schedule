@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -36,7 +37,6 @@ import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.domain.model.University
-import com.example.bruschedule.domain.model.UniversitySourceType
 import com.example.bruschedule.presentation.ProfileSearchUiState
 import com.example.bruschedule.ui.theme.BruColors
 
@@ -47,17 +47,10 @@ fun AddProfileBottomSheet(
     university: University,
     onClose: () -> Unit,
     onSearch: (ScheduleProfileType, String) -> Unit,
-    onAddManual: (ScheduleProfileType, String, String?) -> Unit,
     onSelectCandidate: (ProfileCandidate) -> Unit,
 ) {
-    val hasBruCatalog = university.sourceType == UniversitySourceType.BRU_CATALOG
-    val hasBsuCatalog = university.sourceType == UniversitySourceType.BSU_HTML_AND_SHEETS
-    val hasProfileCatalog = hasBruCatalog || hasBsuCatalog
-    var selectedType by remember(university.id) {
-        mutableStateOf(if (hasBsuCatalog) ScheduleProfileType.GROUP else searchState.type)
-    }
+    var selectedType by remember(university.id) { mutableStateOf(searchState.type) }
     var query by remember(university.id) { mutableStateOf(searchState.query) }
-    var sourceUrl by remember(university.id) { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -75,22 +68,20 @@ fun AddProfileBottomSheet(
                 .padding(bottom = 26.dp),
             verticalArrangement = Arrangement.spacedBy(13.dp),
         ) {
-            Text("НОВЫЙ ПРОФИЛЬ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
-            Text("Подключить расписание", color = BruColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+            Text("НОВОЕ РАСПИСАНИЕ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
+            Text("Найти профиль", color = BruColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                when {
-                    hasBruCatalog -> "Ищите группу или преподавателя в каталоге rasp.bru.by. Для других вузов добавьте открытую HTML-страницу расписания напрямую. Сохранённые пары доступны офлайн."
-                    hasBsuCatalog -> "Для БГУ поиск проверяет расписания факультетов отдельно. Профиль преподавателя объединяет найденные источники; если сайт не публикует открытое расписание, преподаватель не появится в поиске. Для Биофака доступны односимвольные коды групп."
-                    else -> "Вуз: ${university.name}. Каталог этого сайта пока не подключён. Вставьте прямую HTTPS-ссылку на открытую HTML-страницу с таблицей расписания; страницы, которые строятся только JavaScript, не поддерживаются."
-                },
+                "${university.name}. Введите код группы или имя преподавателя. Поиск читает опубликованный каталог GitHub — сайты вузов приложение не опрашивает.",
                 color = BruColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
             )
-            if (hasProfileCatalog) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ProfileTypeChip("Группа", selectedType == ScheduleProfileType.GROUP) { selectedType = ScheduleProfileType.GROUP }
-                    ProfileTypeChip("Преподаватель", selectedType == ScheduleProfileType.TEACHER) { selectedType = ScheduleProfileType.TEACHER }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProfileTypeChip("Группа", selectedType == ScheduleProfileType.GROUP) {
+                    selectedType = ScheduleProfileType.GROUP
+                }
+                ProfileTypeChip("Преподаватель", selectedType == ScheduleProfileType.TEACHER) {
+                    selectedType = ScheduleProfileType.TEACHER
                 }
             }
             OutlinedTextField(
@@ -100,144 +91,54 @@ fun AddProfileBottomSheet(
                 textStyle = typographyTextStyle(TypographyRole.BODY),
                 singleLine = true,
                 label = {
-                    Text(
-                        when {
-                            hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Номер группы"
-                            hasBruCatalog -> "Фамилия преподавателя"
-                            hasBsuCatalog && selectedType == ScheduleProfileType.GROUP -> "Код или название группы"
-                            selectedType == ScheduleProfileType.GROUP -> "Название группы или профиля"
-                            else -> "Название преподавателя или профиля"
-                        },
-                    )
+                    Text(if (selectedType == ScheduleProfileType.GROUP) "Код или название группы" else "Имя преподавателя")
                 },
                 placeholder = {
-                    Text(
-                        when {
-                            hasBruCatalog && selectedType == ScheduleProfileType.GROUP -> "Например, МПР-261"
-                            hasBruCatalog -> "Например, Агеева"
-                            hasBsuCatalog && selectedType == ScheduleProfileType.GROUP -> "Например, 1-11 или 1 группа А"
-                            selectedType == ScheduleProfileType.GROUP -> "Например, ИС-241"
-                            else -> "Фамилия преподавателя"
-                        },
-                    )
+                    Text(if (selectedType == ScheduleProfileType.GROUP) "Например, МПР-261 или 41" else "Например, Агеева Т.Н.")
                 },
                 shape = RoundedCornerShape(14.dp),
             )
-
-            if (hasProfileCatalog) {
-                Button(
-                    onClick = { onSearch(selectedType, query.trim()) },
-                    enabled = !searchState.loading && (
-                        query.trim().length >= 2 ||
-                            hasBsuCatalog && selectedType == ScheduleProfileType.GROUP && query.trim().length == 1
-                        ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),
-                ) {
-                    if (searchState.loading) {
-                        CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = BruColors.background)
-                        Spacer(Modifier.width(9.dp))
-                    }
-                    Text(
-                        when {
-                            searchState.loading && hasBsuCatalog -> "Ищем расписания факультетов"
-                            searchState.loading -> "Ищем в каталоге"
-                            hasBsuCatalog && selectedType == ScheduleProfileType.TEACHER -> "Искать преподавателя БГУ"
-                            hasBsuCatalog -> "Искать группу БГУ"
-                            else -> "Искать в каталоге"
-                        },
-                        fontWeight = FontWeight.SemiBold,
+            Button(
+                onClick = { onSearch(selectedType, query.trim()) },
+                enabled = !searchState.loading && query.trim().isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),
+            ) {
+                if (searchState.loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.width(18.dp).height(18.dp),
+                        strokeWidth = 2.dp,
+                        color = BruColors.background,
                     )
+                    Spacer(Modifier.width(9.dp))
                 }
-
-                searchState.error?.let { error ->
-                    ScheduleErrorPanel(
-                        error = error,
-                        onRetry = { onSearch(selectedType, query.trim()) },
-                    )
-                }
-                if (searchState.loading && searchState.candidates.isNotEmpty()) {
-                    Text(
-                        "Совпадения уже доступны — список пополняется по мере загрузки факультетов.",
-                        color = BruColors.muted,
-                        fontSize = 10.sp,
-                        lineHeight = 14.sp,
-                    )
-                }
-                searchState.candidates.forEach { candidate ->
-                    ProfileCandidateRow(
-                        candidate = candidate,
-                        enabled = !searchState.loading || selectedType == ScheduleProfileType.GROUP,
-                        onClick = { onSelectCandidate(candidate) },
-                    )
-                }
-                Text(
-                    if (searchState.candidates.isNotEmpty()) "ИЛИ ДОБАВИТЬ ПО ССЫЛКЕ"
-                    else "Если профиль не найден, его можно добавить вручную.",
-                    color = BruColors.dim,
-                    fontSize = 9.sp,
-                    letterSpacing = 0.8.sp,
-                )
-            } else {
-                Text(
-                    "УКАЖИТЕ ПРЯМУЮ ССЫЛКУ НА РАСПИСАНИЕ",
-                    color = BruColors.dim,
-                    fontSize = 9.sp,
-                    letterSpacing = 0.8.sp,
-                )
+                Text(if (searchState.loading) "Ищем в каталоге GitHub" else "Искать расписание", fontWeight = FontWeight.SemiBold)
             }
 
-            OutlinedTextField(
-                value = sourceUrl,
-                onValueChange = { sourceUrl = it },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = typographyTextStyle(TypographyRole.BODY),
-                singleLine = true,
-                label = {
-                    Text(
-                        when {
-                            hasBruCatalog -> "Ссылка на rasp.bru.by · необязательно"
-                            hasBsuCatalog -> "Ссылка на HTML или Google Sheets · для ручного добавления"
-                            else -> "Прямая ссылка на HTML-страницу · обязательно"
-                        },
-                    )
-                },
-                placeholder = {
-                    Text(
-                        when {
-                            hasBruCatalog -> "https://rasp.bru.by/…"
-                            hasBsuCatalog -> "https://mmf.bsu.by/… или docs.google.com/…"
-                            else -> "https://university.by/schedule/…"
-                        },
-                    )
-                },
-                shape = RoundedCornerShape(14.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onClose, modifier = Modifier.weight(1f)) {
-                    Text("Отмена", color = BruColors.muted)
-                }
-                Button(
-                    onClick = { onAddManual(selectedType, query.trim(), sourceUrl.trim().ifBlank { null }) },
-                    enabled = query.trim().isNotBlank() && (hasBruCatalog || sourceUrl.trim().startsWith("https://", ignoreCase = true)),
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BruColors.elevatedSurface, contentColor = BruColors.cyan),
-                ) {
-                    Text("Добавить вручную", fontWeight = FontWeight.SemiBold)
-                }
+            searchState.error?.let { error ->
+                ScheduleErrorPanel(error = error, onRetry = { onSearch(selectedType, query.trim()) })
+            }
+            searchState.candidates.forEach { candidate ->
+                ProfileCandidateRow(candidate = candidate, onClick = { onSelectCandidate(candidate) })
+            }
+            if (!searchState.loading && searchState.candidates.isEmpty() && query.isNotBlank() && searchState.error == null) {
+                Text(
+                    "В опубликованном каталоге совпадений нет. Проверьте ввод или дождитесь, пока расписание добавят в GitHub.",
+                    color = BruColors.muted,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                )
             }
             Text(
-                when {
-                    hasBruCatalog -> "Для БРУ источник обновляется через каталог; прямые ссылки можно заменить позднее."
-                    hasBsuCatalog -> "Профиль сохраняется локально. Загрузка и обновление запускаются вручную кнопкой «Обновить» в настройках."
-                    else -> "Если сайт изменит разметку или требует входа, расписание может не загрузиться."
-                },
+                "Пары загружаются только после явного нажатия «Обновить» в настройках. По ссылке добавить расписание нельзя.",
                 color = BruColors.dim,
                 fontSize = 10.sp,
                 lineHeight = 15.sp,
             )
+            TextButton(onClick = onClose, modifier = Modifier.align(Alignment.End)) {
+                Text("Закрыть", color = BruColors.muted)
+            }
         }
     }
 }
@@ -250,15 +151,20 @@ private fun ProfileTypeChip(label: String, selected: Boolean, onClick: () -> Uni
         color = if (selected) BruColors.indigo.copy(alpha = 0.14f) else BruColors.elevatedSurface,
         border = BorderStroke(1.dp, if (selected) BruColors.indigo else BruColors.outline),
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp), color = if (selected) BruColors.foreground else BruColors.muted, fontSize = 11.sp)
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+            color = if (selected) BruColors.foreground else BruColors.muted,
+            fontSize = 11.sp,
+        )
     }
 }
 
 @Composable
-private fun ProfileCandidateRow(candidate: ProfileCandidate, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        enabled = enabled,
+        enabled = candidate.scheduleAvailable,
         shape = RoundedCornerShape(14.dp),
         color = BruColors.elevatedSurface,
         border = BorderStroke(1.dp, BruColors.outline),
@@ -269,10 +175,28 @@ private fun ProfileCandidateRow(candidate: ProfileCandidate, enabled: Boolean = 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(candidate.name, color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(candidate.subtitle.ifBlank { "rasp.bru.by" }, color = BruColors.muted, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    candidate.name,
+                    color = if (candidate.scheduleAvailable) BruColors.foreground else BruColors.muted,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    candidate.subtitle.ifBlank { "Источник GitHub" },
+                    color = BruColors.muted,
+                    fontSize = 10.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text("＋", modifier = Modifier.padding(start = 10.dp), color = BruColors.cyan, fontSize = 18.sp)
+            Text(
+                if (candidate.scheduleAvailable) "＋" else "…",
+                modifier = Modifier.padding(start = 10.dp),
+                color = if (candidate.scheduleAvailable) BruColors.cyan else BruColors.dim,
+                fontSize = 18.sp,
+            )
         }
     }
 }

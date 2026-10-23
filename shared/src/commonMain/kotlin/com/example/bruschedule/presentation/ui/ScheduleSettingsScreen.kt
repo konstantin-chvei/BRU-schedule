@@ -121,6 +121,23 @@ fun ScheduleSettingsScreen(
         )
 
         Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
+            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("ЕЖЕДНЕВНЫЕ СООБЩЕНИЯ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+                Text(state.dailyMessage, color = BruColors.foreground, fontSize = 12.sp, lineHeight = 18.sp)
+                Text("Список сохраняется на устройстве. Проверка GitHub запускается только по кнопке.", color = BruColors.dim, fontSize = 9.sp, lineHeight = 13.sp)
+                OutlinedButton(
+                    onClick = viewModel::refreshDailyMessages,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BruColors.cyan),
+                    border = BorderStroke(1.dp, BruColors.cyan.copy(alpha = 0.5f)),
+                ) {
+                    Text("Проверить обновления фраз", fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+
+        Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
             Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
                 Text("УПРАВЛЕНИЕ РАСПИСАНИЕМ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
                 Box {
@@ -201,7 +218,7 @@ fun ScheduleSettingsScreen(
                 JournalLine("Последняя попытка", sync?.lastAttemptAtEpochMillis?.let(::formatSyncTimestamp) ?: "Ещё не запускали")
                 JournalLine("Локальный сейв", sync?.previousSnapshotAtEpochMillis?.let(::formatSyncTimestamp) ?: "Пока не создан")
                 Text(
-                    "Активные расписания не обновляются при запуске. Новый профиль загружается один раз при добавлении.",
+                    "Профиль не загружается автоматически. Для обновления нажмите кнопку ниже.",
                     color = BruColors.dim,
                     fontSize = 9.sp,
                     lineHeight = 13.sp,

@@ -130,6 +130,8 @@ data class ProfileCandidate(
     val sourceKey: String,
     val subtitle: String = "",
     val universityId: String = UniversityIds.BRU,
+    /** False when the group/person is indexed but its current schedule file has not been published. */
+    val scheduleAvailable: Boolean = true,
 )
 
 data class ProfileSyncState(

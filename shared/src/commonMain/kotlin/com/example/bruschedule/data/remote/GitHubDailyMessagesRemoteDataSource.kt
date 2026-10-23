@@ -2,11 +2,11 @@ package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.domain.repository.DailyMessagesRemoteDataSource
 
-/** Reads the plain-text daily list through GitHub's Contents API; no app release is needed to edit it. */
+/** Reads the public static daily-message list from GitHub Pages; no app release is needed to edit it. */
 class GitHubDailyMessagesRemoteDataSource(
     private val transport: HtmlTransport,
 ) : DailyMessagesRemoteDataSource {
-    override suspend fun fetchMessages(): List<String> = transport.get(DAILY_MESSAGES_API_URL)
+    override suspend fun fetchMessages(): List<String> = transport.get(DAILY_MESSAGES_URL)
         .lineSequence()
         .map { it.removePrefix("\uFEFF").trim() }
         .filter { it.isNotEmpty() && !it.startsWith('#') }
@@ -14,7 +14,7 @@ class GitHubDailyMessagesRemoteDataSource(
         .toList()
 
     companion object {
-        const val DAILY_MESSAGES_API_URL =
-            "https://api.github.com/repos/konstantin-chvei/BRU-schedule/contents/content/daily-messages.txt?ref=master"
+        const val DAILY_MESSAGES_URL =
+            "https://konstantin-chvei.github.io/BRU-schedule/content/daily-messages.txt"
     }
 }

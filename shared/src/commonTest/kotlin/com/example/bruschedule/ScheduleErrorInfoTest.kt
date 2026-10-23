@@ -27,7 +27,7 @@ class ScheduleErrorInfoTest {
         val legacy = ScheduleErrorInfo.decodeStored(
             "rasp.bru.by ответил кодом 404 при запросе https://rasp.bru.by/removed.html",
         )
-        assertTrue(legacy.message.contains("не найдена"))
+        assertTrue(legacy.message.contains("не нашёл файл"))
         assertFalse(legacy.message.contains("removed.html"))
         assertTrue(legacy.code.length < 50)
     }
@@ -41,7 +41,7 @@ class ScheduleErrorInfoTest {
             ),
         )
 
-        assertTrue(error.message.contains("безопасность соединения"))
+        assertTrue(error.message.contains("GitHub Pages"))
         assertTrue(error.message.contains("данные не изменены"))
         assertFalse(error.message.contains("https://"))
         assertTrue(error.code.contains("TLS"))
@@ -54,7 +54,7 @@ class ScheduleErrorInfoTest {
             IllegalStateException("Error Domain=NSURLErrorDomain Code=-1202"),
         )
 
-        assertTrue(error.message.contains("безопасность соединения"))
+        assertTrue(error.message.contains("GitHub Pages"))
         assertTrue(error.code.contains("TLS"))
     }
 
@@ -67,7 +67,7 @@ class ScheduleErrorInfoTest {
         val missing = ScheduleErrorInfo.fromThrowable(IllegalStateException("Группа МПР-261 не найдена в каталогах"))
 
         assertTrue(network.message.contains("не ответил вовремя"))
-        assertTrue(unavailableCatalog.message.contains("связаться с сервером"))
-        assertTrue(missing.message.contains("больше не найдено"))
+        assertTrue(unavailableCatalog.message.contains("связаться с GitHub Pages"))
+        assertTrue(missing.message.contains("больше не опубликован"))
     }
 }

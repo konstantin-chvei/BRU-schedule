@@ -11,7 +11,6 @@ import com.example.bruschedule.domain.model.TypographyPreferences
 import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.domain.model.University
 import com.example.bruschedule.domain.model.UniversityIds
-import com.example.bruschedule.domain.model.UniversitySourceType
 import com.example.bruschedule.domain.model.DefaultUniversities
 import com.example.bruschedule.domain.model.DomainIds
 import com.example.bruschedule.domain.model.DeadlineLinkType
@@ -75,11 +74,6 @@ import kotlinx.datetime.toLocalDateTime
 
 
 enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS }
-
-private val PUBLIC_HTTPS_URL = Regex(
-    """^https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$""",
-    RegexOption.IGNORE_CASE,
-)
 
 data class LessonUiItem(
     val lesson: Lesson,
@@ -175,6 +169,7 @@ class ScheduleViewModel(
     private val notice = MutableStateFlow<String?>(null)
     private val profileSearch = MutableStateFlow(ProfileSearchUiState())
     private var profileSearchJob: Job? = null
+    private var dailyMessageRefreshJob: Job? = null
     private val nowEpochMillis = MutableStateFlow(clock.now().toEpochMilliseconds())
     private val appearance = appearancePreferences.observe().stateIn(
         scope = viewModelScope,
@@ -412,9 +407,6 @@ class ScheduleViewModel(
             typographyPreferencesRepository.observe().collect { typography.value = it }
         }
         viewModelScope.launch {
-            dailyMessagesRepository.refresh()
-        }
-        viewModelScope.launch {
             combine(
                 schedules.observeProfiles(),
                 universityRepository.observeSelectedUniversityId(),
@@ -464,48 +456,6 @@ class ScheduleViewModel(
                 throw cancelled
             } catch (failure: Throwable) {
                 notice.value = errorNotice("Не удалось выбрать вуз", failure, "UNIVERSITY")
-            }
-        }
-    }
-
-    fun addUniversity(name: String, websiteUrl: String) {
-        val cleanName = name.trim()
-        val cleanUrl = websiteUrl.trim().trimEnd('/')
-        if (cleanName.length < 2) {
-            notice.value = "Введите название вуза"
-            return
-        }
-        if (!PUBLIC_HTTPS_URL.matches(cleanUrl)) {
-            notice.value = "Укажите публичную HTTPS-ссылку сайта вуза"
-            return
-        }
-        val existing = uiState.value.universities.firstOrNull {
-            it.name.equals(cleanName, ignoreCase = true) || it.websiteUrl.trimEnd('/').equals(cleanUrl, ignoreCase = true)
-        }
-        if (existing != null) {
-            selectUniversity(existing.id)
-            notice.value = "Этот вуз уже добавлен — выбран «${existing.name}»"
-            return
-        }
-
-        val university = University(
-            id = DomainIds.new("university"),
-            name = cleanName,
-            websiteUrl = cleanUrl,
-            sourceType = UniversitySourceType.DIRECT_HTML,
-        )
-        viewModelScope.launch {
-            try {
-                universityRepository.saveUniversity(university)
-                universityRepository.selectUniversity(university.id)
-                selectedProfileId.value = null
-                selectedDate.value = today()
-                profileSearch.value = ProfileSearchUiState()
-                notice.value = "Вуз добавлен. Теперь укажите прямую ссылку на HTML-страницу расписания."
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Throwable) {
-                notice.value = errorNotice("Не удалось добавить вуз", failure, "UNIVERSITY")
             }
         }
     }
@@ -668,6 +618,21 @@ class ScheduleViewModel(
         notice.value = null
     }
 
+    fun refreshDailyMessages() {
+        if (dailyMessageRefreshJob?.isActive == true) return
+        notice.value = "Проверяем обновления ежедневных фраз…"
+        dailyMessageRefreshJob = viewModelScope.launch {
+            try {
+                dailyMessagesRepository.refresh()
+                notice.value = "Проверка завершена. Используется последняя сохранённая версия фраз"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось проверить ежедневные фразы", failure, "DAILY")
+            }
+        }
+    }
+
     fun refreshSelectedProfile() {
         val id = selectedProfileId.value ?: uiState.value.selectedProfile?.id
         if (id == null) {
@@ -739,74 +704,13 @@ class ScheduleViewModel(
         }
     }
 
-    fun saveManualProfile(type: ScheduleProfileType, name: String, sourceUrl: String?) {
-        profileSearchJob?.cancel()
-        profileSearchJob = null
-        val cleanName = name.trim()
-        if (cleanName.isBlank()) {
-            notice.value = "Укажите название группы или расписания"
-            return
-        }
-        val university = uiState.value.selectedUniversity
-        val enteredUrl = sourceUrl?.trim()?.takeIf(String::isNotBlank)
-        val url = when (university.sourceType) {
-            UniversitySourceType.BRU_CATALOG -> {
-                val rootUrl = "https://rasp.bru.by"
-                if (enteredUrl != null &&
-                    !enteredUrl.startsWith("$rootUrl/", ignoreCase = true) &&
-                    !enteredUrl.equals(rootUrl, ignoreCase = true)
-                ) {
-                    notice.value = "Для БРУ можно добавить только ссылку rasp.bru.by"
-                    return
-                }
-                enteredUrl?.let { if (it.equals(rootUrl, ignoreCase = true)) "$rootUrl/" else it }
-            }
-            UniversitySourceType.BSU_HTML_AND_SHEETS,
-            UniversitySourceType.DIRECT_HTML -> {
-                if (enteredUrl == null) {
-                    notice.value = "Укажите прямую HTTPS-ссылку на таблицу расписания"
-                    return
-                }
-                if (!PUBLIC_HTTPS_URL.matches(enteredUrl)) {
-                    notice.value = "Ссылка на расписание должна быть публичной и начинаться с https://"
-                    return
-                }
-                enteredUrl
-            }
-        }
-        val id = DomainIds.new("profile")
-        val profile = ScheduleProfile(
-            id = id,
-            type = type,
-            name = cleanName,
-            sourceUrl = url,
-            sourceKey = cleanName,
-            universityId = university.id,
-        )
-        viewModelScope.launch {
-            try {
-                schedules.saveProfile(profile)
-                selectedProfileId.value = id
-                notice.value = "Профиль «$cleanName» добавлен · обновите расписание в настройках"
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Throwable) {
-                notice.value = errorNotice("Не удалось добавить расписание", failure, "PROFILE")
-            }
-        }
-    }
-
     fun searchProfiles(type: ScheduleProfileType, query: String) {
         profileSearchJob?.cancel()
         profileSearchJob = null
         val university = uiState.value.selectedUniversity
-        if (university.sourceType !in setOf(
-                UniversitySourceType.BRU_CATALOG,
-                UniversitySourceType.BSU_HTML_AND_SHEETS,
-            )
-        ) {
+        if (query.isBlank()) {
             profileSearch.value = ProfileSearchUiState(query = query, type = type)
-            notice.value = "Для этого вуза поиск профилей не подключён — добавьте расписание по прямой ссылке"
+            notice.value = "Введите код группы или имя преподавателя"
             return
         }
         profileSearch.value = ProfileSearchUiState(query = query, type = type, loading = true)
@@ -825,13 +729,8 @@ class ScheduleViewModel(
                 if (uiState.value.selectedUniversity.id != university.id) return@launch
                 profileSearch.value = ProfileSearchUiState(query, type, candidates = candidates)
                 if (candidates.isEmpty()) {
-                    notice.value = if (university.id == UniversityIds.BSU && type == ScheduleProfileType.TEACHER) {
-                        "Преподаватель не найден в доступных расписаниях факультетов. Проверьте ФИО"
-                    } else if (university.id == UniversityIds.BSU) {
-                        "Совпадений нет. Проверьте код группы или добавьте HTML, Sheets, PDF, XLSX, DOCX, DOC, XLS либо ZIP по ссылке"
-                    } else {
-                        "Совпадений не найдено — можно добавить профиль по ссылке вручную"
-                    }
+                    val profileLabel = if (type == ScheduleProfileType.GROUP) "группу" else "преподавателя"
+                    notice.value = "В опубликованном каталоге GitHub не найдена $profileLabel «$query». Проверьте ввод или обновление каталога"
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -854,6 +753,10 @@ class ScheduleViewModel(
     fun addProfileCandidate(candidate: ProfileCandidate) {
         profileSearchJob?.cancel()
         profileSearchJob = null
+        if (!candidate.scheduleAvailable) {
+            notice.value = "Для «${candidate.name}» ещё не опубликован файл расписания GitHub"
+            return
+        }
         val profile = ScheduleProfile(
             id = DomainIds.new("profile"),
             type = candidate.type,

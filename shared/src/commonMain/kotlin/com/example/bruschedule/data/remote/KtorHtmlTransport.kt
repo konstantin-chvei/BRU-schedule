@@ -14,23 +14,18 @@ class KtorHtmlTransport(
     fun close() = client.close()
 
     override suspend fun get(url: String): String {
-        val isBruSchedulePage = url.startsWith("https://rasp.bru.by/", ignoreCase = true)
-        val isBiologySite = url.startsWith("https://bsu.bio/", ignoreCase = true) ||
-            url.startsWith("https://bio.bsu.by/", ignoreCase = true)
-        val isDailyMessagesFile = url == GitHubDailyMessagesRemoteDataSource.DAILY_MESSAGES_API_URL
-        val isDirectHttpsPage = HTTPS_PAGE_URL.matches(url)
-        require(isBruSchedulePage || isDailyMessagesFile || isDirectHttpsPage) {
-            "Для расписания принимаются только публичные HTTPS-ссылки"
+        val isScheduleDataFile = GitHubScheduleDataPaths.isPublishedDataUrl(url)
+        val isDailyMessagesFile = url == GitHubDailyMessagesRemoteDataSource.DAILY_MESSAGES_URL
+        require(isScheduleDataFile || isDailyMessagesFile) {
+            "Разрешены только опубликованные файлы GitHub Pages; сайты вузов не запрашиваются"
         }
         val response = client.get(url) {
             header(HttpHeaders.UserAgent, "Schedule/1.0 (student timetable app)")
             header(
                 HttpHeaders.Accept,
-                if (isDailyMessagesFile) "application/vnd.github.raw+json" else "text/html,application/xhtml+xml",
+                if (isDailyMessagesFile) "text/plain,text/*;q=0.9,*/*;q=0.8" else "text/html,application/xhtml+xml",
             )
             header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.8")
-            if (isBiologySite) header("Referer", "https://bsu.bio/")
-            if (isDailyMessagesFile) header("X-GitHub-Api-Version", "2022-11-28")
         }
         if (!response.status.isSuccess()) {
             val host = if (isDailyMessagesFile) "GitHub" else url.substringAfter("://").substringBefore('/')
@@ -40,8 +35,8 @@ class KtorHtmlTransport(
     }
 
     override suspend fun getBytes(url: String): ByteArray {
-        require(HTTPS_PAGE_URL.matches(url)) {
-            "Для файлов расписания принимаются только публичные HTTPS-ссылки"
+        require(GitHubScheduleDataPaths.isScheduleFileUrl(url)) {
+            "Разрешены только файлы расписаний из GitHub Pages; сайты вузов не запрашиваются"
         }
         val response = client.get(url) {
             header(HttpHeaders.UserAgent, "Schedule/1.0 (student timetable app)")
@@ -60,9 +55,5 @@ class KtorHtmlTransport(
 
     private companion object {
         const val MAX_BINARY_RESPONSE_BYTES = 30 * 1024 * 1024
-        val HTTPS_PAGE_URL = Regex(
-            """^https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$""",
-            RegexOption.IGNORE_CASE,
-        )
     }
 }

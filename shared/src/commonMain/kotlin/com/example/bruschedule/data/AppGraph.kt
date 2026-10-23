@@ -4,13 +4,10 @@ import app.cash.sqldelight.db.SqlDriver
 import com.example.bruschedule.data.local.SqlDelightScheduleRepository
 import com.example.bruschedule.data.local.SqlDelightUniversityRepository
 import com.example.bruschedule.data.local.db.ScheduleDatabase
-import com.example.bruschedule.data.remote.BruScheduleProfileCatalogRepository
-import com.example.bruschedule.data.remote.BsuScheduleProfileCatalogRepository
-import com.example.bruschedule.data.remote.UniversityScheduleProfileCatalogRepository
-import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
+import com.example.bruschedule.data.remote.GitHubScheduleProfileCatalogRepository
+import com.example.bruschedule.data.remote.GitHubScheduleRemoteDataSource
 import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.remote.createPlatformHtmlTransport
-import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.data.scraper.UniversityScheduleHtmlParser
 import com.example.bruschedule.data.settings.KmpSettingsAppearanceRepository
 import com.example.bruschedule.data.settings.KmpSettingsDeadlineReminderRepository
@@ -29,7 +26,6 @@ import com.example.bruschedule.domain.repository.DeadlineReminderPreferencesRepo
 import com.example.bruschedule.domain.repository.NoOpDeadlineNotificationScheduler
 import com.example.bruschedule.domain.repository.ParserVersionRepository
 import com.example.bruschedule.domain.repository.AcademicTaskRepository
-import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import com.example.bruschedule.domain.repository.ScheduleRepository
 import com.example.bruschedule.domain.repository.ScheduleSyncRepository
@@ -78,15 +74,9 @@ fun createAppGraph(
         versionFlags.setDatabaseMarker(CURRENT_DATABASE_MARKER)
     }
 
-    val directoryParser = BruScheduleDirectoryParser()
     val scraper = UniversityScheduleHtmlParser()
-    val remote = BruScheduleRemoteDataSource(transport, directoryParser)
-    val profileCatalog = UniversityScheduleProfileCatalogRepository(
-        catalogues = mapOf(
-            UniversityIds.BRU to BruScheduleProfileCatalogRepository(transport, directoryParser),
-            UniversityIds.BSU to BsuScheduleProfileCatalogRepository(transport),
-        ),
-    )
+    val remote = GitHubScheduleRemoteDataSource(transport)
+    val profileCatalog = GitHubScheduleProfileCatalogRepository(transport)
     return AppGraph(
         scheduleRepository = localRepository,
         syncRepository = localRepository,

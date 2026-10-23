@@ -1,79 +1,43 @@
 package com.example.bruschedule
 
-import com.example.bruschedule.data.remote.KtorHtmlTransport
-import com.example.bruschedule.data.remote.createPlatformHtmlTransport
-import com.example.bruschedule.data.remote.primeBiologySession
-import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
+import com.example.bruschedule.data.remote.GitHubScheduleRemoteDataSource
+import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
+import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.model.UniversityIds
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
-/** Exercises the production Ktor engine against the public Biology timetable endpoint. */
-class BsuBiologyKtorLiveSmokeTest {
+/** Confirms runtime updates never request a live university endpoint. */
+class BsuBiologyRuntimeSourcePolicyTest {
     @Test
-    fun productionTransportDownloadsAndParsesTheLiveGroupPageWhenTlsIsValid() = runTest {
-        val transport = createPlatformHtmlTransport()
-        try {
-            transport.primeBiologySession()
-            val html = try {
-                transport.get(LIVE_GROUP_URL)
-            } catch (failure: Throwable) {
-                // Keep TLS strict when the public host presents an invalid or expired certificate.
-                assertTrue(
-                    failure.isCertificateTrustFailure(),
-                    "Unexpected live Ktor failure for $LIVE_GROUP_URL: ${failure.message}",
-                )
-                return@runTest
+    fun runtimeRejectsUniversityScheduleUrlBeforeMakingAnyRequest() = runTest {
+        var requestCount = 0
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestCount += 1
+                error("Unexpected network request: $url")
             }
-            val parser = BsuBiologyScheduleHtmlParser()
-
-            assertTrue(parser.hasScheduleGrid(html), "Ktor did not receive the live group timetable")
-            val profile = ScheduleProfile(
-                id = "live-bsu-biology-course-1-group-41",
-                type = ScheduleProfileType.GROUP,
-                name = "Группа 41",
-                sourceUrl = LIVE_GROUP_URL,
-                sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}41",
-                universityId = UniversityIds.BSU,
-            )
-            val lessons = parser.parse(profile, html, LocalDate(2026, 10, 23))
-
-            assertTrue(lessons.isNotEmpty(), "The live Ktor response contained no parsed Biology lessons")
-            assertTrue(
-                lessons.any {
-                    it.subjectName == "Физическая культура" &&
-                        it.teacherName == "Микитченко Надежда Владимировна" &&
-                        it.classroom == "Курчатова 10" &&
-                        it.startTime == "09:00"
-                },
-                "The live group-41 page did not preserve the first lesson's teacher, time, and building-only room",
-            )
-            assertTrue(
-                lessons.any {
-                    it.subjectName == "Общая и неорганическая химия" &&
-                        it.classroom == "3 · Курчатова 10"
-                },
-                "The live group-41 page did not preserve the room number and building together",
-            )
-        } finally {
-            (transport as? KtorHtmlTransport)?.close()
         }
-    }
+        val source = GitHubScheduleRemoteDataSource(transport)
+        val profile = ScheduleProfile(
+            id = "biology-group-41",
+            type = ScheduleProfileType.GROUP,
+            name = "41",
+            sourceUrl = "https://bsu.bio/schedule.php?study=d&course=1&group=41",
+            universityId = UniversityIds.BSU,
+        )
 
-    private fun Throwable.isCertificateTrustFailure(): Boolean =
-        generateSequence(this) { it.cause }
-            .mapNotNull { it.message?.lowercase() }
-            .joinToString(" ")
-            .let { details ->
-                "certificate" in details || "certpath" in details || "sslpeertrust" in details
-            }
-
-    private companion object {
-        const val LIVE_GROUP_URL =
-            "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-23"
+        assertFailsWith<IllegalArgumentException> {
+            source.fetchHtml(
+                profile,
+                ScheduleWindow(LocalDate(2026, 10, 26), LocalDate(2026, 11, 1)),
+            )
+        }
+        assertEquals(0, requestCount)
     }
 }

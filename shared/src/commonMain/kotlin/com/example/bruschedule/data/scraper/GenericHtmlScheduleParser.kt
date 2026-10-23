@@ -15,9 +15,8 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
 /**
- * Best-effort parser for public university pages that publish a timetable as an HTML table.
- * This intentionally does not claim to support JavaScript-only calendars or every site-specific
- * layout; those require a dedicated adapter.
+ * Best-effort parser for static HTML timetable files published in the GitHub schedule tree.
+ * This intentionally does not claim to support every site-specific layout; those require a dedicated adapter.
  */
 class GenericHtmlScheduleParser : ScheduleHtmlParser {
     override val formatVersion: Int = 2
@@ -72,7 +71,7 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         val parsed = result.distinctBy(Lesson::sourceKey)
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
         require(parsed.isNotEmpty()) {
-            "Не удалось распознать таблицу расписания. Нужна прямая ссылка на HTML-страницу с парами"
+            "Не удалось распознать пары в опубликованном файле расписания"
         }
         return parsed
     }
