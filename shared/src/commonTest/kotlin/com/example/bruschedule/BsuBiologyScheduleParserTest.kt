@@ -117,7 +117,7 @@ class BsuBiologyScheduleParserTest {
                 else error("No fixture for $url")
             }
         }
-        val fixedClock = object : Clock() {
+        val fixedClock = object : Clock {
             override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
         }
 
