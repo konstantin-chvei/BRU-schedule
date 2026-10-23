@@ -382,7 +382,7 @@ class BsuScheduleProfileCatalogRepository(
         const val MIN_QUERY_LENGTH = 2
         const val MAX_RESULTS = 80
         const val MAX_LINK_DEPTH = 2
-        const val MAX_LINKS_PER_PAGE = 6
+        const val MAX_LINKS_PER_PAGE = 12
         const val MAX_PAGES_PER_FACULTY = 10
         const val BIOLOGY_ROOT = "https://bio.bsu.by/schedule/"
         const val BIOLOGY_MAX_COURSES = 5
@@ -409,6 +409,18 @@ class BsuScheduleProfileCatalogRepository(
                 "https://hist.bsu.by/uchebnyj-protsess/grafik-uchebnogo-protsessa/raspisanie-zanyatij.html",
             ),
             FacultySource("Юридический факультет", "https://law.bsu.by/index.php?option=com_content&view=article&id=2350&Itemid=7"),
+            FacultySource(
+                "Химический факультет",
+                "https://chemistry.bsu.by/index.php/ru/opisanie-kursa/cv-prepodavatelej/14-studentam/7-raspisanie",
+            ),
+            FacultySource("Физический факультет", "https://physics.bsu.by/raspisanie/studentam/"),
+            FacultySource("Факультет журналистики", "https://journ.bsu.by/raspisanie.html"),
+            FacultySource("Филологический факультет", "https://philology.bsu.by/ru/studjentu/raspisanie"),
+            FacultySource(
+                "Факультет философии и социальных наук",
+                "https://ffsn.bsu.by/ru/dfo-raspisanie-zanyatij.html",
+            ),
+            FacultySource("Факультет радиофизики и компьютерных технологий", "https://rct.bsu.by/education"),
         )
 
         val ROUTE_HINTS = listOf(

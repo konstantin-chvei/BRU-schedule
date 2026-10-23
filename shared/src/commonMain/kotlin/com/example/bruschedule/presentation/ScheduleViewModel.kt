@@ -854,7 +854,7 @@ class ScheduleViewModel(
                 profileSearch.value = ProfileSearchUiState(query, type, candidates = candidates)
                 if (candidates.isEmpty()) {
                     notice.value = if (university.id == UniversityIds.BSU) {
-                        "Группа не найдена в HTML, Sheets или поддерживаемых файлах факультетов; проверьте код или добавьте ссылку вручную"
+                        "Совпадений нет. DOC/XLS пока не читаются; проверьте код или добавьте HTML, Sheets, PDF, XLSX, DOCX либо ZIP по ссылке"
                     } else {
                         "Совпадений не найдено — можно добавить профиль по ссылке вручную"
                     }

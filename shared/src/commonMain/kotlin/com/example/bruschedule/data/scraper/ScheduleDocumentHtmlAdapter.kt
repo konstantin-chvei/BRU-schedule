@@ -7,6 +7,7 @@ import com.gyanoba.kexcel.sheet.DateCellValue
 import com.gyanoba.kexcel.sheet.DateTimeCellValue
 import com.gyanoba.kexcel.sheet.TimeCellValue
 import io.github.yuroyami.kitepdf.PdfDocument
+import no.synth.kmpzip.io.ByteArrayOutputStream
 import no.synth.kmpzip.io.readBytes
 import no.synth.kmpzip.zip.ZipInputStream
 
@@ -15,12 +16,13 @@ enum class ScheduleDocumentFormat(val extension: String, val displayName: String
     PDF(".pdf", "PDF", true),
     XLSX(".xlsx", "XLSX", true),
     DOCX(".docx", "DOCX", true),
+    ZIP(".zip", "ZIP", true),
     XLS(".xls", "XLS 97–2003", false),
     DOC(".doc", "DOC 97–2003", false),
 }
 
 /**
- * Converts public PDF, XLSX and DOCX timetable documents into a small table-oriented HTML
+ * Converts public PDF, XLSX, DOCX and ZIP timetable documents into a small table-oriented HTML
  * representation consumed by the existing university HTML parsers. It intentionally does not
  * pretend that legacy OLE/BIFF `.doc` and `.xls` files are OpenXML documents.
  */
@@ -56,12 +58,13 @@ class ScheduleDocumentHtmlAdapter {
     fun toHtml(format: ScheduleDocumentFormat, bytes: ByteArray): String {
         require(bytes.isNotEmpty()) { "Файл расписания пуст" }
         require(format.isSupported) {
-            "Формат ${format.extension} устаревший; откройте расписание в PDF или XLSX"
+            "Формат ${format.extension} устаревший; откройте расписание в PDF, XLSX или DOCX"
         }
         return when (format) {
             ScheduleDocumentFormat.PDF -> pdfToHtml(bytes)
             ScheduleDocumentFormat.XLSX -> xlsxToHtml(bytes)
             ScheduleDocumentFormat.DOCX -> docxToHtml(bytes)
+            ScheduleDocumentFormat.ZIP -> zipToHtml(bytes)
             ScheduleDocumentFormat.XLS,
             ScheduleDocumentFormat.DOC -> error("Формат ${format.extension} не поддерживается")
         }
@@ -98,6 +101,67 @@ class ScheduleDocumentHtmlAdapter {
             }
         }
         return "<html><body>${tables.joinToString("\n")}</body></html>"
+    }
+
+    private fun zipToHtml(bytes: ByteArray): String {
+        val archive = ZipInputStream(bytes)
+        val documents = mutableListOf<String>()
+        val legacyFormats = mutableSetOf<ScheduleDocumentFormat>()
+        var entryCount = 0
+        var totalUncompressedBytes = 0
+        try {
+            while (true) {
+                val entry = archive.nextEntry ?: break
+                entryCount++
+                require(entryCount <= MAX_ZIP_ENTRIES) { "В ZIP слишком много файлов" }
+                if (entry.isDirectory) {
+                    archive.closeEntry()
+                    continue
+                }
+                val remainingBytes = MAX_ZIP_UNCOMPRESSED_BYTES - totalUncompressedBytes
+                require(remainingBytes > 0) { "Содержимое ZIP превышает допустимый размер" }
+                val bytesForEntry = readZipEntry(
+                    archive = archive,
+                    maxBytes = minOf(MAX_ZIP_ENTRY_BYTES, remainingBytes),
+                )
+                totalUncompressedBytes += bytesForEntry.size
+                val format = formatForUrl(entry.name) ?: continue
+                if (format == ScheduleDocumentFormat.ZIP) continue
+                if (!format.isSupported) {
+                    legacyFormats += format
+                    continue
+                }
+                if (documents.size >= MAX_ZIP_SCHEDULE_FILES) continue
+                val html = try {
+                    toHtml(format, bytesForEntry)
+                } catch (_: Exception) {
+                    continue
+                }
+                documents += "<section><h2>${escapeHtml(entry.name)}</h2>$html</section>"
+            }
+        } finally {
+            archive.close()
+        }
+        if (documents.isEmpty() && legacyFormats.isNotEmpty()) {
+            val formats = legacyFormats.map(ScheduleDocumentFormat::extension).sorted().joinToString(", ")
+            error("В ZIP найдены неподдерживаемые старые форматы: $formats")
+        }
+        require(documents.isNotEmpty()) { "В ZIP не найдены поддерживаемые файлы расписания" }
+        return "<html><body>${documents.joinToString("\n")}</body></html>"
+    }
+
+    private fun readZipEntry(archive: ZipInputStream, maxBytes: Int): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(ZIP_BUFFER_SIZE)
+        var totalBytes = 0
+        while (true) {
+            val read = archive.read(buffer, 0, buffer.size)
+            if (read < 0) break
+            totalBytes += read
+            require(totalBytes <= maxBytes) { "Содержимое ZIP превышает допустимый размер" }
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
     }
 
     private fun xlsxToHtml(bytes: ByteArray): String {
@@ -243,6 +307,11 @@ class ScheduleDocumentHtmlAdapter {
         const val MAX_XLSX_COLUMNS = 96
         const val MAX_DOCX_ROWS = 3_000
         const val MAX_DOCX_COLUMNS = 96
+        const val MAX_ZIP_ENTRIES = 128
+        const val MAX_ZIP_ENTRY_BYTES = 20 * 1024 * 1024
+        const val MAX_ZIP_UNCOMPRESSED_BYTES = 60 * 1024 * 1024
+        const val MAX_ZIP_SCHEDULE_FILES = 24
+        const val ZIP_BUFFER_SIZE = 8 * 1024
         const val PDF_COLUMN_CLUSTER_DISTANCE = 28.0
         val DOCX_TABLE = Regex("<w:tbl\\b[^>]*>(.*?)</w:tbl>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
         val DOCX_ROW = Regex("<w:tr\\b[^>]*>(.*?)</w:tr>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
