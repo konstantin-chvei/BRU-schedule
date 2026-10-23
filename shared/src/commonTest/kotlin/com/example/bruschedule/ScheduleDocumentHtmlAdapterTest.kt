@@ -359,17 +359,17 @@ class ScheduleDocumentHtmlAdapterTest {
         val pdf = StringBuilder("%PDF-1.4\n")
         val offsets = mutableListOf(0)
         objects.forEachIndexed { index, value ->
-            offsets += pdf.encodeToByteArray().size
+            offsets += pdf.toString().encodeToByteArray().size
             pdf.append("${index + 1} 0 obj\n$value\nendobj\n")
         }
-        val xrefOffset = pdf.encodeToByteArray().size
+        val xrefOffset = pdf.toString().encodeToByteArray().size
         pdf.append("xref\n0 ${objects.size + 1}\n0000000000 65535 f \n")
         offsets.drop(1).forEach { offset ->
             pdf.append(offset.toString().padStart(10, '0')).append(" 00000 n \n")
         }
         pdf.append("trailer\n<< /Size ${objects.size + 1} /Root 1 0 R >>\n")
             .append("startxref\n$xrefOffset\n%%EOF")
-        return pdf.encodeToByteArray()
+        return pdf.toString().encodeToByteArray()
     }
 
     private fun <T> runSuspending(block: suspend () -> T): T {
