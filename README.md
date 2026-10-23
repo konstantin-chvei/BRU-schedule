@@ -1,31 +1,29 @@
-This is a Kotlin Multiplatform project targeting Android, iOS.
+# Расписание
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+Кроссплатформенное расписание для студентов вузов Беларуси на Kotlin Multiplatform и Compose Multiplatform. Вуз выбирается на главном экране: для Белорусско-Российского университета доступен каталог групп и преподавателей; для БГУ — поиск групп по публичным HTML-страницам, Google Sheets и документам PDF/XLSX/DOCX/XLS/DOC/ZIP. Общие KMP-адаптеры преобразуют документы в HTML для факультетских парсеров; для бинарных XLS/DOC добавлены синтетические регрессионные fixtures, а фактическая проверка скачанных файлов факультетов ещё требует прогонки по доступным источникам. Расписания, доступные только через JavaScript или авторизацию, требуют отдельных адаптеров. Другие вузы можно добавить по прямой HTTPS-ссылке на распознаваемую HTML-таблицу; backend не используется. Архитектура находится в модуле `shared`: Clean Architecture + MVVM, SQLDelight Offline-First база с V−1 snapshot/rollback, KMP Settings для настроек, Ktor для загрузки страниц и общий Compose UI для Android/iOS.
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+## Основные возможности
 
-### Running the apps
+- Выбор вуза на главном экране и добавление пользовательских вузов; выбранный вуз и его расписания сохраняются отдельно.
+- Несколько профилей одновременно: группы и преподаватели из каталога БРУ, поиск групп БГУ по факультетским HTML/Google Sheets источникам или профили по прямым ссылкам на HTML-таблицы других вузов.
+- Быстрое чтение из локального кэша; ручные правки и пары защищены от перезаписи сайтом.
+- Обновление расписания с сохранением предыдущей версии и явным откатом.
+- Парсинг двухнедельных таблиц группы и страниц занятости преподавателей; распознанный цикл «Неделя 1 / Неделя 2» разворачивается от текущей даты до конца сессии и ещё на 7 дней. Для белорусского и российского отделений границы заданы отдельно; дату окончания можно переопределить для конкретного расписания, если факультет завершает сессию в другой день.
+- Видимые состояния первичной загрузки, обновления, ошибки и сохранённого офлайн-кэша.
+- Выбор синей, чёрной или белой темы и настройка цветовых акцентов лекций, лабораторных, практик и прочих занятий; параметры сохраняются в KMP Settings.
+- Ежедневная фраза загружается при запуске из [`content/daily-messages.txt`](content/daily-messages.txt) через GitHub Contents API и кэшируется локально для работы без сети.
+- Минималистичный Compose UI с плавной навигацией для Android и iOS.
+- Дедлайны, связанные с парами, бейджи количества незакрытых задач и общий хронологический список.
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+## Запуск
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+```bash
+bash ./gradlew :androidApp:assembleDebug
+bash ./gradlew :shared:allTests
+```
 
-### Running tests
+Откройте `iosApp/iosApp.xcodeproj` в Xcode для iOS. Требуются установленный JDK и Android SDK; iOS-сборка требует Xcode. В Android добавлено разрешение `INTERNET`; без сети кэш всё равно доступен.
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+## Архитектурная документация
 
-- Android tests: `./gradlew :shared:testAndroidHostTest`
-- iOS tests: `./gradlew :shared:iosSimulatorArm64Test`
-
----
-
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+Подробное описание моделей, схемы SQLDelight, source URL resolver, merge/snapshot/rollback, UI и наблюдений по HTML-образцам находится в [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
