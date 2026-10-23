@@ -66,6 +66,7 @@ import com.example.bruschedule.domain.model.University
 import com.example.bruschedule.domain.model.UniversitySourceType
 import com.example.bruschedule.domain.usecase.ScheduleLessonConflict
 import com.example.bruschedule.presentation.LessonUiItem
+import com.example.bruschedule.presentation.MainDestination
 import com.example.bruschedule.presentation.ScheduleUiState
 import com.example.bruschedule.presentation.ScheduleViewModel
 import com.example.bruschedule.ui.theme.BruColors
@@ -105,11 +106,7 @@ fun ScheduleHomeScreen(
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(16.dp))
-        ScheduleTopBar(
-            dailyMessage = state.dailyMessage,
-            refreshing = state.isRefreshing,
-            onRefresh = viewModel::refreshSelectedProfile,
-        )
+        ScheduleTopBar(dailyMessage = state.dailyMessage)
         Spacer(Modifier.height(18.dp))
         UniversitySelectionPanel(
             university = state.selectedUniversity,
@@ -161,11 +158,16 @@ fun ScheduleHomeScreen(
                 )
                 !state.hasRemoteSchedule && syncError != null -> ScheduleErrorStatusCard(
                     error = syncError,
-                    onRetry = viewModel::refreshSelectedProfile,
+                    onOpenSettings = { viewModel.showDestination(MainDestination.SETTINGS) },
                 )
-                !state.hasRemoteSchedule -> ScheduleNotLoadedCard(onRetry = viewModel::refreshSelectedProfile)
+                !state.hasRemoteSchedule -> ScheduleNotLoadedCard(
+                    onOpenSettings = { viewModel.showDestination(MainDestination.SETTINGS) },
+                )
                 state.isRefreshing -> ScheduleRefreshingBanner()
-                syncError != null -> CachedScheduleWarning(error = syncError, onRetry = viewModel::refreshSelectedProfile)
+                syncError != null -> CachedScheduleWarning(
+                    error = syncError,
+                    onOpenSettings = { viewModel.showDestination(MainDestination.SETTINGS) },
+                )
             }
             Spacer(Modifier.height(12.dp))
 
@@ -431,49 +433,23 @@ fun ScheduleHomeScreen(
 }
 
 @Composable
-private fun ScheduleTopBar(
-    dailyMessage: String,
-    refreshing: Boolean,
-    onRefresh: () -> Unit,
-) {
+private fun ScheduleTopBar(dailyMessage: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp),
-        ) {
-            BrandCalendarGlyph()
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("РАСПИСАНИЕ", color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                Text(
-                    dailyMessage,
-                    color = BruColors.muted,
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Surface(
-            onClick = onRefresh,
-            enabled = !refreshing,
-            shape = CircleShape,
-            color = BruColors.elevatedSurface,
-            border = BorderStroke(1.dp, BruColors.outline),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Text(if (refreshing) "···" else "↻", color = BruColors.cyan, fontSize = 17.sp)
-                Text(if (refreshing) "Загрузка" else "Обновить", color = BruColors.foreground, fontSize = 11.sp)
-            }
+        BrandCalendarGlyph()
+        Spacer(Modifier.width(11.dp))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("РАСПИСАНИЕ", color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Text(
+                dailyMessage,
+                color = BruColors.muted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -1120,7 +1096,7 @@ private fun ScheduleLoadingStatusCard(title: String, detail: String) {
 }
 
 @Composable
-private fun ScheduleNotLoadedCard(onRetry: () -> Unit) {
+private fun ScheduleNotLoadedCard(onOpenSettings: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -1129,19 +1105,21 @@ private fun ScheduleNotLoadedCard(onRetry: () -> Unit) {
     ) {
         Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("РАСПИСАНИЕ ЕЩЁ НЕ ЗАГРУЖЕНО", color = BruColors.cyan, fontSize = 8.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
-            Text("Загрузите расписание, чтобы сохранить его офлайн. Обычный недельный цикл будет показан на семестр.", color = BruColors.muted, fontSize = 11.sp, lineHeight = 16.sp)
-            TextButton(onClick = onRetry) { Text("Загрузить расписание  →", color = BruColors.cyan, fontSize = 11.sp) }
+            Text("Чтобы загрузить расписание и сохранить его офлайн, откройте настройки и нажмите «Обновить расписание».", color = BruColors.muted, fontSize = 11.sp, lineHeight = 16.sp)
+            TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = BruColors.cyan, fontSize = 11.sp) }
         }
     }
 }
 
 @Composable
-private fun ScheduleErrorStatusCard(error: ScheduleErrorInfo, onRetry: () -> Unit) {
-    ScheduleErrorPanel(
-        error = error,
-        context = "Локальная копия пока отсутствует. Проверьте источник или попробуйте позже.",
-        onRetry = onRetry,
-    )
+private fun ScheduleErrorStatusCard(error: ScheduleErrorInfo, onOpenSettings: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        ScheduleErrorPanel(
+            error = error,
+            context = "Локальная копия пока отсутствует. Сохранённые данные не изменены.",
+        )
+        TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = BruColors.cyan, fontSize = 11.sp) }
+    }
 }
 
 @Composable
@@ -1164,12 +1142,14 @@ private fun ScheduleRefreshingBanner() {
 }
 
 @Composable
-private fun CachedScheduleWarning(error: ScheduleErrorInfo, onRetry: () -> Unit) {
-    ScheduleErrorPanel(
-        error = error,
-        context = "Показана сохранённая локальная копия расписания.",
-        onRetry = onRetry,
-    )
+private fun CachedScheduleWarning(error: ScheduleErrorInfo, onOpenSettings: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        ScheduleErrorPanel(
+            error = error,
+            context = "Показана сохранённая локальная копия расписания.",
+        )
+        TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = BruColors.cyan, fontSize = 11.sp) }
+    }
 }
 
 @Composable

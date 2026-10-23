@@ -12,7 +12,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import com.fleeksoft.ksoup.Ksoup
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
@@ -40,22 +47,40 @@ class BsuScheduleProfileCatalogRepository(
         universityId: String,
         type: ScheduleProfileType,
         query: String,
+    ): List<ProfileCandidate> = search(universityId, type, query) { }
+
+    override suspend fun search(
+        universityId: String,
+        type: ScheduleProfileType,
+        query: String,
+        onPartialResults: (List<ProfileCandidate>) -> Unit,
     ): List<ProfileCandidate> {
         require(universityId == UniversityIds.BSU) { "Каталог расписаний БГУ не подходит выбранному вузу" }
         require(type == ScheduleProfileType.GROUP) { "В каталоге БГУ пока доступен поиск учебных групп" }
         val normalizedQuery = normalize(query)
         require(normalizedQuery.length >= MIN_QUERY_LENGTH) { "Введите не менее двух символов для поиска" }
 
+        val progressLock = Mutex()
+        val partialByFaculty = linkedMapOf<String, FacultyResult>()
         val results = supervisorScope {
             FACULTIES.map { faculty ->
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    try {
-                        discoverFaculty(faculty, normalizedQuery)
+                    suspend fun publish(partial: FacultyResult) {
+                        progressLock.withLock {
+                            partialByFaculty[faculty.url] = partial
+                            onPartialResults(sortedCandidates(partialByFaculty.values.toList(), normalizedQuery))
+                        }
+                    }
+
+                    val result = try {
+                        discoverFaculty(faculty, normalizedQuery, ::publish)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
                         FacultyResult(candidates = emptyList(), pagesLoaded = 0, requestFailures = 1)
                     }
+                    publish(result)
+                    result
                 }
             }.awaitAll()
         }
@@ -66,21 +91,26 @@ class BsuScheduleProfileCatalogRepository(
         if (successfulPages == 0 && results.any { it.requestFailures > 0 }) {
             error("Не удалось открыть сайты факультетов БГУ. Проверьте подключение и попробуйте ещё раз")
         }
-        return results.flatMap { it.candidates }
-            .distinctBy { "${it.sourceUrl}|${it.sourceKey}|${it.name}" }
-            .sortedWith(
-                compareBy<ProfileCandidate> { normalize(it.name) != normalizedQuery }
-                    .thenBy { normalize(it.name) }
-                    .thenBy { it.subtitle.orEmpty() },
-            )
-            .take(MAX_RESULTS)
+        return sortedCandidates(results, normalizedQuery)
     }
+
+    private fun sortedCandidates(
+        results: List<FacultyResult>,
+        normalizedQuery: String,
+    ): List<ProfileCandidate> = results.flatMap { it.candidates }
+        .distinctBy { "${it.sourceUrl}|${it.sourceKey}|${it.name}" }
+        .sortedWith(
+            compareBy<ProfileCandidate> { normalize(it.name) != normalizedQuery }
+                .thenBy { normalize(it.name) }
+                .thenBy { it.subtitle.orEmpty() },
+        )
 
     private suspend fun discoverFaculty(
         faculty: FacultySource,
         normalizedQuery: String,
+        onProgress: suspend (FacultyResult) -> Unit,
     ): FacultyResult {
-        if (faculty.url == BIOLOGY_ROOT) return discoverBiologyFaculty(faculty, normalizedQuery)
+        if (faculty.url == BIOLOGY_ROOT) return discoverBiologyFaculty(faculty, normalizedQuery, onProgress)
         val candidates = mutableListOf<ProfileCandidate>()
         val visited = mutableSetOf<String>()
         var pagesLoaded = 0
@@ -111,6 +141,7 @@ class BsuScheduleProfileCatalogRepository(
                     candidates += candidate(faculty, group, pageUrl, sourceKind)
                 }
             }
+            onProgress(FacultyResult(candidates.toList(), pagesLoaded, requestFailures))
             if (depth >= MAX_LINK_DEPTH || pageUrl.contains("docs.google.com/spreadsheets/")) return
 
             val document = Ksoup.parse(html)
@@ -146,55 +177,75 @@ class BsuScheduleProfileCatalogRepository(
                 )
                 .take(MAX_LINKS_PER_PAGE)
 
-            links.forEach { link ->
+            suspend fun fetchLink(link: LinkTarget): LinkFetchResult = try {
                 val documentFormat = link.documentFormat
-                if (documentFormat != null) {
-                    if (!documentFormat.isSupported) {
-                        requestFailures++
-                        return@forEach
-                    }
-                    val binaryTransport = transport as? BinaryResourceTransport
-                    if (binaryTransport == null) {
-                        requestFailures++
-                        return@forEach
-                    }
-                    val documentHtml = try {
+                val html = when {
+                    documentFormat != null -> {
+                        if (!documentFormat.isSupported) return LinkFetchResult(link, html = null, failed = true)
+                        val binaryTransport = transport as? BinaryResourceTransport
+                            ?: return LinkFetchResult(link, html = null, failed = true)
                         val bytes = binaryTransport.getBytes(documentAdapter.downloadUrl(link.url))
-                        pagesLoaded++
                         documentAdapter.toHtml(documentFormat, bytes)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        requestFailures++
-                        null
-                    } ?: return@forEach
-                    val documentLabels = (parser.discoverTableGroupLabels(documentHtml) + link.groupLabels)
-                        .distinctBy(::normalize)
-                    if (isTimetablePage(documentHtml)) {
-                        documentLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
-                            candidates += candidate(faculty, group, link.url, documentFormat.displayName)
+                    }
+                    link.isSheet -> {
+                        val htmlUrl = GoogleSheetsScheduleUrl.toHtmlTableUrl(link.url)
+                            ?: return LinkFetchResult(link, html = null, failed = true)
+                        transport.get(htmlUrl)
+                    }
+                    else -> transport.get(link.url)
+                }
+                LinkFetchResult(link, html = html, failed = false)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                LinkFetchResult(link, html = null, failed = true)
+            }
+
+            val linkResponses = supervisorScope {
+                val semaphore = Semaphore(MAX_LINK_REQUESTS_IN_FLIGHT_PER_FACULTY)
+                links.map { link ->
+                    async(start = CoroutineStart.UNDISPATCHED) {
+                        semaphore.withPermit { fetchLink(link) }
+                    }
+                }.awaitAll()
+            }
+            linkResponses.forEach { response ->
+                val link = response.link
+                val html = response.html
+                if (response.failed || html == null) {
+                    requestFailures++
+                    return@forEach
+                }
+                pagesLoaded++
+                val documentFormat = link.documentFormat
+                when {
+                    documentFormat != null -> {
+                        val documentLabels = (parser.discoverTableGroupLabels(html) + link.groupLabels)
+                            .distinctBy(::normalize)
+                        if (isTimetablePage(html)) {
+                            documentLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
+                                candidates += candidate(faculty, group, link.url, documentFormat.displayName)
+                            }
                         }
                     }
-                } else if (link.isSheet) {
-                    val htmlUrl = GoogleSheetsScheduleUrl.toHtmlTableUrl(link.url) ?: return@forEach
-                    val sheetHtml = fetch(htmlUrl) ?: return@forEach
-                    val sheetLabels = (parser.discoverTableGroupLabels(sheetHtml) + link.groupLabels)
-                        .distinctBy(::normalize)
-                    if (isTimetablePage(sheetHtml)) {
-                        sheetLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
-                            candidates += candidate(faculty, group, link.url, "Google Sheets")
+                    link.isSheet -> {
+                        val sheetLabels = (parser.discoverTableGroupLabels(html) + link.groupLabels)
+                            .distinctBy(::normalize)
+                        if (isTimetablePage(html)) {
+                            sheetLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
+                                candidates += candidate(faculty, group, link.url, "Google Sheets")
+                            }
                         }
                     }
-                } else {
-                    val childHtml = fetch(link.url) ?: return@forEach
-                    inspectPage(
+                    else -> inspectPage(
                         pageUrl = link.url,
-                        html = childHtml,
+                        html = html,
                         depth = depth + 1,
                         inheritedGroupLabels = link.groupLabels,
                     )
                 }
             }
+            onProgress(FacultyResult(candidates.toList(), pagesLoaded, requestFailures))
         }
 
         val rootHtml = fetch(faculty.url) ?: return FacultyResult(candidates, pagesLoaded, requestFailures)
@@ -205,6 +256,7 @@ class BsuScheduleProfileCatalogRepository(
     private suspend fun discoverBiologyFaculty(
         faculty: FacultySource,
         normalizedQuery: String,
+        onProgress: suspend (FacultyResult) -> Unit,
     ): FacultyResult {
         transport.primeBiologySession()
         val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -219,10 +271,14 @@ class BsuScheduleProfileCatalogRepository(
             }
         }
         val responses = mutableListOf<BiologyPageResult>()
-        requests.chunked(MAX_BIOLOGY_REQUESTS_IN_FLIGHT).forEach { batch ->
-            responses += supervisorScope {
-                batch.map { request ->
-                    async(start = CoroutineStart.UNDISPATCHED) {
+        val candidates = mutableListOf<ProfileCandidate>()
+        var hasGroupCatalogue = false
+        supervisorScope {
+            val completedPages = Channel<BiologyPageResult>(capacity = requests.size)
+            val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
+            val workers = requests.map { request ->
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    val result = semaphore.withPermit {
                         try {
                             BiologyPageResult(request, transport.get(request.url), failed = false)
                         } catch (cancelled: CancellationException) {
@@ -231,40 +287,53 @@ class BsuScheduleProfileCatalogRepository(
                             BiologyPageResult(request, html = null, failed = true)
                         }
                     }
-                }.awaitAll()
+                    completedPages.send(result)
+                }
             }
-        }
-        val groupsByResponse = responses.mapNotNull { response ->
-            val html = response.html ?: return@mapNotNull null
-            val groups = biologyParser.discoverGroups(html)
-            if (groups.isEmpty()) null else response to groups
-        }
-        val candidates = groupsByResponse.flatMap { (response, groups) ->
-            groups.mapNotNull { group ->
-                val mode = response.request.studyMode
-                val searchable = "${group.name} ${group.programme} ${mode.label} ${response.request.course}"
-                if (!matchesQuery(searchable, normalizedQuery)) return@mapNotNull null
-                val sourceUrl = "$BIOLOGY_ROOT?study=${mode.code}&course=${response.request.course}" +
-                    "&group=${group.id}&date=$weekDate"
-                candidate(
-                    faculty = faculty,
-                    group = group.name,
-                    sourceUrl = sourceUrl,
-                    sourceKind = "HTML",
-                    sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}${group.id}",
-                    detail = listOfNotNull(
-                        mode.label,
-                        "${response.request.course} курс",
-                        group.programme.takeIf(String::isNotBlank),
-                    ).joinToString(" · "),
-                )
+            repeat(requests.size) {
+                val response = completedPages.receive()
+                responses += response
+                val html = response.html ?: return@repeat
+                val groups = biologyParser.discoverGroups(html)
+                if (groups.isNotEmpty()) hasGroupCatalogue = true
+                val matches = groups.mapNotNull { group ->
+                    val mode = response.request.studyMode
+                    val searchable = "${group.name} ${group.programme} ${mode.label} ${response.request.course}"
+                    if (!matchesQuery(searchable, normalizedQuery)) return@mapNotNull null
+                    val sourceUrl = "$BIOLOGY_ROOT?study=${mode.code}&course=${response.request.course}" +
+                        "&group=${group.id}&date=$weekDate"
+                    candidate(
+                        faculty = faculty,
+                        group = group.name,
+                        sourceUrl = sourceUrl,
+                        sourceKind = "HTML",
+                        sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}${group.id}",
+                        detail = listOfNotNull(
+                            mode.label,
+                            "${response.request.course} курс",
+                            group.programme.takeIf(String::isNotBlank),
+                        ).joinToString(" · "),
+                    )
+                }
+                if (matches.isNotEmpty()) {
+                    candidates += matches
+                    onProgress(
+                        FacultyResult(
+                            candidates = candidates.toList(),
+                            pagesLoaded = responses.count { it.html != null },
+                            requestFailures = responses.count(BiologyPageResult::failed),
+                        ),
+                    )
+                }
             }
+            workers.joinAll()
+            completedPages.close()
         }
         return FacultyResult(
             candidates = candidates,
             pagesLoaded = responses.count { it.html != null },
             requestFailures = responses.count(BiologyPageResult::failed),
-            sourceUnavailable = groupsByResponse.isEmpty(),
+            sourceUnavailable = !hasGroupCatalogue,
         )
     }
 
@@ -373,6 +442,12 @@ class BsuScheduleProfileCatalogRepository(
         val looksRelevant: Boolean,
     )
 
+    private data class LinkFetchResult(
+        val link: LinkTarget,
+        val html: String?,
+        val failed: Boolean,
+    )
+
     private data class FacultyResult(
         val candidates: List<ProfileCandidate>,
         val pagesLoaded: Int,
@@ -398,19 +473,18 @@ class BsuScheduleProfileCatalogRepository(
 
     private companion object {
         const val MIN_QUERY_LENGTH = 2
-        const val MAX_RESULTS = 80
         const val MAX_LINK_DEPTH = 2
         const val MAX_LINKS_PER_PAGE = 12
         const val MAX_PAGES_PER_FACULTY = 10
+        const val MAX_LINK_REQUESTS_IN_FLIGHT_PER_FACULTY = 3
         const val BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL
         const val BIOLOGY_MAX_COURSES = 5
-        const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 3
+        const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 5
 
         val BIOLOGY_STUDY_MODES = listOf(
             BiologyStudyMode("d", "Дневная"),
             BiologyStudyMode("z", "Заочная"),
             BiologyStudyMode("m", "Магистратура"),
-            BiologyStudyMode("t", "Преподаватели"),
         )
 
         val FACULTIES = listOf(

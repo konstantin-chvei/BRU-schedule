@@ -65,6 +65,14 @@ interface ScheduleProfileCatalogRepository {
     /** University-aware extension keeps the original BRU call source-compatible. */
     suspend fun search(universityId: String, type: ScheduleProfileType, query: String): List<ProfileCandidate> =
         search(type, query)
+
+    /** Catalogs may publish results as sources finish, while still returning the complete final list. */
+    suspend fun search(
+        universityId: String,
+        type: ScheduleProfileType,
+        query: String,
+        onPartialResults: (List<ProfileCandidate>) -> Unit,
+    ): List<ProfileCandidate> = search(universityId, type, query).also(onPartialResults)
 }
 
 /** Persisted appearance settings for the Compose shell and lesson-type accents. */

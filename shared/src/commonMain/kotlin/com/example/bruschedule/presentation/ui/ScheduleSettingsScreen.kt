@@ -200,6 +200,12 @@ fun ScheduleSettingsScreen(
                 JournalLine("Последнее успешное обновление", sync?.lastSuccessfulAtEpochMillis?.let(::formatSyncTimestamp) ?: "Пока нет")
                 JournalLine("Последняя попытка", sync?.lastAttemptAtEpochMillis?.let(::formatSyncTimestamp) ?: "Ещё не запускали")
                 JournalLine("Локальный сейв", sync?.previousSnapshotAtEpochMillis?.let(::formatSyncTimestamp) ?: "Пока не создан")
+                Text(
+                    "Активные расписания не обновляются при запуске. Новый профиль загружается один раз при добавлении.",
+                    color = BruColors.dim,
+                    fontSize = 9.sp,
+                    lineHeight = 13.sp,
+                )
                 sync?.lastError?.let { error ->
                     ScheduleErrorPanel(
                         error = ScheduleErrorInfo.decodeStored(error),
@@ -214,7 +220,7 @@ fun ScheduleSettingsScreen(
                     shape = RoundedCornerShape(13.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),
                 ) {
-                    Text(if (state.isRefreshing) "Обновляем расписание…" else "Обновить с rasp.bru.by", fontWeight = FontWeight.SemiBold)
+                    Text(if (state.isRefreshing) "Обновляем расписание…" else "Обновить расписание", fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
                     onClick = viewModel::rollbackSelectedProfile,

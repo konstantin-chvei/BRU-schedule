@@ -6,10 +6,15 @@ import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
 import com.example.bruschedule.data.scraper.UniversityScheduleHtmlParser
+import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.model.UniversityIds
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
@@ -154,6 +159,31 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
+    fun biologyRemoteStopsAfterTheFirstRejectedWeekInsteadOfFetchingTheWholeSemester() {
+        val requested = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                if (url.contains("date=2026-10-19")) error("bsu.bio ответил кодом 406")
+                return "<html><body>$url</body></html>"
+            }
+        }
+        val window = ScheduleWindow(
+            startDate = LocalDate(2026, 10, 19),
+            endDate = LocalDate(2026, 11, 1),
+            semesterCoverageEndDate = LocalDate(2027, 1, 31),
+        )
+
+        val failure = checkNotNull(runCatching {
+            runSuspending { BruScheduleRemoteDataSource(transport).fetchHtml(groupPageProfile, window) }
+        }.exceptionOrNull())
+
+        assertTrue(failure.message.orEmpty().contains("406"))
+        assertTrue(ScheduleErrorInfo.fromThrowable(failure).code.contains("HTTP406"))
+        assertTrue(requested.count { "date=" in it } <= 6)
+    }
+
+    @Test
     fun biologyGroupPageRemoteUsesTheDateParameterForEveryWeek() {
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
@@ -196,10 +226,11 @@ class BsuBiologyScheduleParserTest {
         val fixedClock = object : Clock {
             override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
         }
+        val progressUpdates = mutableListOf<List<com.example.bruschedule.domain.model.ProfileCandidate>>()
 
         val matches = runSuspending {
             BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
-                .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "42")
+                .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "42") { progressUpdates += it }
         }
 
         assertEquals(1, matches.size)
@@ -209,6 +240,46 @@ class BsuBiologyScheduleParserTest {
         assertTrue(matches.single().subtitle.contains("Дневная"))
         assertTrue(matches.single().subtitle.contains("3 курс"))
         assertTrue(requested.contains(indexUrl))
+        assertEquals(15, requested.count { "?study=" in it })
+        assertTrue(requested.none { "study=t" in it })
+        assertTrue(progressUpdates.any { update -> update.any { it.sourceUrl == expectedScheduleUrl } })
+    }
+
+    @Test
+    fun biologyCataloguePublishesMatchingGroupsBeforeTheRemainingCoursePagesFinish() = runTest {
+        val indexUrl = "https://bsu.bio/schedule.php?study=d&course=3&date=2026-10-19"
+        val releaseRemainingPages = CompletableDeferred<Unit>()
+        val firstMatch = CompletableDeferred<List<com.example.bruschedule.domain.model.ProfileCandidate>>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when {
+                url == BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL -> "<html><body>catalogue</body></html>"
+                url == indexUrl -> biologyGroupIndexHtml()
+                url.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL) -> {
+                    releaseRemainingPages.await()
+                    "<html><body>other course</body></html>"
+                }
+                else -> "<html><body>no links</body></html>"
+            }
+        }
+        val fixedClock = object : Clock {
+            override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
+        }
+        val searchJob = async {
+            BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
+                .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "42") { candidates ->
+                    if (candidates.any { it.sourceKey == "bio-group-number:42" }) firstMatch.complete(candidates)
+                }
+        }
+
+        try {
+            val earlyCandidates = withTimeout(5_000) { firstMatch.await() }
+            assertTrue(earlyCandidates.any { it.sourceKey == "bio-group-number:42" })
+            assertTrue(searchJob.isActive)
+        } finally {
+            releaseRemainingPages.complete(Unit)
+        }
+
+        assertEquals(1, searchJob.await().size)
     }
 
     private fun biologyGroupIndexHtml(): String = """

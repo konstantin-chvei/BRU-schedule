@@ -153,7 +153,15 @@ fun AddProfileBottomSheet(
                         onRetry = { onSearch(selectedType, query.trim()) },
                     )
                 }
-                searchState.candidates.take(14).forEach { candidate ->
+                if (searchState.loading && searchState.candidates.isNotEmpty()) {
+                    Text(
+                        "Совпадения уже доступны — список пополняется по мере загрузки факультетов.",
+                        color = BruColors.muted,
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp,
+                    )
+                }
+                searchState.candidates.forEach { candidate ->
                     ProfileCandidateRow(candidate, onClick = { onSelectCandidate(candidate) })
                 }
                 Text(

@@ -48,6 +48,7 @@ import com.example.bruschedule.domain.usecase.RefreshOutcome
 import com.example.bruschedule.domain.usecase.RefreshScheduleUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,7 +76,6 @@ import kotlinx.datetime.toLocalDateTime
 
 enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS }
 
-private const val STARTUP_REFRESH_RETRY_COOLDOWN_MILLIS = 12 * 60 * 60 * 1000L
 private val PUBLIC_HTTPS_URL = Regex(
     """^https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$""",
     RegexOption.IGNORE_CASE,
@@ -174,6 +174,7 @@ class ScheduleViewModel(
     private val refreshing = MutableStateFlow(false)
     private val notice = MutableStateFlow<String?>(null)
     private val profileSearch = MutableStateFlow(ProfileSearchUiState())
+    private var profileSearchJob: Job? = null
     private val nowEpochMillis = MutableStateFlow(clock.now().toEpochMilliseconds())
     private val appearance = appearancePreferences.observe().stateIn(
         scope = viewModelScope,
@@ -428,13 +429,6 @@ class ScheduleViewModel(
                 }
         }
         viewModelScope.launch {
-            val initialBase = baseState.first()
-            val storedProfile = initialBase.profiles.firstOrNull {
-                it.universityId == initialBase.selectedUniversityId
-            } ?: return@launch
-            refreshIfSemesterCoverageIsMissing(storedProfile.id)
-        }
-        viewModelScope.launch {
             while (true) {
                 nowEpochMillis.value = clock.now().toEpochMilliseconds()
                 delay(30_000)
@@ -448,10 +442,11 @@ class ScheduleViewModel(
             return
         }
         selectedProfileId.value = profileId
-        viewModelScope.launch { refreshIfSemesterCoverageIsMissing(profileId) }
     }
 
     fun selectUniversity(universityId: String) {
+        profileSearchJob?.cancel()
+        profileSearchJob = null
         if (uiState.value.universities.none { it.id == universityId }) {
             notice.value = "Этот вуз больше не доступен. Выберите другой или добавьте его заново."
             return
@@ -465,7 +460,6 @@ class ScheduleViewModel(
                 }
                 selectedProfileId.value = profile?.id
                 selectedDate.value = today()
-                profile?.let { refreshIfSemesterCoverageIsMissing(it.id) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -650,7 +644,6 @@ class ScheduleViewModel(
                     activeProfileId,
                 )
                 if (selectedDate.value < today || selectedDate.value > end) selectedDate.value = today
-                activeProfileId?.let(::launchRefresh)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -682,37 +675,6 @@ class ScheduleViewModel(
             return
         }
         launchRefresh(id)
-    }
-
-    private suspend fun refreshIfSemesterCoverageIsMissing(profileId: String) {
-        try {
-            val cachedLessons = withContext(Dispatchers.Default) { schedules.getLessons(profileId) }
-            val today = today()
-            val profile = uiState.value.profiles.firstOrNull { it.id == profileId } ?: schedules.getProfile(profileId)
-            val desiredCoverageEnd = SemesterCoveragePolicy.coverageEndDateForUniversity(
-                today,
-                semesterSchedulePreferencesRepository.observe().first(),
-                profile?.universityId ?: uiState.value.selectedUniversity.id,
-                profileId,
-            )
-            val remoteDates = cachedLessons.asSequence()
-                .filterNot(Lesson::isCustom)
-                .mapNotNull { lesson -> runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull() }
-                .toList()
-            val coverageEnd = remoteDates.maxOrNull()
-            val containsDatesOutsideRequestedRange = remoteDates.any { it < today || it > desiredCoverageEnd }
-            if (coverageEnd != null && coverageEnd >= desiredCoverageEnd && !containsDatesOutsideRequestedRange) return
-
-            val sync = syncRepository.observeSyncState(profileId).first()
-            val lastAttempt = sync?.lastAttemptAtEpochMillis
-            val now = clock.now().toEpochMilliseconds()
-            if (sync?.lastError != null && lastAttempt != null && now - lastAttempt < STARTUP_REFRESH_RETRY_COOLDOWN_MILLIS) return
-            launchRefresh(profileId)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Throwable) {
-            notice.value = errorNotice("Не удалось проверить период расписания", failure, "DATABASE")
-        }
     }
 
     private fun launchRefresh(profileId: String) {
@@ -778,6 +740,8 @@ class ScheduleViewModel(
     }
 
     fun saveManualProfile(type: ScheduleProfileType, name: String, sourceUrl: String?) {
+        profileSearchJob?.cancel()
+        profileSearchJob = null
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
             notice.value = "Укажите название группы или расписания"
@@ -834,6 +798,8 @@ class ScheduleViewModel(
     }
 
     fun searchProfiles(type: ScheduleProfileType, query: String) {
+        profileSearchJob?.cancel()
+        profileSearchJob = null
         val university = uiState.value.selectedUniversity
         if (university.sourceType !in setOf(
                 UniversitySourceType.BRU_CATALOG,
@@ -845,10 +811,17 @@ class ScheduleViewModel(
             return
         }
         profileSearch.value = ProfileSearchUiState(query = query, type = type, loading = true)
-        viewModelScope.launch {
+        profileSearchJob = viewModelScope.launch {
             try {
                 val candidates = withContext(Dispatchers.Default) {
-                    profileCatalog.search(university.id, type, query)
+                    profileCatalog.search(university.id, type, query) { partialCandidates ->
+                        val currentSearch = profileSearch.value
+                        if (uiState.value.selectedUniversity.id == university.id &&
+                            currentSearch.query == query && currentSearch.type == type && currentSearch.loading
+                        ) {
+                            profileSearch.value = currentSearch.copy(candidates = partialCandidates)
+                        }
+                    }
                 }
                 if (uiState.value.selectedUniversity.id != university.id) return@launch
                 profileSearch.value = ProfileSearchUiState(query, type, candidates = candidates)
@@ -863,9 +836,14 @@ class ScheduleViewModel(
                 throw cancelled
             } catch (failure: Throwable) {
                 if (uiState.value.selectedUniversity.id != university.id) return@launch
+                val partialCandidates = profileSearch.value
+                    .takeIf { it.query == query && it.type == type }
+                    ?.candidates
+                    .orEmpty()
                 profileSearch.value = ProfileSearchUiState(
                     query = query,
                     type = type,
+                    candidates = partialCandidates,
                     error = ScheduleErrorInfo.fromThrowable(failure, operation = "SEARCH"),
                 )
             }
@@ -873,6 +851,8 @@ class ScheduleViewModel(
     }
 
     fun addProfileCandidate(candidate: ProfileCandidate) {
+        profileSearchJob?.cancel()
+        profileSearchJob = null
         val profile = ScheduleProfile(
             id = DomainIds.new("profile"),
             type = candidate.type,

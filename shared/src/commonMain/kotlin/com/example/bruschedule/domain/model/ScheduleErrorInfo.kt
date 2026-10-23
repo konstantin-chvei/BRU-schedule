@@ -10,6 +10,7 @@ data class ScheduleErrorInfo(
     companion object {
         private const val STORAGE_PREFIX = "@BRU_ERROR_V1:"
         private val HTTP_STATUS = Regex("(?:кодом\\s*|HTTP(?:/\\d(?:\\.\\d)?)?\\s*)(\\d{3})", RegexOption.IGNORE_CASE)
+        private val DARWIN_TLS_STATUS = Regex("nsurlerrordomain.*code\\s*=\\s*-120[0-6]\\b")
 
         /** Converts an exception chain to a concise message and a stable, short diagnostic code. */
         fun fromThrowable(failure: Throwable, operation: String = "SYNC"): ScheduleErrorInfo {
@@ -17,7 +18,11 @@ data class ScheduleErrorInfo(
             var cause: Throwable? = failure
             repeat(5) {
                 val current = cause ?: return@repeat
-                current.message?.takeIf(String::isNotBlank)?.take(MAX_CAUSE_MESSAGE_LENGTH)?.let(messages::add)
+                val currentMessage = current.message?.takeIf(String::isNotBlank)
+                currentMessage?.take(MAX_CAUSE_MESSAGE_LENGTH)?.let(messages::add)
+                if (currentMessage == null) {
+                    current.toString().take(MAX_CAUSE_MESSAGE_LENGTH).takeIf(String::isNotBlank)?.let(messages::add)
+                }
                 cause = current.cause
             }
             return fromDiagnostic(messages.joinToString(" | ").ifBlank { "unknown failure" }, operation)
@@ -43,15 +48,18 @@ data class ScheduleErrorInfo(
             val source = diagnostic.take(MAX_DIAGNOSTIC_LENGTH).ifBlank { "unknown failure" }
             val normalized = source.lowercase()
             val status = HTTP_STATUS.find(source)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            val certificateFailure = listOf(
+            val certificateFailure = DARWIN_TLS_STATUS.containsMatchIn(normalized) || listOf(
                 "certificate", "certpath", "sslpeertrust", "sslpeerunverified", "сертификат",
+                "trust evaluation", "server identity could not be verified", "secure connection could not be established",
             ).any(normalized::contains)
             val networkFailure = listOf(
                 "timeout", "timed out", "timedout", "unknownhost", "unable to resolve", "could not resolve host",
                 "failed host lookup", "failed to connect", "connection refused", "connection reset", "no route to host",
                 "network is unreachable", "internet connection appears", "no internet connection", "socketexception",
-                "sslhandshakeexception", "dns", "ошибка сети", "сеть недоступна", "нет подключения", "нет сети",
+                "sslhandshakeexception", "nsurlerrordomain", "darwinhttprequestexception", "dns",
+                "ошибка сети", "сеть недоступна", "нет подключения", "нет сети",
                 "ответ отсутствует", "не удалось открыть каталог", "не удалось загрузить каталог",
+                "не удалось загрузить расписание биофака",
             ).any(normalized::contains)
             val category: String
             val message: String

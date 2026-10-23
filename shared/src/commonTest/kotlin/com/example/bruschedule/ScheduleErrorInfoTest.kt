@@ -49,6 +49,16 @@ class ScheduleErrorInfoTest {
     }
 
     @Test
+    fun bareDarwinCertificateErrorCodeIsClassifiedAsTls() {
+        val error = ScheduleErrorInfo.fromThrowable(
+            IllegalStateException("Error Domain=NSURLErrorDomain Code=-1202"),
+        )
+
+        assertTrue(error.message.contains("безопасность соединения"))
+        assertTrue(error.code.contains("TLS"))
+    }
+
+    @Test
     fun networkAndMissingSourceFailuresHaveUsefulShortMessages() {
         val network = ScheduleErrorInfo.fromThrowable(IllegalStateException("ConnectTimeoutException: request timed out"))
         val unavailableCatalog = ScheduleErrorInfo.fromThrowable(

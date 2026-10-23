@@ -12,7 +12,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
@@ -142,32 +144,24 @@ class BruScheduleRemoteDataSource(
         require(mondays.last() <= throughDate || mondays.size < MAX_BIOLOGY_WEEKS) {
             "Период расписания Биофака превышает допустимый диапазон"
         }
-        val responses = mutableListOf<Pair<kotlinx.datetime.LocalDate, Result<String>>>()
-        mondays.chunked(MAX_BIOLOGY_REQUESTS_IN_FLIGHT).forEach { batch ->
-            responses += supervisorScope {
-                batch.map { week ->
-                    async(start = CoroutineStart.UNDISPATCHED) {
-                        val result = try {
-                            Result.success(transport.get(withWeekDate(sourceUrl, week.toString())))
+        val responses = coroutineScope {
+            val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
+            mondays.map { week ->
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    semaphore.withPermit {
+                        try {
+                            week to transport.get(withWeekDate(sourceUrl, week.toString()))
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (failure: Throwable) {
-                            Result.failure(failure)
+                            val detail = failure.message?.takeIf(String::isNotBlank) ?: failure.toString()
+                            error("Не удалось загрузить расписание Биофака на неделю $week: $detail")
                         }
-                        week to result
                     }
-                }.awaitAll()
-            }
+                }
+            }.awaitAll()
         }
-        val failed = responses.firstOrNull { (_, result) -> result.isFailure }
-        if (failed != null) {
-            val detail = failed.second.exceptionOrNull()?.message?.takeIf(String::isNotBlank)
-                ?: "сайт не вернул страницу"
-            error("Не удалось загрузить расписание Биофака на неделю ${failed.first}: $detail")
-        }
-        return biologyScheduleParser.combineWeeklyPages(
-            responses.map { (week, result) -> week to result.getOrThrow() },
-        )
+        return biologyScheduleParser.combineWeeklyPages(responses)
     }
 
     private fun currentBiologySourceUrl(profile: ScheduleProfile, configuredUrl: String): String {
@@ -291,7 +285,7 @@ class BruScheduleRemoteDataSource(
 
     private companion object {
         const val MAX_BIOLOGY_WEEKS = 54
-        const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 3
+        const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 6
         val BIOLOGY_GROUP_NUMBER = Regex("\\d+[A-Za-zА-Яа-яЁё]?")
     }
 }
