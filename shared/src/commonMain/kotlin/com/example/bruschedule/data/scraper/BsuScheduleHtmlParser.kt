@@ -4,6 +4,7 @@ import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ScheduleProfile
+import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.repository.ScheduleHtmlParser
 import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Element
@@ -21,14 +22,19 @@ class BsuScheduleHtmlParser(
     private val genericParser: GenericHtmlScheduleParser = GenericHtmlScheduleParser(),
     private val biologyParser: BsuBiologyScheduleHtmlParser = BsuBiologyScheduleHtmlParser(),
 ) : ScheduleHtmlParser {
-    override val formatVersion: Int = 4
+    override val formatVersion: Int = 6
 
     override fun parse(profile: ScheduleProfile, html: String, referenceDate: LocalDate): List<Lesson> {
         require(html.isNotBlank()) { "Страница расписания пуста" }
         if (biologyParser.isBiologyProfile(profile)) return biologyParser.parse(profile, html, referenceDate)
+        if (profile.type == ScheduleProfileType.TEACHER) {
+            return parseTeacherProfile(profile, html, referenceDate)
+        }
         val document = Ksoup.parse(html)
-        val pageText = normalize(document.text()).lowercase().replace('ё', 'е')
-        val hasDateAnchor = document.select("table th, table td").any { EXPLICIT_DATE.containsMatchIn(it.text()) }
+        val pageContent = "${document.selectFirst("title")?.text().orEmpty()} ${document.text()}"
+        val pageText = normalize(pageContent).lowercase().replace('ё', 'е')
+        val hasDateAnchor = document.select("table th, table td").any { EXPLICIT_DATE.containsMatchIn(it.text()) } ||
+            EXPLICIT_DATE.containsMatchIn(pageContent) || ISO_DATE.containsMatchIn(pageContent)
         require(!hasSingleParityLabel(pageText) || hasDateAnchor) {
             "Для чётного или нечётного расписания нужны даты в таблице, чтобы определить повтор недели"
         }
@@ -43,6 +49,40 @@ class BsuScheduleHtmlParser(
 
     fun discoverGroupLabelsFromText(text: String): List<String> = groupLabelsIn(text)
 
+    /** Returns teacher names found in a faculty's public timetable page. */
+    fun discoverTeacherNames(html: String): List<String> = genericParser.discoverTeacherNames(html)
+
+    /** Uses the same faculty adapter during discovery and later when loading the selected teacher. */
+    fun discoverTeacherNames(facultyName: String?, html: String): List<String> =
+        BsuFacultyTeacherScheduleParserRegistry.parserFor(facultyName)
+            ?.discoverTeacherNames(html, genericParser)
+            ?: genericParser.discoverTeacherNames(html)
+
+    private fun parseTeacherProfile(
+        profile: ScheduleProfile,
+        html: String,
+        referenceDate: LocalDate,
+    ): List<Lesson> {
+        val document = Ksoup.parse(html)
+        val documentText = "${document.selectFirst("title")?.text().orEmpty()} ${document.text()}"
+        val pageText = normalize(documentText).lowercase().replace('ё', 'е')
+        val hasDateAnchor = document.select("table th, table td").any { EXPLICIT_DATE.containsMatchIn(it.text()) } ||
+            EXPLICIT_DATE.containsMatchIn(documentText) || ISO_DATE.containsMatchIn(documentText)
+        require(!hasSingleParityLabel(pageText) || hasDateAnchor) {
+            "Для чётного или нечётного расписания нужны даты в таблице"
+        }
+        val facultyName = BsuTeacherProfileSourceKey.decode(profile.sourceKey)?.facultyName
+        val facultyParser = BsuFacultyTeacherScheduleParserRegistry.parserFor(facultyName)
+            ?: BsuGenericFacultyTeacherScheduleParser()
+        return facultyParser.parse(
+            profile = profile,
+            html = html,
+            referenceDate = referenceDate,
+            scheduleParser = this,
+            genericParser = genericParser,
+        )
+    }
+
     /** Returns group labels found in matrix table headers. */
     fun discoverTableGroupLabels(html: String): List<String> {
         val biologyGroups = biologyParser.discoverGroups(html).map(BsuBiologyGroup::name)
@@ -56,7 +96,9 @@ class BsuScheduleHtmlParser(
                 texts.forEachIndexed { index, text ->
                     groupLabelsIn(text).forEach { labels += it }
                     val descriptor = parseGroupDescriptor(text) ?: return@forEachIndexed
-                    if (descriptor.subgroup != null) return@forEachIndexed
+                    descriptor.subgroup?.let { subgroup ->
+                        labels += "${descriptor.number} группа ${displaySubgroup(subgroup)}"
+                    }
                     texts.drop(index + 1).take(2)
                         .filter { SUBGROUP_HEADER.matches(it) }
                         .map(::normalizeSubgroup)
@@ -99,12 +141,32 @@ class BsuScheduleHtmlParser(
 
     override fun hasAlternatingTwoWeekCycle(html: String): Boolean {
         val document = Ksoup.parse(html)
-        val pageText = normalize(document.text()).lowercase().replace('ё', 'е')
+        val pageContent = "${document.selectFirst("title")?.text().orEmpty()} ${document.text()}"
+        val pageText = normalize(pageContent).lowercase().replace('ё', 'е')
         val hasOneParity = hasSingleParityLabel(pageText)
         val timetableCells = document.select("table th, table td")
         val hasTime = timetableCells.any { TIME_RANGE.containsMatchIn(it.text()) }
-        val hasDateAnchor = timetableCells.any { EXPLICIT_DATE.containsMatchIn(it.text()) }
-        return (hasOneParity && hasTime && hasDateAnchor) || genericParser.hasAlternatingTwoWeekCycle(html)
+        val hasDateAnchor = timetableCells.any { EXPLICIT_DATE.containsMatchIn(it.text()) } ||
+            EXPLICIT_DATE.containsMatchIn(pageContent) || ISO_DATE.containsMatchIn(pageContent)
+        val sourceSections = document.select("[data-bsu-teacher-source]").toList()
+        val paritySources = sourceSections.mapNotNull { section ->
+            val title = section.attr("data-bsu-teacher-title")
+                .ifBlank { section.selectFirst(".bsu-teacher-source-title")?.text().orEmpty() }
+            val odd = hasOddParityLabel(title)
+            val even = hasEvenParityLabel(title)
+            if (odd.xor(even)) section to odd else null
+        }
+        val allTeacherSourcesAreParitySheets = sourceSections.isNotEmpty() &&
+            paritySources.size == sourceSections.size &&
+            paritySources.all { (section, _) ->
+                val sectionCells = section.select("table th, table td")
+                sectionCells.any { TIME_RANGE.containsMatchIn(it.text()) } &&
+                    (sectionCells.any { EXPLICIT_DATE.containsMatchIn(it.text()) } ||
+                        EXPLICIT_DATE.containsMatchIn(section.text()) || ISO_DATE.containsMatchIn(section.text()))
+            }
+        return allTeacherSourcesAreParitySheets ||
+            (hasOneParity && hasTime && hasDateAnchor) ||
+            genericParser.hasAlternatingTwoWeekCycle(html)
     }
 
     override fun hasAlternatingTwoWeekCycle(profile: ScheduleProfile, html: String): Boolean =
@@ -113,7 +175,9 @@ class BsuScheduleHtmlParser(
     override fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean {
         if (biologyParser.isBiologyProfile(profile)) return biologyParser.hasWeeklyScheduleTemplate(profile, html)
         val layout = findLayout(profile, html) ?: return genericParser.hasWeeklyScheduleTemplate(profile, html)
-        val pageText = normalize(Ksoup.parse(html).text()).lowercase().replace('ё', 'е')
+        val document = Ksoup.parse(html)
+        val pageText = normalize("${document.selectFirst("title")?.text().orEmpty()} ${document.text()}")
+            .lowercase().replace('ё', 'е')
         if ("нечетн" in pageText || "четн" in pageText) return false
         val timedRows = layout.rows.drop(layout.dataStart).filter { row ->
             TIME_RANGE.containsMatchIn(cellText(row, layout.timeColumn))
@@ -125,20 +189,29 @@ class BsuScheduleHtmlParser(
         return dates.size <= 7
     }
 
-    private fun hasSingleParityLabel(text: String): Boolean {
+    private fun hasSingleParityLabel(text: String): Boolean =
+        hasOddParityLabel(text).xor(hasEvenParityLabel(text))
+
+    private fun hasOddParityLabel(text: String): Boolean =
+        "нечетн" in normalize(text).lowercase().replace('ё', 'е')
+
+    private fun hasEvenParityLabel(text: String): Boolean {
         val normalized = normalize(text).lowercase().replace('ё', 'е')
-        val hasOddLabel = "нечетн" in normalized
-        val hasEvenLabel = "четн" in normalized.replace("нечетн", "")
-        return hasOddLabel.xor(hasEvenLabel)
+        return "четн" in normalized.replace("нечетн", "")
     }
 
     private fun parseNumberedGroupBlocks(
         profile: ScheduleProfile,
         html: String,
         referenceDate: LocalDate,
+        includeAllGroups: Boolean = false,
     ): List<Lesson> {
-        val wantedGroup = parseGroupDescriptor(profile.sourceKey ?: profile.name)?.number?.toIntOrNull()
-            ?: error("Не удалось определить номер группы в таблице расписания")
+        val wantedGroup = if (includeAllGroups) {
+            null
+        } else {
+            parseGroupDescriptor(profile.sourceKey ?: profile.name)?.number?.toIntOrNull()
+                ?: error("Не удалось определить номер группы в таблице расписания")
+        }
         val document = Ksoup.parse(html)
         val monday = referenceDate.minus(DatePeriod(days = referenceDate.dayOfWeek.isoDayNumber - 1))
         val lessons = mutableListOf<Lesson>()
@@ -204,7 +277,9 @@ class BsuScheduleHtmlParser(
                     val subject = normalize(cellText(row, subjectColumn))
                     val date = currentDate
                     val time = TIME_RANGE.find(currentTime)
-                    if (subject.isBlank() || date == null || time == null || currentGroup != wantedGroup) {
+                    if (subject.isBlank() || date == null || time == null ||
+                        wantedGroup != null && currentGroup != wantedGroup
+                    ) {
                         return@rowLoop
                     }
                     val start = normalizeTime(time.groupValues[1])
@@ -221,7 +296,8 @@ class BsuScheduleHtmlParser(
                         "практ" in joined || "practice" in joined || PRACTICE_CODE.containsMatchIn(joined) -> LessonType.PRACTICE
                         else -> LessonType.UNKNOWN
                     }
-                    val sourceKey = "${profile.id}|${date}|$start-$end|$tableIndex|$blockIndex|$rowOffset"
+                    val groupScope = if (includeAllGroups) "|group:${currentGroup ?: "unknown"}" else ""
+                    val sourceKey = "${profile.id}|${date}|$start-$end|$tableIndex|$blockIndex|$rowOffset$groupScope"
                     lessons += Lesson(
                         id = "web:$sourceKey",
                         profileId = profile.id,
@@ -244,9 +320,154 @@ class BsuScheduleHtmlParser(
         }
         val parsed = lessons.distinctBy(Lesson::sourceKey)
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
-        require(parsed.isNotEmpty()) { "Не найдены пары группы «${profile.sourceKey ?: profile.name}» в таблице расписания" }
+        require(parsed.isNotEmpty()) {
+            if (wantedGroup == null) "В таблице расписания не найдены пары выбранного профиля"
+            else "Не найдены пары группы «${profile.sourceKey ?: profile.name}» в таблице расписания"
+        }
         return parsed
     }
+
+    internal fun parseAllNumberedGroupBlocks(
+        profile: ScheduleProfile,
+        html: String,
+        referenceDate: LocalDate,
+    ): List<Lesson> = parseNumberedGroupBlocks(
+        profile = profile,
+        html = html,
+        referenceDate = referenceDate,
+        includeAllGroups = true,
+    )
+
+    /**
+     * Normalizes PDF/Office tables that put weekdays in the first data column and omit a weekday
+     * label from the header (for example, the current FSC PDFs). Each group/subgroup column is
+     * projected into a small day/time/subject/room table before using the shared KMP parser.
+     */
+    internal fun parseDayFirstDocumentTables(
+        profile: ScheduleProfile,
+        html: String,
+        referenceDate: LocalDate,
+    ): List<Lesson> {
+        val document = Ksoup.parse(html)
+        val projectedTables = mutableListOf<String>()
+        document.select("table").forEach { table ->
+            val rows = expandTableRows(table)
+            val headerIndex = rows.take(MAX_HEADER_ROWS).indexOfFirst { row ->
+                row.any { cell -> isTimeHeader(cell?.text().orEmpty()) }
+            }
+            if (headerIndex < 0) return@forEach
+            val header = rows[headerIndex]
+            val timeColumn = header.indexOfFirst { cell -> isTimeHeader(cell?.text().orEmpty()) }
+            if (timeColumn < 0) return@forEach
+            val dayColumn = header.indices.firstOrNull { column ->
+                column != timeColumn && (
+                    isWeekdayHeader(cellText(header, column)) || isDateHeader(cellText(header, column))
+                )
+            } ?: rows.drop(headerIndex + 1).take(MAX_PDF_DAY_COLUMN_LOOKAHEAD).mapIndexedNotNull { offset, row ->
+                row.indices.firstOrNull { column ->
+                    column != timeColumn && (
+                        weekdayNumber(cellText(row, column)) != null ||
+                            parseAnyDate(cellText(row, column), referenceDate) != null
+                    )
+                }?.let { column -> (headerIndex + 1 + offset) to column }
+            }.groupBy({ it.second }, { it.first })
+                .maxByOrNull { (_, rowIndexes) -> rowIndexes.size }
+                ?.key
+            if (dayColumn == null || dayColumn == timeColumn) return@forEach
+
+            val roomColumns = header.indices.filter { column -> isRoomHeader(cellText(header, column)) }
+            val groupColumns = header.indices.filter { column ->
+                column != dayColumn && column != timeColumn && isDocumentGroupColumn(cellText(header, column))
+            }
+            val contentColumns = groupColumns.ifEmpty {
+                header.indices.filter { column ->
+                    column != dayColumn && column != timeColumn &&
+                        !isDateHeader(cellText(header, column)) &&
+                        !isRoomHeader(cellText(header, column))
+                }
+            }.distinct()
+            if (contentColumns.isEmpty()) return@forEach
+
+            contentColumns.forEach { contentColumn ->
+                val nextContentColumn = contentColumns.firstOrNull { it > contentColumn }
+                val roomColumn = roomColumns.firstOrNull { column ->
+                    column > contentColumn && (nextContentColumn == null || column < nextContentColumn)
+                }
+                val dateColumn = header.indices.firstOrNull { column ->
+                    column != dayColumn && column != timeColumn && isDateHeader(cellText(header, column))
+                }
+                val bodyRows = rows.drop(headerIndex + 1)
+                var currentTime = ""
+                val projectedRows = mutableListOf<String>()
+                bodyRows.forEach rowLoop@ { row ->
+                    val timeText = cellText(row, timeColumn)
+                    val timeRanges = TIME_RANGE.findAll(timeText).map { it.value }.toList()
+                    if (timeRanges.isNotEmpty()) currentTime = timeRanges.last()
+                    val rowTimeRanges = if (timeRanges.isNotEmpty()) timeRanges else listOf(currentTime).filter(String::isNotBlank)
+                    if (rowTimeRanges.isEmpty()) return@rowLoop
+                    val contentCell = row.getOrNull(contentColumn) ?: return@rowLoop
+                    val lessonSegments = splitDocumentLessonSegments(contentCell.text())
+                    val contentParts = if (lessonSegments.isNotEmpty()) {
+                        lessonSegments.map(::escapeHtmlText)
+                    } else {
+                        listOf(contentCell.html())
+                    }
+                    val roomHtml = roomColumn?.let { row.getOrNull(it)?.html().orEmpty() }.orEmpty()
+                    val segments = when {
+                        rowTimeRanges.size > 1 && contentParts.size > 1 ->
+                            rowTimeRanges.indices.map { index -> contentParts.getOrElse(index) { contentParts.last() } }
+                        contentParts.size > 1 -> contentParts
+                        else -> List(rowTimeRanges.size) { contentParts.firstOrNull().orEmpty() }
+                    }
+                    val dateText = dateColumn?.let { cellText(row, it) }.orEmpty()
+                    val dayAndDate = listOf(cellText(row, dayColumn), dateText).filter(String::isNotBlank)
+                        .joinToString(" ")
+                    segments.forEachIndexed { index, content ->
+                        if (content.isBlank()) return@forEachIndexed
+                        val range = rowTimeRanges.getOrElse(index) { rowTimeRanges.last() }
+                        projectedRows += "<tr><td>${escapeHtmlText(dayAndDate)}</td>" +
+                            "<td>${escapeHtmlText(range)}</td><td>$content</td>" +
+                            "<td>$roomHtml</td></tr>"
+                    }
+                }
+                if (projectedRows.isNotEmpty()) {
+                    projectedTables += "<table><thead><tr><th>День</th><th>Время</th>" +
+                        "<th>Предмет</th><th>Аудитория</th></tr></thead><tbody>" +
+                        projectedRows.joinToString("") + "</tbody></table>"
+                }
+            }
+        }
+        if (projectedTables.isEmpty()) return emptyList()
+        return genericParser.parse(profile, "<html><body>${projectedTables.joinToString("\n")}</body></html>", referenceDate)
+    }
+
+    private fun isDocumentGroupColumn(text: String): Boolean {
+        val normalized = normalize(text).lowercase().replace('ё', 'е')
+        return "групп" in normalized || "group" in normalized || GROUP_CODE.containsMatchIn(normalized)
+    }
+
+    private fun splitDocumentLessonSegments(text: String): List<String> {
+        val normalized = normalize(text)
+        val teacherMarkers = DOCUMENT_TEACHER_MARKER.findAll(normalized).toList()
+        if (teacherMarkers.size < 2) return emptyList()
+        return buildList {
+            var start = 0
+            teacherMarkers.forEach { marker ->
+                val end = marker.range.last + 1
+                val segment = normalized.substring(start, end).trim()
+                if (segment.isNotBlank()) add(segment)
+                start = end
+            }
+            val trailing = normalized.substring(start).trim()
+            if (trailing.isNotBlank()) add(trailing)
+        }
+    }
+
+    private fun escapeHtmlText(text: String): String = text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
 
     private fun parseAnyDate(text: String, referenceDate: LocalDate): LocalDate? {
         val iso = ISO_DATE.find(text)
@@ -487,7 +708,7 @@ class BsuScheduleHtmlParser(
 
     private fun isRoomHeader(text: String): Boolean {
         val normalized = normalize(text).lowercase().replace('ё', 'е')
-        return listOf("аудитор", "ауд.", "кабинет", "room").any { normalized.contains(it) }
+        return listOf("ауд", "кабинет", "room").any { normalized.contains(it) }
     }
 
     private fun hasNumberedGroupColumns(html: String): Boolean =
@@ -799,6 +1020,7 @@ class BsuScheduleHtmlParser(
 
     private companion object {
         const val MAX_HEADER_ROWS = 12
+        const val MAX_PDF_DAY_COLUMN_LOOKAHEAD = 24
         const val ONE_OFF_KEY_MARKER = "|once"
         const val EXCLUDED_DATE_KEY_MARKER = "|except:"
         val TIME_RANGE = Regex("(\\d{1,2}[:.]\\d{2})\\s*[-–—−]\\s*(\\d{1,2}[:.]\\d{2})")
@@ -818,6 +1040,10 @@ class BsuScheduleHtmlParser(
         val PRACTICE_CODE = Regex("(^|\\s)пз\\.?($|\\s)", RegexOption.IGNORE_CASE)
         val INLINE_TEACHER_LINE = Regex(
             "^(.+?)\\s+((?:(?:проф(?:ессор)?|доц(?:ент)?|ст\\.?\\s*преп\\.?|ассистент)\\s+)?[А-ЯЁ][а-яё-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.?)$",
+            RegexOption.IGNORE_CASE,
+        )
+        val DOCUMENT_TEACHER_MARKER = Regex(
+            "[А-ЯЁ][а-яё-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.?(?=$|\\s)",
             RegexOption.IGNORE_CASE,
         )
         val TEACHER_TITLE_LINE = Regex(

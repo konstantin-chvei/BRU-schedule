@@ -18,7 +18,18 @@ class UniversityScheduleProfileCatalogRepository(
         query: String,
     ): List<ProfileCandidate> {
         val catalogue = catalogues[universityId]
-            ?: error("Поиск групп для выбранного вуза пока не подключён")
+            ?: error("Поиск расписаний для выбранного вуза пока не подключён")
         return catalogue.search(universityId, type, query)
+    }
+
+    override suspend fun search(
+        universityId: String,
+        type: ScheduleProfileType,
+        query: String,
+        onPartialResults: (List<ProfileCandidate>) -> Unit,
+    ): List<ProfileCandidate> {
+        val catalogue = catalogues[universityId]
+            ?: error("Поиск расписаний для выбранного вуза пока не подключён")
+        return catalogue.search(universityId, type, query, onPartialResults)
     }
 }

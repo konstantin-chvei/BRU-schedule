@@ -22,7 +22,7 @@ data class ScheduleProfile(
     val name: String,
     /** Stable university directory/details page or direct timetable URL. */
     val sourceUrl: String? = null,
-    /** Exact label/slug used to find this item on its university directory page. */
+    /** Exact label/slug used by a university adapter; BSU teacher profiles store their faculty source set here. */
     val sourceKey: String? = null,
     /** University whose adapter/source owns this profile. Existing profiles migrate to BRU. */
     val universityId: String = UniversityIds.BRU,

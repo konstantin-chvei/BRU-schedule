@@ -105,6 +105,39 @@ class GenericHtmlScheduleParserTest {
     }
 
     @Test
+    fun discoversTeacherNamesFromFacultyTeacherColumnsAndExplicitTeacherMarkup() {
+        val html = """
+            <table>
+              <tr><th>День</th><th>Время</th><th>Предмет</th><th>Преподаватель</th></tr>
+              <tr><td>Понедельник</td><td>08:30-10:05</td><td>Математика</td><td>Иванова Н.В.</td></tr>
+            </table>
+            <div class="lesson-teacher"><a class="teacher-link">Микитченко Надежда Владимировна</a></div>
+            <div>Преподаватель: Петров П.П.</div>
+        """.trimIndent()
+
+        assertEquals(
+            setOf("Иванова Н.В.", "Микитченко Надежда Владимировна", "Петров П.П."),
+            parser.discoverTeacherNames(html).toSet(),
+        )
+    }
+
+    @Test
+    fun discoversMultipleTeachersFromOneInlineMatrixCell() {
+        val html = """
+            <table>
+              <tr><th>День</th><th>Время</th><th>1-11</th></tr>
+              <tr><td>Понедельник</td><td>08:15-09:40</td>
+                <td>Английский язык<br>Ковальчук А.М. Кутыркина Т.П.</td></tr>
+            </table>
+        """.trimIndent()
+
+        assertEquals(
+            setOf("Ковальчук А.М.", "Кутыркина Т.П."),
+            parser.discoverTeacherNames(html).toSet(),
+        )
+    }
+
+    @Test
     fun recognizesWeeklyTemplatesOnlyForNonBruSources() {
         val html = """
             <table>
@@ -115,6 +148,12 @@ class GenericHtmlScheduleParserTest {
 
         assertEquals(true, parser.hasWeeklyScheduleTemplate(profile, html))
         assertEquals(false, parser.hasWeeklyScheduleTemplate(profile.copy(universityId = "bru"), html))
+        val oddWeekHtml = """
+            <h2>Нечетная неделя</h2>
+            <table><tr><th>День</th><th>Время</th><th>Предмет</th></tr>
+            <tr><td>Понедельник, 26.10.2026</td><td>08:15-09:40</td><td>Математика</td></tr></table>
+        """.trimIndent()
+        assertEquals(false, parser.hasWeeklyScheduleTemplate(profile, oddWeekHtml))
     }
 
     @Test

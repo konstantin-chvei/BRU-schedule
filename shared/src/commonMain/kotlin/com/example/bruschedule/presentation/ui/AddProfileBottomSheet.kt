@@ -80,14 +80,14 @@ fun AddProfileBottomSheet(
             Text(
                 when {
                     hasBruCatalog -> "Ищите группу или преподавателя в каталоге rasp.bru.by. Для других вузов добавьте открытую HTML-страницу расписания напрямую. Сохранённые пары доступны офлайн."
-                    hasBsuCatalog -> "Для БГУ поиск сканирует страницы факультетов, HTML-таблицы и открытые Google Sheets. Для Биофака можно искать по односимвольному коду группы; PDF, Excel, Word и динамические расписания требуют отдельных адаптеров."
+                    hasBsuCatalog -> "Для БГУ поиск проверяет расписания факультетов отдельно. Профиль преподавателя объединяет найденные источники; если сайт не публикует открытое расписание, преподаватель не появится в поиске. Для Биофака доступны односимвольные коды групп."
                     else -> "Вуз: ${university.name}. Каталог этого сайта пока не подключён. Вставьте прямую HTTPS-ссылку на открытую HTML-страницу с таблицей расписания; страницы, которые строятся только JavaScript, не поддерживаются."
                 },
                 color = BruColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
             )
-            if (!hasBsuCatalog) {
+            if (hasProfileCatalog) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProfileTypeChip("Группа", selectedType == ScheduleProfileType.GROUP) { selectedType = ScheduleProfileType.GROUP }
                     ProfileTypeChip("Преподаватель", selectedType == ScheduleProfileType.TEACHER) { selectedType = ScheduleProfileType.TEACHER }
@@ -143,6 +143,7 @@ fun AddProfileBottomSheet(
                         when {
                             searchState.loading && hasBsuCatalog -> "Ищем расписания факультетов"
                             searchState.loading -> "Ищем в каталоге"
+                            hasBsuCatalog && selectedType == ScheduleProfileType.TEACHER -> "Искать преподавателя БГУ"
                             hasBsuCatalog -> "Искать группу БГУ"
                             else -> "Искать в каталоге"
                         },
@@ -165,7 +166,11 @@ fun AddProfileBottomSheet(
                     )
                 }
                 searchState.candidates.forEach { candidate ->
-                    ProfileCandidateRow(candidate, onClick = { onSelectCandidate(candidate) })
+                    ProfileCandidateRow(
+                        candidate = candidate,
+                        enabled = !searchState.loading || selectedType == ScheduleProfileType.GROUP,
+                        onClick = { onSelectCandidate(candidate) },
+                    )
                 }
                 Text(
                     if (searchState.candidates.isNotEmpty()) "ИЛИ ДОБАВИТЬ ПО ССЫЛКЕ"
@@ -226,7 +231,7 @@ fun AddProfileBottomSheet(
             Text(
                 when {
                     hasBruCatalog -> "Для БРУ источник обновляется через каталог; прямые ссылки можно заменить позднее."
-                    hasBsuCatalog -> "Выбранный профиль сохраняется локально и обновляется напрямую с сайта факультета; сервер приложения не используется."
+                    hasBsuCatalog -> "Профиль сохраняется локально. Загрузка и обновление запускаются вручную кнопкой «Обновить» в настройках."
                     else -> "Если сайт изменит разметку или требует входа, расписание может не загрузиться."
                 },
                 color = BruColors.dim,
@@ -250,9 +255,10 @@ private fun ProfileTypeChip(label: String, selected: Boolean, onClick: () -> Uni
 }
 
 @Composable
-private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit) {
+private fun ProfileCandidateRow(candidate: ProfileCandidate, enabled: Boolean = true, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(14.dp),
         color = BruColors.elevatedSurface,
         border = BorderStroke(1.dp, BruColors.outline),

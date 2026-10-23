@@ -4,6 +4,7 @@ import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ScheduleProfile
+import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.repository.ScheduleHtmlParser
 import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Element
@@ -15,10 +16,13 @@ import kotlinx.datetime.plus
 
 /** Adapter for the Biology faculty's public group pages at bsu.bio/schedule.php, with legacy-grid support. */
 class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
-    override val formatVersion: Int = 4
+    override val formatVersion: Int = 5
 
     override fun parse(profile: ScheduleProfile, html: String, referenceDate: LocalDate): List<Lesson> {
         require(isBiologyProfile(profile)) { "Профиль не относится к расписанию Биологического факультета БГУ" }
+        if (profile.type == ScheduleProfileType.TEACHER) {
+            return parseTeacherProfile(profile, html, referenceDate)
+        }
         val groupId = profile.sourceKey
             ?.let { sourceKey ->
                 when {
@@ -50,7 +54,9 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
 
     /** A single saved week is a repeatable template; a fetched week envelope already has exact dates. */
     override fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean =
-        isBiologyProfile(profile) && !hasWeeklyEnvelope(html)
+        isBiologyProfile(profile) &&
+            !(profile.type == ScheduleProfileType.TEACHER && BsuTeacherProfileSourceKey.decode(profile.sourceKey) != null) &&
+            !hasWeeklyEnvelope(html)
 
     /** True only for an actual group timetable, not a filter page or the site's error shell. */
     fun hasScheduleGrid(html: String): Boolean {
@@ -105,6 +111,33 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         }.distinctBy(BsuBiologyGroup::id)
     }
 
+    /**
+     * Extracts teacher names from one faculty-specific Biology group timetable. This deliberately
+     * uses the Biology page's teacher links/labels instead of assuming the generic faculty table.
+     */
+    fun discoverTeacherNames(html: String): List<String> {
+        val document = Ksoup.parse(html)
+        val names = linkedSetOf<String>()
+        document.select(".lesson-teacher a, .lesson-teacher, .teacher-link, [class*=teacher]")
+            .forEach { element ->
+                splitTeacherValues(element.text()).forEach { name -> names += name }
+            }
+        val lines = htmlLines(html)
+        lines.forEachIndexed { index, line ->
+            if (!line.startsWith("Преподаватель", ignoreCase = true)) return@forEachIndexed
+            val inline = line.substringAfter(':', "").trim()
+            val value = inline.takeIf(::isTeacherValue)
+                ?: lines.drop(index + 1).firstOrNull(::isTeacherValue)
+            value?.let { teacherText -> splitTeacherValues(teacherText).forEach { names += it } }
+        }
+        return names.toList()
+    }
+
+    /** Wraps week pages with group identity so teacher parsing can safely merge several groups. */
+    fun combineTeacherPages(pages: List<BsuBiologyTeacherPage>): String = pages.joinToString("\n") { page ->
+        "$TEACHER_PAGE_MARKER_PREFIX${page.groupId}:${page.weekDate}-->\n${page.html}"
+    }
+
     fun isBiologyProfile(profile: ScheduleProfile): Boolean =
         profile.sourceUrl?.let { sourceUrl ->
             sourceUrl.contains(BIOLOGY_HOST_PATH, ignoreCase = true) ||
@@ -116,6 +149,65 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
 
     fun combineWeeklyPages(pages: List<Pair<LocalDate, String>>): String = pages
         .joinToString("\n") { (weekDate, html) -> "$WEEK_MARKER_PREFIX$weekDate-->\n$html" }
+
+    private fun parseTeacherProfile(
+        profile: ScheduleProfile,
+        html: String,
+        referenceDate: LocalDate,
+    ): List<Lesson> {
+        val targetTeacher = BsuTeacherProfileSourceKey.teacherName(profile.sourceKey)
+            ?: profile.sourceKey?.takeIf(String::isNotBlank)
+            ?: profile.name
+        val markers = TEACHER_PAGE_MARKER.findAll(html).toList()
+        val lessons = if (markers.isNotEmpty()) {
+            markers.flatMapIndexed { index, marker ->
+                val groupId = marker.groupValues[1]
+                val weekDate = runCatching { LocalDate.parse(marker.groupValues[2]) }.getOrNull()
+                    ?: return@flatMapIndexed emptyList()
+                val endIndex = markers.getOrNull(index + 1)?.range?.first ?: html.length
+                val pageHtml = html.substring(marker.range.last + 1, endIndex)
+                if (groupId.isBlank()) return@flatMapIndexed emptyList()
+                if (isGroupPageProfile(profile) || isServerRenderedGroupPage(pageHtml)) {
+                    parseGroupPage(profile, groupId, weekDate, pageHtml)
+                } else {
+                    parseWeek(profile, groupId, weekDate, pageHtml)
+                }
+            }
+        } else {
+            val groupId = profile.sourceUrl?.let { queryParameter(it, "group") }
+                ?.takeIf(String::isNotBlank)
+                ?: error("В источнике расписания Биофака не указан код группы преподавателя")
+            splitWeeklyPages(html, referenceDate).flatMap { (weekDate, pageHtml) ->
+                if (isGroupPageProfile(profile) || isServerRenderedGroupPage(pageHtml)) {
+                    parseGroupPage(profile, groupId, weekDate, pageHtml)
+                } else {
+                    parseWeek(profile, groupId, weekDate, pageHtml)
+                }
+            }
+        }
+        val parsed = lessons.filter { BsuTeacherNameMatcher.matches(it.teacherName, targetTeacher) }
+            .distinctBy(Lesson::sourceKey)
+            .sortedWith(compareBy({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
+        require(parsed.isNotEmpty()) {
+            "В расписании Биофака не найдены пары преподавателя «$targetTeacher». Проверьте источник факультета"
+        }
+        return parsed
+    }
+
+    private fun splitTeacherValues(value: String): List<String> {
+        val clean = value.substringAfter(':', value).trim()
+        return clean.split(Regex("[;,/|]+"))
+            .map(::normalizeLine)
+            .filter(::isTeacherValue)
+    }
+
+    private fun isTeacherValue(value: String): Boolean {
+        val clean = normalizeLine(value).trim('.', ':', ' ', '–', '-')
+        if (clean.length !in 4..90 || clean.any(Char::isDigit)) return false
+        val normalized = clean.lowercase().replace('ё', 'е')
+        if (normalized.startsWith("ауд") || normalized == "преподаватель" || normalized == "—") return false
+        return clean.any(Char::isLetter) && clean.any(Char::isWhitespace)
+    }
 
     private fun parseGroupPage(
         profile: ScheduleProfile,
@@ -609,7 +701,9 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         const val BIO_GROUP_SOURCE_KEY_PREFIX = "bio-group-id:"
         const val BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX = "bio-group-number:"
         private const val WEEK_MARKER_PREFIX = "<!--BSU-BIO-WEEK:"
+        private const val TEACHER_PAGE_MARKER_PREFIX = "<!--BSU-BIO-TEACHER-PAGE:"
         private val WEEK_MARKER = Regex("<!--BSU-BIO-WEEK:(\\d{4}-\\d{2}-\\d{2})-->")
+        private val TEACHER_PAGE_MARKER = Regex("<!--BSU-BIO-TEACHER-PAGE:([^:>]+):(\\d{4}-\\d{2}-\\d{2})-->")
         private val TIME_RANGE = Regex("(\\d{1,2}[:.]\\d{2})\\s*[-–—−]\\s*(\\d{1,2}[:.]\\d{2})")
         private val EXPLICIT_DATE = Regex("(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})")
         private val SIMPLE_DATE = Regex("\\b\\d{1,2}\\.\\d{1,2}\\b")
@@ -627,6 +721,12 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         private val WHITESPACE = Regex("\\s+")
     }
 }
+
+data class BsuBiologyTeacherPage(
+    val groupId: String,
+    val weekDate: LocalDate,
+    val html: String,
+)
 
 data class BsuBiologyGroup(
     val id: String,

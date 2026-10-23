@@ -2,12 +2,15 @@ package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
+import com.example.bruschedule.data.scraper.BsuBiologyTeacherPage
+import com.example.bruschedule.data.scraper.BsuTeacherProfileSourceKey
 import com.example.bruschedule.data.scraper.ScheduleDocumentHtmlAdapter
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
+import com.fleeksoft.ksoup.Ksoup
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
@@ -32,6 +35,15 @@ class BruScheduleRemoteDataSource(
 ) : ScheduleRemoteDataSource {
     override suspend fun fetchHtml(profile: ScheduleProfile, window: ScheduleWindow): String {
         if (profile.universityId != UniversityIds.BRU) {
+            if (profile.universityId == UniversityIds.BSU && profile.type == ScheduleProfileType.TEACHER) {
+                val teacherSources = BsuTeacherProfileSourceKey.decode(profile.sourceKey)
+                if (teacherSources != null) {
+                    if (biologyScheduleParser.isBiologyProfile(profile)) {
+                        return fetchBiologyTeacherWeeks(teacherSources.urls, window)
+                    }
+                    return fetchBsuTeacherPages(teacherSources.urls)
+                }
+            }
             if (profile.universityId == UniversityIds.BSU && biologyScheduleParser.isBiologyProfile(profile)) {
                 return fetchBiologyWeeks(profile, window)
             }
@@ -123,6 +135,120 @@ class BruScheduleRemoteDataSource(
                 teacherHtml
             }
         }
+    }
+
+    private suspend fun fetchBsuTeacherPages(sourceUrls: List<String>): String {
+        require(sourceUrls.isNotEmpty()) { "Для расписания преподавателя не найдены источники факультета" }
+        val pages = sourceUrls.distinct().map { sourceUrl ->
+            val html = fetchBsuSchedulePage(sourceUrl)
+            val document = Ksoup.parse(html)
+            val title = document.selectFirst("title")?.text()?.trim().orEmpty()
+            val body = document.body()?.html()?.takeIf(String::isNotBlank) ?: html
+            buildString {
+                append("<section data-bsu-teacher-source=\"true\" data-bsu-teacher-url=\"")
+                append(escapeHtmlAttribute(sourceUrl))
+                append("\" data-bsu-teacher-title=\"")
+                append(escapeHtmlAttribute(title))
+                append("\">")
+                if (title.isNotBlank()) {
+                    append("<h2 class=\"bsu-teacher-source-title\">")
+                    append(escapeHtmlAttribute(title))
+                    append("</h2>")
+                }
+                append(body)
+                append("</section>")
+            }
+        }
+        return pages.joinToString("\n")
+    }
+
+    private fun escapeHtmlAttribute(value: String): String = value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+
+    private suspend fun fetchBsuSchedulePage(sourceUrl: String): String {
+        require(sourceUrl.startsWith("https://", ignoreCase = true)) {
+            "Ссылка на расписание преподавателя должна начинаться с https://"
+        }
+        val fetchUrl = GoogleSheetsScheduleUrl.toHtmlTableUrl(sourceUrl) ?: sourceUrl
+        val documentFormat = documentAdapter.formatForUrl(fetchUrl)
+        if (documentFormat == null) return transport.get(fetchUrl)
+        require(documentFormat.isSupported) {
+            "Формат ${documentFormat.extension} не поддерживается для расписания преподавателя"
+        }
+        val binaryTransport = transport as? BinaryResourceTransport
+            ?: error("Источник не поддерживает загрузку файлов расписания преподавателя")
+        val bytes = binaryTransport.getBytes(documentAdapter.downloadUrl(fetchUrl))
+        return documentAdapter.toHtml(documentFormat, bytes)
+    }
+
+    private suspend fun fetchBiologyTeacherWeeks(sourceUrls: List<String>, window: ScheduleWindow): String {
+        transport.primeBiologySession()
+        val groupSources = sourceUrls.distinct().map { url ->
+            require(url.startsWith("https://", ignoreCase = true) &&
+                url.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_GROUP_PAGE_PATH, ignoreCase = true)
+            ) { "В профиле преподавателя Биофака найдена неподдерживаемая ссылка на группу" }
+            val groupId = queryParameter(url, "group")
+                ?: error("В источнике преподавателя Биофака не указан код группы")
+            BiologyTeacherFetchSource(url, groupId)
+        }
+        require(groupSources.isNotEmpty()) { "Для преподавателя Биофака не найдены расписания групп" }
+        val firstMonday = window.startDate.minus(DatePeriod(days = window.startDate.dayOfWeek.isoDayNumber - 1))
+        val throughDate = window.semesterCoverageEndDate ?: window.endDate
+        val mondays = buildList {
+            var week = firstMonday
+            while (week <= throughDate && size < MAX_BIOLOGY_WEEKS) {
+                add(week)
+                week = week.plus(DatePeriod(days = 7))
+            }
+        }
+        require(mondays.isNotEmpty()) { "Не удалось определить недели расписания преподавателя Биофака" }
+        require(mondays.last() <= throughDate || mondays.size < MAX_BIOLOGY_WEEKS) {
+            "Период расписания преподавателя Биофака превышает допустимый диапазон"
+        }
+        val requests = groupSources.flatMap { source ->
+            mondays.map { week -> BiologyTeacherFetchRequest(source.groupId, source.url, week) }
+        }
+        require(requests.size <= MAX_BIOLOGY_TEACHER_PAGE_REQUESTS) {
+            "Для расписания преподавателя Биофака найдено слишком много групп; выберите профиль заново"
+        }
+
+        val pages = coroutineScope {
+            val pending = Channel<BiologyTeacherFetchRequest>(capacity = requests.size)
+            requests.forEach { request -> pending.send(request) }
+            pending.close()
+            val completed = Channel<Pair<BiologyTeacherFetchRequest, Result<String>>>()
+            val workers = List(minOf(MAX_BIOLOGY_REQUESTS_IN_FLIGHT, requests.size)) {
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    for (request in pending) {
+                        val result = try {
+                            Result.success(transport.get(withWeekDate(request.sourceUrl, request.week.toString())))
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Throwable) {
+                            Result.failure(failure)
+                        }
+                        completed.send(request to result)
+                    }
+                }
+            }
+            val resultPages = mutableListOf<BsuBiologyTeacherPage>()
+            repeat(requests.size) {
+                val (request, result) = completed.receive()
+                val html = result.getOrElse { failure ->
+                    val detail = failure.message?.takeIf(String::isNotBlank) ?: failure.toString()
+                    error("Не удалось загрузить расписание Биофака на неделю ${request.week}: $detail")
+                }
+                resultPages += BsuBiologyTeacherPage(request.groupId, request.week, html)
+            }
+            workers.joinAll()
+            pending.close()
+            completed.close()
+            resultPages
+        }
+        return biologyScheduleParser.combineTeacherPages(pages)
     }
 
     private suspend fun fetchBiologyWeeks(profile: ScheduleProfile, window: ScheduleWindow): String {
@@ -298,9 +424,21 @@ class BruScheduleRemoteDataSource(
         return null
     }
 
+    private data class BiologyTeacherFetchSource(
+        val url: String,
+        val groupId: String,
+    )
+
+    private data class BiologyTeacherFetchRequest(
+        val groupId: String,
+        val sourceUrl: String,
+        val week: kotlinx.datetime.LocalDate,
+    )
+
     private companion object {
         const val MAX_BIOLOGY_WEEKS = 54
         const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 6
+        const val MAX_BIOLOGY_TEACHER_PAGE_REQUESTS = 800
         val BIOLOGY_GROUP_NUMBER = Regex("\\d+[A-Za-zА-Яа-яЁё]?")
     }
 }

@@ -1,6 +1,8 @@
 package com.example.bruschedule
 
 import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
+import com.example.bruschedule.data.scraper.BsuTeacherNameMatcher
+import com.example.bruschedule.data.scraper.BsuTeacherProfileSourceKey
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.usecase.ScheduleCycleExpander
@@ -12,6 +14,27 @@ import kotlin.test.assertTrue
 
 class BsuScheduleHtmlParserTest {
     private val parser = BsuScheduleHtmlParser()
+
+    @Test
+    fun teacherProfileSourceKeyKeepsFacultyAndReadsLegacyKeys() {
+        val urls = listOf("https://fpmi.bsu.by/schedule-one", "https://fpmi.bsu.by/schedule-two")
+        val encoded = BsuTeacherProfileSourceKey.encode("Иванова И.И.", urls, facultyName = "ФПМИ")
+
+        assertEquals("Иванова И.И.", BsuTeacherProfileSourceKey.decode(encoded)?.teacherName)
+        assertEquals(urls, BsuTeacherProfileSourceKey.decode(encoded)?.urls)
+        assertEquals("ФПМИ", BsuTeacherProfileSourceKey.decode(encoded)?.facultyName)
+        assertEquals(
+            null,
+            BsuTeacherProfileSourceKey.decode(BsuTeacherProfileSourceKey.encode("Иванова И.И.", urls))?.facultyName,
+        )
+    }
+
+    @Test
+    fun matchesFacultyTeacherNameVariantsWithAcademicTitles() {
+        assertTrue(BsuTeacherNameMatcher.matches("ст. преп. Иванова Н.В.", "Иванова Наталья Владимировна"))
+        assertTrue(BsuTeacherNameMatcher.matches("Петров П.П.", "Петров Павел Петрович"))
+        assertFalse(BsuTeacherNameMatcher.matches("Иванова Н.В.", "Иванова Наталья Сергеевна"))
+    }
 
     @Test
     fun discoversGroupLabelsFromTableHeadersAndSplitSubgroupColumns() {
@@ -253,15 +276,208 @@ class BsuScheduleHtmlParserTest {
     }
 
     @Test
-    fun treatsAnExplicitOddOrEvenWorksheetAsAnAlternatingTwoWeekTemplate() {
+    fun parsesOnlyTheSelectedTeacherFromAFacultyTimetable() {
+        val profile = ScheduleProfile(
+            id = "bsu-teacher-ivanova",
+            type = ScheduleProfileType.TEACHER,
+            name = "Иванова И.И.",
+            sourceUrl = "https://mmf.bsu.by/ru/raspisanie-zanyatij/",
+            sourceKey = BsuTeacherProfileSourceKey.encode(
+                "Иванова И.И.",
+                listOf("https://mmf.bsu.by/ru/raspisanie-zanyatij/"),
+                facultyName = "Механико-математический факультет",
+            ),
+            universityId = "bsu",
+        )
         val html = """
-            <h2>Нечётная неделя</h2>
             <table>
-              <tr><th>День</th><th>Время</th><th>Группа 1-11</th></tr>
-              <tr><td>Понедельник, 19.10.2026</td><td>08.15–09.40</td><td>Математика</td></tr>
+              <tr><th>День</th><th>Дата</th><th>Время</th><th>Группа</th><th>Предмет</th><th>Преподаватель</th><th>Аудитория</th></tr>
+              <tr><td>Понедельник</td><td>19.10.2026</td><td>09:00-10:25</td><td>1 группа</td><td>Математика</td><td>Иванова И.И.</td><td>101</td></tr>
+              <tr><td>Понедельник</td><td>19.10.2026</td><td>10:35-12:00</td><td>2 группа</td><td>Физика</td><td>Петров П.П.</td><td>202</td></tr>
             </table>
         """.trimIndent()
 
+        val lessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
+
+        assertEquals(1, lessons.size)
+        assertEquals("Математика", lessons.single().subjectName)
+        assertEquals("Иванова И.И.", lessons.single().teacherName)
+        assertEquals("101", lessons.single().classroom)
+    }
+
+    @Test
+    fun discoversAndParsesTeacherFromTheSecondFpmisSubgroupColumn() {
+        val profile = ScheduleProfile(
+            id = "bsu-teacher-fpmi-subgroup",
+            type = ScheduleProfileType.TEACHER,
+            name = "Иванова И.И.",
+            sourceUrl = "https://docs.google.com/spreadsheets/d/fpmi/edit?gid=795046734",
+            sourceKey = BsuTeacherProfileSourceKey.encode(
+                "Иванова И.И.",
+                listOf("https://docs.google.com/spreadsheets/d/fpmi/edit?gid=795046734"),
+                facultyName = "ФПМИ",
+            ),
+            universityId = "bsu",
+        )
+        val html = """
+            <table>
+              <tr>
+                <th>1 курс день недели понедельник</th><th>время занятий</th>
+                <th>Выписка 1 группа А</th><th>Б</th><th>2 группа А</th><th>Б</th>
+              </tr>
+              <tr>
+                <td></td><td>08.15–09.40</td>
+                <td>Математический анализ<br>Петров П.П.</td>
+                <td>Физика<br>Иванова И.И.</td>
+                <td>История<br>Сидоров С.С.</td><td></td>
+              </tr>
+            </table>
+        """.trimIndent()
+
+        assertTrue(parser.discoverTableGroupLabels(html).containsAll(listOf("1 группа А", "1 группа Б")))
+        val lessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
+
+        assertEquals(1, lessons.size)
+        assertEquals("Физика", lessons.single().subjectName)
+        assertEquals("Иванова И.И.", lessons.single().teacherName)
+        assertEquals("2026-10-19", lessons.single().lessonDate)
+    }
+
+    @Test
+    fun parsesTeacherLessonsFromEveryGroupColumnInAFacultyGoogleSheet() {
+        val sheetUrl = "https://docs.google.com/spreadsheets/d/teacher-sheet/edit?gid=1"
+        val profile = ScheduleProfile(
+            id = "bsu-teacher-petrov",
+            type = ScheduleProfileType.TEACHER,
+            name = "Петров П.П.",
+            sourceUrl = sheetUrl,
+            sourceKey = BsuTeacherProfileSourceKey.encode(
+                "Петров П.П.",
+                listOf(sheetUrl),
+                facultyName = "Экономический факультет",
+            ),
+            universityId = "bsu",
+        )
+        val html = """
+            <table>
+              <tr><th>День</th><th>Дата</th><th>Время</th><th>1-11</th><th>1-12</th></tr>
+              <tr><td>Понедельник</td><td>19.10.2026</td><td>08:15-09:40</td>
+                <td>Математика<br>Иванова И.И.</td><td>Физика<br>Петров П.П.</td></tr>
+            </table>
+        """.trimIndent()
+
+        val lessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
+
+        assertEquals(1, lessons.size)
+        assertEquals("Физика", lessons.single().subjectName)
+        assertEquals("Петров П.П.", lessons.single().teacherName)
+    }
+
+    @Test
+    fun parsesTeacherLessonsFromRepeatedGroupTablesInEveryFacultySheet() {
+        val profile = ScheduleProfile(
+            id = "bsu-teacher-multi-sheet",
+            type = ScheduleProfileType.TEACHER,
+            name = "Петров П.П.",
+            sourceUrl = "https://docs.google.com/spreadsheets/d/example/edit",
+            sourceKey = BsuTeacherProfileSourceKey.encode(
+                "Петров П.П.",
+                listOf(
+                    "https://docs.google.com/spreadsheets/d/example-odd/edit",
+                    "https://docs.google.com/spreadsheets/d/example-even/edit",
+                ),
+                facultyName = "Экономический факультет",
+            ),
+            universityId = "bsu",
+        )
+        val html = """
+            <section data-bsu-teacher-source="true" data-bsu-teacher-title="НЕЧЕТНАЯ">
+              <h2 class="bsu-teacher-source-title">НЕЧЕТНАЯ</h2>
+              <table>
+                <tr><th>День</th><th>Дата</th><th>Время</th><th>1-11</th></tr>
+                <tr><td>ПОНЕДЕЛЬНИК</td><td>С 26.10.2026</td><td>08:15-09:40</td><td>История<br>Петров П.П.</td></tr>
+              </table>
+            </section>
+            <section data-bsu-teacher-source="true" data-bsu-teacher-title="ЧЕТНАЯ">
+              <h2 class="bsu-teacher-source-title">ЧЕТНАЯ</h2>
+              <table>
+                <tr><th>День</th><th>Дата</th><th>Время</th><th>1-11</th></tr>
+                <tr><td>ПОНЕДЕЛЬНИК</td><td>С 19.10.2026</td><td>09:50-11:15</td><td>Математика<br>Петров П.П.</td></tr>
+              </table>
+            </section>
+        """.trimIndent()
+
+        val lessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
+
+        assertEquals(2, lessons.size)
+        assertEquals(listOf("Математика", "История"), lessons.map { it.subjectName })
+        assertEquals(listOf("2026-10-19", "2026-10-26"), lessons.map { it.lessonDate })
+        assertEquals(2, lessons.map { it.sourceKey }.distinct().size)
         assertTrue(parser.hasAlternatingTwoWeekCycle(html))
+        val occurrences = ScheduleCycleExpander.expand(
+            lessons,
+            fromDate = LocalDate(2026, 10, 23),
+            throughDate = LocalDate(2026, 11, 8),
+        )
+        assertEquals(listOf("2026-10-26", "2026-11-02"), occurrences.map { it.lessonDate })
+    }
+
+    @Test
+    fun parsesFscPdfWeekdayRowsWithSeparateSubgroupAndRoomColumns() {
+        val sheetUrl = "https://fsc.bsu.by/media/schedules/class/2026/10/17/inform_1_1.pdf"
+        val profile = ScheduleProfile(
+            id = "bsu-teacher-fsc-kvetko",
+            type = ScheduleProfileType.TEACHER,
+            name = "Кветко О.М.",
+            sourceUrl = sheetUrl,
+            sourceKey = BsuTeacherProfileSourceKey.encode(
+                "Кветко О.М.",
+                listOf(sheetUrl),
+                facultyName = "ФСК",
+            ),
+            universityId = "bsu",
+        )
+        val html = """
+            <h2>Курс 1 19.10.2026-24.10.2026</h2>
+            <table>
+              <tr><td></td><td>Время</td><td>1 подгруппа (2620)</td><td>ауд</td><td>2 подгруппа (2620)</td><td>ауд</td></tr>
+              <tr><td>Понедельник</td><td>08.30-09.55</td><td>Алгебра и теория чисел (лекция) Дубровина О.В.</td><td>801</td><td></td><td></td></tr>
+              <tr><td>Вторник</td><td>11.50-13.15 13.25-14.50</td><td>Математический анализ (лекция) Кветко О.М. Кураторский/информационный час Кветко О.М.</td><td>803</td><td>Физическая культура (пр)</td><td>803</td></tr>
+            </table>
+        """.trimIndent()
+
+        val lessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
+
+        assertEquals(2, lessons.size)
+        assertEquals(listOf("Математический анализ (лекция)", "Кураторский/информационный час"), lessons.map { it.subjectName })
+        assertEquals(listOf("11:50", "13:25"), lessons.map { it.startTime })
+        assertEquals(listOf("803", "803"), lessons.map { it.classroom })
+        assertTrue(lessons.all { it.teacherName == "Кветко О.М." })
+    }
+
+    @Test
+    fun treatsAnExplicitOddOrEvenWorksheetAsAnAlternatingTwoWeekTemplate() {
+        val html = """
+            <html><head><title>НЕЧЕТНАЯ</title></head><body>
+              <table>
+                <tr><th>День</th><th>Дата</th><th>Время</th><th>Группа 1-11</th></tr>
+                <tr><td>Понедельник</td><td>С 19.10.2026</td><td>08.15–09.40</td><td>Математика</td></tr>
+              </table>
+            </body></html>
+        """.trimIndent()
+        val profile = ScheduleProfile(
+            id = "bsu-group-parity",
+            type = ScheduleProfileType.GROUP,
+            name = "1-11",
+            sourceUrl = "https://docs.google.com/spreadsheets/d/economy-odd/edit",
+            sourceKey = "1-11",
+            universityId = "bsu",
+        )
+
+        assertTrue(parser.hasAlternatingTwoWeekCycle(html))
+        assertFalse(parser.hasWeeklyScheduleTemplate(profile, html))
+        val lessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
+        assertEquals(1, lessons.size)
+        assertEquals("2026-10-19", lessons.single().lessonDate)
     }
 }

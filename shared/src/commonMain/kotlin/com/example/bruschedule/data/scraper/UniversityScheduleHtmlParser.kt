@@ -32,6 +32,6 @@ class UniversityScheduleHtmlParser(
     }
 
     private companion object {
-        const val DISPATCHER_FORMAT_VERSION = 7
+        const val DISPATCHER_FORMAT_VERSION = 9
     }
 }

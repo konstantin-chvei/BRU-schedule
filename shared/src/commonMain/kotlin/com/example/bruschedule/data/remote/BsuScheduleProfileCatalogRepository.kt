@@ -3,6 +3,8 @@ package com.example.bruschedule.data.remote
 import com.example.bruschedule.data.scraper.BsuBiologyGroup
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
+import com.example.bruschedule.data.scraper.BsuTeacherNameMatcher
+import com.example.bruschedule.data.scraper.BsuTeacherProfileSourceKey
 import com.example.bruschedule.data.scraper.ScheduleDocumentFormat
 import com.example.bruschedule.data.scraper.ScheduleDocumentHtmlAdapter
 import com.example.bruschedule.domain.model.ProfileCandidate
@@ -30,9 +32,9 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * Discovers selectable groups from public BSU faculty pages, HTML timetables and Google Sheets.
- * The Biology adapter follows the public mode/course filters and binds each group to the group's
- * server-rendered schedule URL, including the week date used by that source.
+ * Searches each public BSU faculty source independently. Group candidates retain the faculty's
+ * group-specific timetable URL; teacher candidates collect the timetable pages that contain the
+ * selected teacher. Biology uses its own mode/course catalogue and group-page parser.
  */
 class BsuScheduleProfileCatalogRepository(
     private val transport: HtmlTransport,
@@ -41,6 +43,8 @@ class BsuScheduleProfileCatalogRepository(
     private val biologyParser: BsuBiologyScheduleHtmlParser = BsuBiologyScheduleHtmlParser(),
     private val documentAdapter: ScheduleDocumentHtmlAdapter = ScheduleDocumentHtmlAdapter(),
 ) : ScheduleProfileCatalogRepository {
+    internal val configuredFacultyNames: Set<String> get() = FACULTIES.map(FacultySource::name).toSet()
+
     override suspend fun search(type: ScheduleProfileType, query: String): List<ProfileCandidate> =
         search(UniversityIds.BSU, type, query)
 
@@ -57,11 +61,11 @@ class BsuScheduleProfileCatalogRepository(
         onPartialResults: (List<ProfileCandidate>) -> Unit,
     ): List<ProfileCandidate> {
         require(universityId == UniversityIds.BSU) { "Каталог расписаний БГУ не подходит выбранному вузу" }
-        require(type == ScheduleProfileType.GROUP) { "В каталоге БГУ пока доступен поиск учебных групп" }
         val normalizedQuery = normalize(query)
-        val singleSymbolBiologyQuery = normalizedQuery.length == BIOLOGY_SINGLE_SYMBOL_QUERY_LENGTH
+        val singleSymbolBiologyQuery =
+            type == ScheduleProfileType.GROUP && normalizedQuery.length == BIOLOGY_SINGLE_SYMBOL_QUERY_LENGTH
         require(normalizedQuery.length >= MIN_QUERY_LENGTH || singleSymbolBiologyQuery) {
-            "Введите не менее двух символов для поиска; для Биофака допускается односимвольный код"
+            "Введите не менее двух символов для поиска преподавателя или группы; для Биофака допускается односимвольный код группы"
         }
 
         val facultiesToSearch = if (singleSymbolBiologyQuery) {
@@ -77,12 +81,12 @@ class BsuScheduleProfileCatalogRepository(
                     suspend fun publish(partial: FacultyResult) {
                         progressLock.withLock {
                             partialByFaculty[faculty.url] = partial
-                            onPartialResults(sortedCandidates(partialByFaculty.values.toList(), normalizedQuery))
+                            onPartialResults(sortedCandidates(partialByFaculty.values.toList(), type, normalizedQuery))
                         }
                     }
 
                     val result = try {
-                        discoverFaculty(faculty, normalizedQuery, ::publish)
+                        discoverFaculty(faculty, type, normalizedQuery, ::publish)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
@@ -93,33 +97,71 @@ class BsuScheduleProfileCatalogRepository(
                 }
             }.awaitAll()
         }
-        if (results.none { it.candidates.isNotEmpty() } && results.any(FacultyResult::sourceUnavailable)) {
+        if (singleSymbolBiologyQuery && results.none { it.candidates.isNotEmpty() } &&
+            results.any(FacultyResult::sourceUnavailable)
+        ) {
             error("Не удалось получить список групп Биофака. Попробуйте позже; сохранённые данные не изменены")
         }
         val successfulPages = results.sumOf { it.pagesLoaded }
         if (successfulPages == 0 && results.any { it.requestFailures > 0 }) {
             error("Не удалось открыть сайты факультетов БГУ. Проверьте подключение и попробуйте ещё раз")
         }
-        return sortedCandidates(results, normalizedQuery)
+        return sortedCandidates(results, type, normalizedQuery)
     }
 
     private fun sortedCandidates(
         results: List<FacultyResult>,
+        type: ScheduleProfileType,
         normalizedQuery: String,
-    ): List<ProfileCandidate> = results.flatMap { it.candidates }
-        .distinctBy { "${it.sourceUrl}|${it.sourceKey}|${it.name}" }
-        .sortedWith(
+    ): List<ProfileCandidate> {
+        val candidates = results.flatMap { it.candidates }
+        val prepared = if (type == ScheduleProfileType.TEACHER) {
+            val groups = mutableListOf<MutableList<ProfileCandidate>>()
+            candidates.forEach { candidate ->
+                val facultyName = normalize(candidate.subtitle.substringBefore(" · "))
+                val matchingGroup = groups.firstOrNull { group ->
+                    val first = group.first()
+                    normalize(first.subtitle.substringBefore(" · ")) == facultyName &&
+                        BsuTeacherNameMatcher.matches(first.name, candidate.name)
+                }
+                if (matchingGroup == null) groups += mutableListOf(candidate) else matchingGroup += candidate
+            }
+            groups.map { duplicates ->
+                val first = duplicates.first()
+                val urls = duplicates.map(ProfileCandidate::sourceUrl).distinct()
+                first.copy(
+                    sourceUrl = urls.first(),
+                    sourceKey = BsuTeacherProfileSourceKey.encode(
+                        teacherName = first.name,
+                        urls = urls,
+                        facultyName = first.subtitle.substringBefore(" ·"),
+                    ),
+                    subtitle = "${first.subtitle.substringBefore(" · ")} · расписаний: ${urls.size}",
+                )
+            }
+        } else {
+            candidates.distinctBy { "${it.sourceUrl}|${it.sourceKey}|${it.name}" }
+        }
+        return prepared.sortedWith(
             compareBy<ProfileCandidate> { normalize(it.name) != normalizedQuery }
                 .thenBy { normalize(it.name) }
                 .thenBy { it.subtitle.orEmpty() },
         )
+    }
 
     private suspend fun discoverFaculty(
         faculty: FacultySource,
+        type: ScheduleProfileType,
         normalizedQuery: String,
         onProgress: suspend (FacultyResult) -> Unit,
     ): FacultyResult {
-        if (faculty.url == BIOLOGY_ROOT) return discoverBiologyFaculty(faculty, normalizedQuery, onProgress)
+        if (faculty.url == BIOLOGY_ROOT) {
+            return if (type == ScheduleProfileType.TEACHER) {
+                discoverBiologyTeachers(faculty, normalizedQuery, onProgress)
+            } else {
+                discoverBiologyFaculty(faculty, normalizedQuery, onProgress)
+            }
+        }
         val candidates = mutableListOf<ProfileCandidate>()
         val visited = mutableSetOf<String>()
         var pagesLoaded = 0
@@ -141,17 +183,35 @@ class BsuScheduleProfileCatalogRepository(
             inheritedGroupLabels: List<String> = emptyList(),
             sourceKind: String = "HTML",
         ) {
-            if (!visited.add(pageUrl) || visited.size > MAX_PAGES_PER_FACULTY) return
+            val pageLimit = if (type == ScheduleProfileType.TEACHER) MAX_TEACHER_PAGES_PER_FACULTY else MAX_PAGES_PER_FACULTY
+            if (!visited.add(pageUrl) || visited.size > pageLimit) return
 
             val discoveredLabels = (parser.discoverTableGroupLabels(html) + inheritedGroupLabels)
                 .distinctBy(::normalize)
             if (isTimetablePage(html)) {
-                discoveredLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
-                    candidates += candidate(faculty, group, pageUrl, sourceKind)
+                when (type) {
+                    ScheduleProfileType.GROUP -> discoveredLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
+                        candidates += candidate(faculty, group, pageUrl, sourceKind)
+                    }
+                    ScheduleProfileType.TEACHER -> parser.discoverTeacherNames(faculty.name, html)
+                        .filter { matchesQuery(it, normalizedQuery) }
+                        .forEach { teacher ->
+                            candidates += candidate(
+                                faculty = faculty,
+                                group = teacher,
+                                sourceUrl = pageUrl,
+                                sourceKind = sourceKind,
+                                type = ScheduleProfileType.TEACHER,
+                                sourceKey = teacher,
+                                detail = discoveredLabels.take(3).takeIf { it.isNotEmpty() }
+                                    ?.joinToString(", ")?.let { "группы $it" },
+                            )
+                        }
                 }
             }
             onProgress(FacultyResult(candidates.toList(), pagesLoaded, requestFailures))
-            if (depth >= MAX_LINK_DEPTH || pageUrl.contains("docs.google.com/spreadsheets/")) return
+            val maxLinkDepth = if (type == ScheduleProfileType.TEACHER) MAX_TEACHER_LINK_DEPTH else MAX_LINK_DEPTH
+            if (depth >= maxLinkDepth || pageUrl.contains("docs.google.com/spreadsheets/")) return
 
             val document = Ksoup.parse(html)
             val linkSources = document.select("a[href]").toList().map { element ->
@@ -184,7 +244,7 @@ class BsuScheduleProfileCatalogRepository(
                         .thenBy { !it.isSheet }
                         .thenBy { !it.looksRelevant },
                 )
-                .take(MAX_LINKS_PER_PAGE)
+                .take(if (type == ScheduleProfileType.TEACHER) MAX_TEACHER_LINKS_PER_PAGE else MAX_LINKS_PER_PAGE)
 
             suspend fun fetchLink(link: LinkTarget): LinkFetchResult = try {
                 val documentFormat = link.documentFormat
@@ -232,8 +292,24 @@ class BsuScheduleProfileCatalogRepository(
                         val documentLabels = (parser.discoverTableGroupLabels(html) + link.groupLabels)
                             .distinctBy(::normalize)
                         if (isTimetablePage(html)) {
-                            documentLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
-                                candidates += candidate(faculty, group, link.url, documentFormat.displayName)
+                            if (type == ScheduleProfileType.GROUP) {
+                                documentLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
+                                    candidates += candidate(faculty, group, link.url, documentFormat.displayName)
+                                }
+                            } else {
+                                parser.discoverTeacherNames(faculty.name, html).filter { matchesQuery(it, normalizedQuery) }
+                                    .forEach { teacher ->
+                                        candidates += candidate(
+                                            faculty = faculty,
+                                            group = teacher,
+                                            sourceUrl = link.url,
+                                            sourceKind = documentFormat.displayName,
+                                            type = ScheduleProfileType.TEACHER,
+                                            sourceKey = teacher,
+                                            detail = documentLabels.take(3).takeIf { it.isNotEmpty() }
+                                                ?.joinToString(", ")?.let { "группы $it" },
+                                        )
+                                    }
                             }
                         }
                     }
@@ -241,8 +317,24 @@ class BsuScheduleProfileCatalogRepository(
                         val sheetLabels = (parser.discoverTableGroupLabels(html) + link.groupLabels)
                             .distinctBy(::normalize)
                         if (isTimetablePage(html)) {
-                            sheetLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
-                                candidates += candidate(faculty, group, link.url, "Google Sheets")
+                            if (type == ScheduleProfileType.GROUP) {
+                                sheetLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
+                                    candidates += candidate(faculty, group, link.url, "Google Sheets")
+                                }
+                            } else {
+                                parser.discoverTeacherNames(faculty.name, html).filter { matchesQuery(it, normalizedQuery) }
+                                    .forEach { teacher ->
+                                        candidates += candidate(
+                                            faculty = faculty,
+                                            group = teacher,
+                                            sourceUrl = link.url,
+                                            sourceKind = "Google Sheets",
+                                            type = ScheduleProfileType.TEACHER,
+                                            sourceKey = teacher,
+                                            detail = sheetLabels.take(3).takeIf { it.isNotEmpty() }
+                                                ?.joinToString(", ")?.let { "группы $it" },
+                                        )
+                                    }
                             }
                         }
                     }
@@ -346,15 +438,125 @@ class BsuScheduleProfileCatalogRepository(
         )
     }
 
+    /**
+     * Biology has no separate public teacher index. Search the faculty's own course catalogues,
+     * open their current group timetable pages, and collect the teacher links/labels from those
+     * pages. The selected teacher profile later keeps the full set of matching group sources.
+     */
+    private suspend fun discoverBiologyTeachers(
+        faculty: FacultySource,
+        normalizedQuery: String,
+        onProgress: suspend (FacultyResult) -> Unit,
+    ): FacultyResult {
+        transport.primeBiologySession()
+        val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val weekDate = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1)).toString()
+        val indexRequests = BIOLOGY_STUDY_MODES.flatMap { mode ->
+            (1..BIOLOGY_MAX_COURSES).map { course ->
+                BiologyRequest(
+                    studyMode = mode,
+                    course = course,
+                    url = "$BIOLOGY_ROOT?study=${mode.code}&course=$course&date=$weekDate",
+                )
+            }
+        }
+        val indexResponses = supervisorScope {
+            val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
+            indexRequests.map { request ->
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    semaphore.withPermit {
+                        try {
+                            BiologyPageResult(request, transport.get(request.url), failed = false)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            BiologyPageResult(request, html = null, failed = true)
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+        val teacherRequests = indexResponses.flatMap { response ->
+            val html = response.html ?: return@flatMap emptyList()
+            biologyParser.discoverGroups(html).map { group ->
+                BiologyTeacherRequest(
+                    studyMode = response.request.studyMode,
+                    course = response.request.course,
+                    group = group,
+                    url = "$BIOLOGY_ROOT?study=${response.request.studyMode.code}" +
+                        "&course=${response.request.course}&group=${encodeQueryComponent(group.id)}&date=$weekDate",
+                )
+            }
+        }.distinctBy(BiologyTeacherRequest::url).take(MAX_BIOLOGY_TEACHER_GROUP_PAGES)
+
+        val timetableResponses = supervisorScope {
+            val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
+            teacherRequests.map { request ->
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    semaphore.withPermit {
+                        try {
+                            BiologyTeacherPageResult(request, transport.get(request.url), failed = false)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            BiologyTeacherPageResult(request, html = null, failed = true)
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+        val candidates = mutableListOf<ProfileCandidate>()
+        timetableResponses.forEach { response ->
+            val html = response.html
+            if (html != null) {
+                biologyParser.discoverTeacherNames(html)
+                    .filter { matchesQuery(it, normalizedQuery) }
+                    .forEach { teacher ->
+                        candidates += candidate(
+                            faculty = faculty,
+                            group = teacher,
+                            sourceUrl = response.request.url,
+                            sourceKind = "HTML",
+                            type = ScheduleProfileType.TEACHER,
+                            sourceKey = teacher,
+                            detail = listOf(
+                                response.request.studyMode.label,
+                                "${response.request.course} курс",
+                                response.request.group.name,
+                            ).joinToString(" · "),
+                        )
+                    }
+            }
+            onProgress(
+                FacultyResult(
+                    candidates = candidates.toList(),
+                    pagesLoaded = indexResponses.count { it.html != null } +
+                        timetableResponses.count { it.html != null },
+                    requestFailures = indexResponses.count(BiologyPageResult::failed) +
+                        timetableResponses.count(BiologyTeacherPageResult::failed),
+                    sourceUnavailable = teacherRequests.isEmpty(),
+                ),
+            )
+        }
+        return FacultyResult(
+            candidates = candidates,
+            pagesLoaded = indexResponses.count { it.html != null } + timetableResponses.count { it.html != null },
+            requestFailures = indexResponses.count(BiologyPageResult::failed) +
+                timetableResponses.count(BiologyTeacherPageResult::failed),
+            sourceUnavailable = teacherRequests.isEmpty(),
+        )
+    }
+
     private fun candidate(
         faculty: FacultySource,
         group: String,
         sourceUrl: String,
         sourceKind: String,
+        type: ScheduleProfileType = ScheduleProfileType.GROUP,
         sourceKey: String = group,
         detail: String? = null,
     ) = ProfileCandidate(
-        type = ScheduleProfileType.GROUP,
+        type = type,
         name = group,
         sourceUrl = sourceUrl,
         sourceKey = sourceKey,
@@ -363,9 +565,10 @@ class BsuScheduleProfileCatalogRepository(
     )
 
     private fun isTimetablePage(html: String): Boolean {
-        val text = Ksoup.parse(html).text().lowercase()
+        val text = Ksoup.parse(html).text().lowercase().replace('ё', 'е')
         val hasTime = TIME_RANGE.containsMatchIn(text)
-        val hasDayOrDate = DAY_OR_DATE_HINTS.any { hint -> text.contains(hint) }
+        val hasDayOrDate = DAY_OR_DATE_HINTS.any { hint -> text.contains(hint) } ||
+            ABBREVIATED_WEEKDAY.containsMatchIn(text) || EXPLICIT_SCHEDULE_DATE.containsMatchIn(text)
         return hasTime && hasDayOrDate
     }
 
@@ -495,18 +698,35 @@ class BsuScheduleProfileCatalogRepository(
         val failed: Boolean,
     )
 
+    private data class BiologyTeacherRequest(
+        val studyMode: BiologyStudyMode,
+        val course: Int,
+        val group: BsuBiologyGroup,
+        val url: String,
+    )
+
+    private data class BiologyTeacherPageResult(
+        val request: BiologyTeacherRequest,
+        val html: String?,
+        val failed: Boolean,
+    )
+
     private data class FacultySource(val name: String, val url: String)
 
     private companion object {
         const val MIN_QUERY_LENGTH = 2
         const val BIOLOGY_SINGLE_SYMBOL_QUERY_LENGTH = 1
         const val MAX_LINK_DEPTH = 2
+        const val MAX_TEACHER_LINK_DEPTH = 3
         const val MAX_LINKS_PER_PAGE = 12
+        const val MAX_TEACHER_LINKS_PER_PAGE = 40
         const val MAX_PAGES_PER_FACULTY = 10
+        const val MAX_TEACHER_PAGES_PER_FACULTY = 30
         const val MAX_LINK_REQUESTS_IN_FLIGHT_PER_FACULTY = 3
         const val BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL
         const val BIOLOGY_MAX_COURSES = 5
         const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 5
+        const val MAX_BIOLOGY_TEACHER_GROUP_PAGES = 200
 
         val BIOLOGY_GROUP_LABEL_CODE = Regex(
             "^группа\\s*(?:№|#)?\\s*([0-9]+[a-zа-яё]?|[a-zа-яё])$",
@@ -540,7 +760,7 @@ class BsuScheduleProfileCatalogRepository(
             FacultySource("Юридический факультет", "https://law.bsu.by/index.php?option=com_content&view=article&id=2350&Itemid=7"),
             FacultySource(
                 "Химический факультет",
-                "https://chemistry.bsu.by/index.php/ru/opisanie-kursa/cv-prepodavatelej/14-studentam/7-raspisanie",
+                "https://chemistry.bsu.by/index.php/ru/studentam/grafik-uchebnogo-protsessa/raspisanie",
             ),
             FacultySource("Физический факультет", "https://physics.bsu.by/raspisanie/studentam/"),
             FacultySource("Факультет журналистики", "https://journ.bsu.by/raspisanie.html"),
@@ -560,6 +780,8 @@ class BsuScheduleProfileCatalogRepository(
             "дата", "день недели", "день", "weekday",
         )
         val TIME_RANGE = Regex("\\b\\d{1,2}[:.]\\d{2}\\s*[-–—]\\s*\\d{1,2}[:.]\\d{2}\\b")
+        val ABBREVIATED_WEEKDAY = Regex("\\b(?:пн|вт|ср|чт|пт|сб|вс|mon|tue|wed|thu|fri|sat|sun)\\b")
+        val EXPLICIT_SCHEDULE_DATE = Regex("\\b\\d{1,2}[./]\\d{1,2}(?:[./]\\d{2,4})?\\b")
         val FILE_EXTENSIONS = listOf(
             ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".rar", ".jpg", ".png",
         )

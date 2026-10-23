@@ -29,7 +29,8 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
     ): List<Lesson> {
         require(html.isNotBlank()) { "Страница расписания пуста" }
         val document = Ksoup.parse(html)
-        val pageText = document.text().lowercase().replace('ё', 'е')
+        val pageText = "${document.selectFirst("title")?.text().orEmpty()} ${document.text()}"
+            .lowercase().replace('ё', 'е')
         val hasTwoWeekLabels = WEEK_ONE.containsMatchIn(pageText) && WEEK_TWO.containsMatchIn(pageText)
         val datedCells = document.select("table th, table td")
             .mapNotNull { EXPLICIT_DATE.find(it.text())?.value }
@@ -76,9 +77,57 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         return parsed
     }
 
+    /**
+     * Extracts teacher labels from timetable tables and explicit teacher links/classes.
+     * This is discovery only; each faculty adapter still decides which timetable pages to inspect.
+     */
+    fun discoverTeacherNames(html: String): List<String> {
+        if (html.isBlank()) return emptyList()
+        val document = Ksoup.parse(html)
+        val names = linkedSetOf<String>()
+        document.select("[class*=teacher], a[href*=teacher], a[href*=employee]").forEach { element ->
+            collectTeacherValues(element.text(), names, allowPlainName = true)
+        }
+        document.select("div, p, li, span").forEach { element ->
+            teacherFromLine(element.text())?.let { collectTeacherValues(it, names, allowPlainName = true) }
+        }
+
+        document.select("table").forEach { table ->
+            val rows = table.select("tr").toList()
+            val headerIndex = rows.indexOfFirst { row ->
+                row.select("th, td").any { isTeacherHeader(it.text()) }
+            }
+            if (headerIndex >= 0) {
+                val headers = rows[headerIndex].select("th, td").toList()
+                val teacherColumns = headers.mapIndexedNotNull { index, cell ->
+                    index.takeIf { isTeacherHeader(cell.text()) }
+                }
+                rows.drop(headerIndex + 1).forEach { row ->
+                    val cells = row.select("th, td").toList()
+                    teacherColumns.forEach { column ->
+                        cells.getOrNull(column)?.text()?.let { collectTeacherValues(it, names, allowPlainName = true) }
+                    }
+                }
+            }
+
+            rows.forEach { row ->
+                row.select("th, td").forEach { cell ->
+                    contentLines(cell).forEach { line ->
+                        teacherFromLine(line)?.let { collectTeacherValues(it, names, allowPlainName = true) }
+                        if (splitInlineTeacher(line) != null) {
+                            collectTeacherValues(line, names, allowPlainName = true)
+                        }
+                    }
+                }
+            }
+        }
+        return names.toList()
+    }
+
     override fun hasAlternatingTwoWeekCycle(html: String): Boolean {
         val document = Ksoup.parse(html)
-        val pageText = document.text().lowercase().replace('ё', 'е')
+        val pageText = "${document.selectFirst("title")?.text().orEmpty()} ${document.text()}"
+            .lowercase().replace('ё', 'е')
         val datedHeaders = document.select("table th, table td")
             .mapNotNull { EXPLICIT_DATE.find(it.text())?.value }
             .distinct()
@@ -88,8 +137,11 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
     override fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean {
         if (profile.universityId == UniversityIds.BRU) return false
         val document = Ksoup.parse(html)
-        val pageText = document.text().lowercase().replace('ё', 'е')
-        if (WEEK_ONE.containsMatchIn(pageText) || WEEK_TWO.containsMatchIn(pageText)) return false
+        val pageText = "${document.selectFirst("title")?.text().orEmpty()} ${document.text()}"
+            .lowercase().replace('ё', 'е')
+        if (WEEK_ONE.containsMatchIn(pageText) || WEEK_TWO.containsMatchIn(pageText) ||
+            "нечетн" in pageText || "четн" in pageText
+        ) return false
         return document.select("table").any { table ->
             val cells = table.select("th, td")
             val weekdays = cells.mapNotNull { weekdayNumber(it.text()) }.distinct()
@@ -304,6 +356,36 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         return runCatching { LocalDate(year, month, day) }.getOrNull()
     }
 
+    private fun collectTeacherValues(value: String, target: MutableSet<String>, allowPlainName: Boolean) {
+        val candidates = value
+            .replace(BR_TAG, "\n")
+            .replace(BLOCK_START_TAG, "\n")
+            .replace(BLOCK_END_TAG, "\n")
+            .replace(HTML_TAG, " ")
+            .replace("&nbsp;", " ", ignoreCase = true)
+            .split(Regex("[\\n;/,|]+"))
+            .map(::normalize)
+            .filter(String::isNotBlank)
+        candidates.forEach { candidate ->
+            TEACHER_INITIALS.findAll(candidate).forEach { match -> target += normalize(match.value) }
+            val labelled = teacherFromLine(candidate)
+            val plainName = TEACHER_TITLE_PREFIX.replace(candidate, "").trim()
+            when {
+                labelled != null && isLikelyTeacherName(labelled) -> target += normalize(labelled)
+                allowPlainName && isLikelyTeacherName(plainName) -> target += plainName
+            }
+        }
+    }
+
+    private fun isLikelyTeacherName(value: String): Boolean {
+        val candidate = normalize(value).trim('.', ':', ' ', '–', '-')
+        if (candidate.length !in 4..90 || candidate.any(Char::isDigit)) return false
+        val words = TEACHER_NAME_WORD.findAll(candidate).map { it.value }.toList()
+        if (words.size !in 2..4 || words.any { it.firstOrNull()?.isUpperCase() != true }) return false
+        val normalized = candidate.lowercase().replace('ё', 'е')
+        return TEACHER_NAME_EXCLUSIONS.none { exclusion -> normalized.contains(exclusion) }
+    }
+
     private fun contentLines(element: Element): List<String> {
         val html = element.html()
             .replace(BR_TAG, "\n")
@@ -409,6 +491,14 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         val WEEK_ONE = Regex("недел[ья]\\s*1|week\\s*1", RegexOption.IGNORE_CASE)
         val WEEK_TWO = Regex("недел[ья]\\s*2|week\\s*2", RegexOption.IGNORE_CASE)
         val TEACHER_LINE = Regex("(?:преподаватель|преп\\.?|teacher|викладчык)\\s*[:–-]?\\s*(.+)", RegexOption.IGNORE_CASE)
+        val TEACHER_NAME_WORD = Regex("[A-Za-zА-Яа-яЁё-]+")
+        val TEACHER_INITIALS = Regex("[А-ЯЁ][а-яё-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.?", RegexOption.IGNORE_CASE)
+        val TEACHER_TITLE_PREFIX = Regex("^(?:проф(?:ессор)?|доц(?:ент)?|ассистент|ст\\.?\\s*преп\\.?|старший\\s+преподаватель)\\.?\\s+", RegexOption.IGNORE_CASE)
+        val TEACHER_NAME_EXCLUSIONS = listOf(
+            "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье",
+            "лекция", "практика", "лабораторная", "расписание", "преподав", "введите", "фио",
+            "группа", "групп", "время", "дата", "занят", "курс", "недел", "четн", "нечетн", "teacher", "name",
+        )
         val LECTURE_CODE = Regex("(^|\\s)лк\\.?($|\\s)", RegexOption.IGNORE_CASE)
         val PRACTICE_CODE = Regex("(^|\\s)пз\\.?($|\\s)", RegexOption.IGNORE_CASE)
         val INLINE_TEACHER_LINE = Regex(

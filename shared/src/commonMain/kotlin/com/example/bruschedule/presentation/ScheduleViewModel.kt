@@ -787,8 +787,7 @@ class ScheduleViewModel(
             try {
                 schedules.saveProfile(profile)
                 selectedProfileId.value = id
-                notice.value = "Профиль «$cleanName» добавлен · загружаем расписание"
-                launchRefresh(id)
+                notice.value = "Профиль «$cleanName» добавлен · обновите расписание в настройках"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -807,7 +806,7 @@ class ScheduleViewModel(
             )
         ) {
             profileSearch.value = ProfileSearchUiState(query = query, type = type)
-            notice.value = "Для этого вуза поиск групп не подключён — добавьте профиль по прямой ссылке"
+            notice.value = "Для этого вуза поиск профилей не подключён — добавьте расписание по прямой ссылке"
             return
         }
         profileSearch.value = ProfileSearchUiState(query = query, type = type, loading = true)
@@ -826,7 +825,9 @@ class ScheduleViewModel(
                 if (uiState.value.selectedUniversity.id != university.id) return@launch
                 profileSearch.value = ProfileSearchUiState(query, type, candidates = candidates)
                 if (candidates.isEmpty()) {
-                    notice.value = if (university.id == UniversityIds.BSU) {
+                    notice.value = if (university.id == UniversityIds.BSU && type == ScheduleProfileType.TEACHER) {
+                        "Преподаватель не найден в доступных расписаниях факультетов. Проверьте ФИО"
+                    } else if (university.id == UniversityIds.BSU) {
                         "Совпадений нет. Проверьте код группы или добавьте HTML, Sheets, PDF, XLSX, DOCX, DOC, XLS либо ZIP по ссылке"
                     } else {
                         "Совпадений не найдено — можно добавить профиль по ссылке вручную"
@@ -866,8 +867,7 @@ class ScheduleViewModel(
                 schedules.saveProfile(profile)
                 selectedProfileId.value = profile.id
                 profileSearch.value = ProfileSearchUiState(type = candidate.type)
-                notice.value = "Профиль «${candidate.name}» добавлен · загружаем расписание"
-                launchRefresh(profile.id)
+                notice.value = "Профиль «${candidate.name}» добавлен · обновите расписание в настройках"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {

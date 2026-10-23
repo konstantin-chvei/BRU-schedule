@@ -5,14 +5,35 @@ import com.example.bruschedule.data.remote.BruScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
 import com.example.bruschedule.data.remote.BsuScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.HtmlTransport
+import com.example.bruschedule.data.remote.UniversityScheduleProfileCatalogRepository
 import com.example.bruschedule.data.scraper.BruScheduleScraper
+import com.example.bruschedule.data.scraper.BsuBiologyFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuBusinessInstituteTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuChemistryFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuEconomyFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuFacultyTeacherScheduleParserRegistry
+import com.example.bruschedule.data.scraper.BsuFirFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuFfsnFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuFpmiFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuFscFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuGeographyFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuHistoryFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuJournalismFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuLawFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuMmfFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuPhilologyFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuPhysicsFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuRctFacultyTeacherScheduleParser
+import com.example.bruschedule.data.scraper.BsuTeacherProfileSourceKey
 import com.example.bruschedule.domain.model.Lesson
+import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.model.UniversityIds
+import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import com.example.bruschedule.domain.usecase.ScheduleMergeStrategy
 import kotlinx.datetime.LocalDate
 import kotlin.coroutines.Continuation
@@ -31,6 +52,128 @@ class ScheduleArchitectureTest {
         type = ScheduleProfileType.GROUP,
         name = "МПР-261",
     )
+
+    @Test
+    fun bsuFacultyTeacherAdapterRegistryCoversEveryConfiguredFacultySource() {
+        val catalogue = BsuScheduleProfileCatalogRepository(object : HtmlTransport {
+            override suspend fun get(url: String): String = error("This contract test must not access the network")
+        })
+        assertEquals(
+            catalogue.configuredFacultyNames,
+            BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames,
+        )
+        assertEquals(
+            setOf(
+                "Экономический факультет",
+                "ФПМИ",
+                "Механико-математический факультет",
+                "Географический факультет",
+                "ФМО",
+                "ФСК",
+                "Биологический факультет",
+                "Институт бизнеса",
+                "Исторический факультет",
+                "Юридический факультет",
+                "Химический факультет",
+                "Физический факультет",
+                "Факультет журналистики",
+                "Филологический факультет",
+                "Факультет философии и социальных наук",
+                "Факультет радиофизики и компьютерных технологий",
+            ),
+            BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames,
+        )
+        val officialFacultySourceAliases = setOf(
+            "Биологический факультет",
+            "Военный факультет",
+            "Географический факультет",
+            "Факультет журналистики",
+            "Исторический факультет",
+            "Механико-математический факультет",
+            "ФПМИ",
+            "Факультет радиофизики и компьютерных технологий",
+            "ФСК",
+            "Факультет философии и социальных наук",
+            "Физический факультет",
+            "Филологический факультет",
+            "Химический факультет",
+            "Экономический факультет",
+            "Юридический факультет",
+            "ФМО",
+        )
+        assertEquals(
+            setOf("Военный факультет"),
+            officialFacultySourceAliases - BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames,
+            "Military Faculty has no public lesson timetable URL in the official BSU pages",
+        )
+        assertTrue("Институт бизнеса" in BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames)
+        val adapters = BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames.map { facultyName ->
+            BsuFacultyTeacherScheduleParserRegistry.parserFor(facultyName)
+        }
+        assertEquals(
+            BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames.size,
+            adapters.distinct().size,
+            "Each configured source has a dedicated faculty adapter instance",
+        )
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Экономический факультет") is BsuEconomyFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("ФПМИ") is BsuFpmiFacultyTeacherScheduleParser)
+        assertTrue(
+            BsuFacultyTeacherScheduleParserRegistry.parserFor("Механико-математический факультет") is
+                BsuMmfFacultyTeacherScheduleParser,
+        )
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Географический факультет") is BsuGeographyFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("ФМО") is BsuFirFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("ФСК") is BsuFscFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Биологический факультет") is BsuBiologyFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Институт бизнеса") is BsuBusinessInstituteTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Исторический факультет") is BsuHistoryFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Юридический факультет") is BsuLawFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Химический факультет") is BsuChemistryFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Физический факультет") is BsuPhysicsFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Факультет журналистики") is BsuJournalismFacultyTeacherScheduleParser)
+        assertTrue(BsuFacultyTeacherScheduleParserRegistry.parserFor("Филологический факультет") is BsuPhilologyFacultyTeacherScheduleParser)
+        assertTrue(
+            BsuFacultyTeacherScheduleParserRegistry.parserFor("Факультет философии и социальных наук") is
+                BsuFfsnFacultyTeacherScheduleParser,
+        )
+        assertTrue(
+            BsuFacultyTeacherScheduleParserRegistry.parserFor("Факультет радиофизики и компьютерных технологий") is
+                BsuRctFacultyTeacherScheduleParser,
+        )
+    }
+
+    @Test
+    fun universityCatalogueForwardsPartialTeacherSearchResults() {
+        val candidate = ProfileCandidate(
+            type = ScheduleProfileType.TEACHER,
+            name = "Иванова И.И.",
+            sourceUrl = "https://fpmi.bsu.by/timetable",
+            sourceKey = "source-key",
+            universityId = UniversityIds.BSU,
+        )
+        val catalogue = object : ScheduleProfileCatalogRepository {
+            override suspend fun search(type: ScheduleProfileType, query: String) = listOf(candidate)
+
+            override suspend fun search(
+                universityId: String,
+                type: ScheduleProfileType,
+                query: String,
+                onPartialResults: (List<ProfileCandidate>) -> Unit,
+            ): List<ProfileCandidate> {
+                onPartialResults(listOf(candidate))
+                return listOf(candidate)
+            }
+        }
+        val partials = mutableListOf<List<ProfileCandidate>>()
+
+        val results = runSuspending {
+            UniversityScheduleProfileCatalogRepository(mapOf(UniversityIds.BSU to catalogue))
+                .search(UniversityIds.BSU, ScheduleProfileType.TEACHER, "Иванова") { partials += it }
+        }
+
+        assertEquals(listOf(candidate), partials.single())
+        assertEquals(listOf(candidate), results)
+    }
 
     @Test
     fun parsesRealBruTableRowsAndMapsSiteTypesToPastelAccents() {
@@ -246,6 +389,51 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun bsuTeacherRefreshLoadsAllFacultyScheduleSourcesFromTheSavedProfile() {
+        val sources = listOf(
+            "https://docs.google.com/spreadsheets/d/econ-one/edit?gid=123",
+            "https://docs.google.com/spreadsheets/d/econ-two/edit?gid=456",
+        )
+        val expectedRequests = listOf(
+            "https://docs.google.com/spreadsheets/d/econ-one/gviz/tq?tqx=out:html&gid=123",
+            "https://docs.google.com/spreadsheets/d/econ-two/gviz/tq?tqx=out:html&gid=456",
+        )
+        val requested = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return when (url) {
+                    expectedRequests[0] -> "<html><head><title>НЕЧЕТНАЯ</title></head><body><table><tr><td>First teacher schedule</td></tr></table></body></html>"
+                    expectedRequests[1] -> "<html><head><title>ЧЕТНАЯ</title></head><body><table><tr><td>Second teacher schedule</td></tr></table></body></html>"
+                    else -> error("Unexpected teacher timetable URL: $url")
+                }
+            }
+        }
+        val profile = ScheduleProfile(
+            id = "bsu-teacher-ivanova",
+            type = ScheduleProfileType.TEACHER,
+            name = "Иванова И.И.",
+            sourceUrl = sources.first(),
+            sourceKey = BsuTeacherProfileSourceKey.encode("Иванова И.И.", sources),
+            universityId = UniversityIds.BSU,
+        )
+
+        val html = runSuspending {
+            BruScheduleRemoteDataSource(transport).fetchHtml(
+                profile,
+                ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 10, 25)),
+            )
+        }
+
+        assertEquals(expectedRequests, requested)
+        assertTrue(html.contains("First teacher schedule"))
+        assertTrue(html.contains("Second teacher schedule"))
+        assertTrue(html.contains("data-bsu-teacher-title=\"НЕЧЕТНАЯ\""))
+        assertTrue(html.contains("data-bsu-teacher-title=\"ЧЕТНАЯ\""))
+        assertTrue(html.contains("data-bsu-teacher-url=\"${sources[0]}\""))
+    }
+
+    @Test
     fun bsuCatalogueSearchDiscoversSelectableGroupsFromPublicGoogleSheets() {
         val sheetUrl = "https://docs.google.com/spreadsheets/d/econ-sheet/edit?gid=123"
         val gvizUrl = "https://docs.google.com/spreadsheets/d/econ-sheet/gviz/tq?tqx=out:html&gid=123"
@@ -272,6 +460,113 @@ class ScheduleArchitectureTest {
         assertEquals("1-11", matches.single().sourceKey)
         assertTrue(matches.single().subtitle.contains("Экономический факультет"))
         assertEquals(UniversityIds.BSU, matches.single().universityId)
+    }
+
+    @Test
+    fun bsuTeacherCatalogueSearchesFacultySheetsAndCreatesATeacherProfileWithItsSource() {
+        val facultyUrl = "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/"
+        val sheetUrl = "https://docs.google.com/spreadsheets/d/econ-teachers/edit?gid=123"
+        val gvizUrl = "https://docs.google.com/spreadsheets/d/econ-teachers/gviz/tq?tqx=out:html&gid=123"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                facultyUrl -> "<a href=\"$sheetUrl\">Расписание занятий 1 курса</a>"
+                gvizUrl -> """
+                    <table>
+                      <tr><th>День</th><th>Дата</th><th>Время</th><th>Группа 1-11</th><th>Преподаватель</th></tr>
+                      <tr><td>Понедельник</td><td>19.10.2026</td><td>08:15-09:40</td><td>Математика</td><td>Иванова И.И.</td></tr>
+                    </table>
+                """.trimIndent()
+                else -> error("No faculty fixture for $url")
+            }
+        }
+
+        val matches = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport)
+                .search(UniversityIds.BSU, ScheduleProfileType.TEACHER, "Иванова")
+        }
+
+        assertEquals(1, matches.size)
+        assertEquals(ScheduleProfileType.TEACHER, matches.single().type)
+        assertEquals("Иванова И.И.", matches.single().name)
+        assertEquals(sheetUrl, matches.single().sourceUrl)
+        assertEquals(listOf(sheetUrl), BsuTeacherProfileSourceKey.decode(matches.single().sourceKey)?.urls)
+        assertEquals(
+            "Экономический факультет",
+            BsuTeacherProfileSourceKey.decode(matches.single().sourceKey)?.facultyName,
+        )
+        assertTrue(matches.single().subtitle.contains("Экономический факультет"))
+    }
+
+    @Test
+    fun bsuTeacherCatalogueMergesNameVariantsAcrossSheetsFromTheSameFaculty() {
+        val facultyUrl = "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/"
+        val firstSheet = "https://docs.google.com/spreadsheets/d/econ-teachers-one/edit"
+        val secondSheet = "https://docs.google.com/spreadsheets/d/econ-teachers-two/edit"
+        val firstGviz = "https://docs.google.com/spreadsheets/d/econ-teachers-one/gviz/tq?tqx=out:html"
+        val secondGviz = "https://docs.google.com/spreadsheets/d/econ-teachers-two/gviz/tq?tqx=out:html"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                facultyUrl -> """
+                    <a href="$firstSheet">Расписание занятий 1 курса</a>
+                    <a href="$secondSheet">Расписание занятий 2 курса</a>
+                """.trimIndent()
+                firstGviz -> """
+                    <table><tr><th>День</th><th>Время</th><th>Предмет</th><th>Преподаватель</th></tr>
+                    <tr><td>Понедельник</td><td>08:15-09:40</td><td>Математика</td><td>Иванова Н.В.</td></tr></table>
+                """.trimIndent()
+                secondGviz -> """
+                    <table><tr><th>День</th><th>Время</th><th>Предмет</th><th>Преподаватель</th></tr>
+                    <tr><td>Вторник</td><td>09:50-11:15</td><td>Статистика</td><td>Иванова Наталья Владимировна</td></tr></table>
+                """.trimIndent()
+                else -> error("No faculty fixture for $url")
+            }
+        }
+
+        val matches = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport)
+                .search(UniversityIds.BSU, ScheduleProfileType.TEACHER, "Иванова")
+        }
+
+        assertEquals(1, matches.size)
+        assertEquals(
+            listOf(firstSheet, secondSheet),
+            BsuTeacherProfileSourceKey.decode(matches.single().sourceKey)?.urls,
+        )
+        assertTrue(matches.single().subtitle.contains("расписаний: 2"))
+    }
+
+    @Test
+    fun bsuFpmiGoogleSheetTeacherSearchUsesItsFacultySourceAndKeepsFacultyIdentity() {
+        val facultyUrl = "https://fpmi.bsu.by/timetable"
+        val sheetUrl = "https://docs.google.com/spreadsheets/d/fpmi-course-one/edit?gid=795046734"
+        val gvizUrl = "https://docs.google.com/spreadsheets/d/fpmi-course-one/gviz/tq?tqx=out:html&gid=795046734"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                facultyUrl -> "<a href=\"$sheetUrl\">Расписание занятий на 1 курс</a>"
+                gvizUrl -> """
+                    <table>
+                      <tr><th>1 курс день недели понедельник</th><th>время занятий</th>
+                        <th>1 группа А</th><th>Б</th><th>2 группа А</th><th>Б</th></tr>
+                      <tr><td></td><td>08:15-09:40</td>
+                        <td>Математический анализ<br>Петров П.П.</td>
+                        <td>Физика<br>Иванова И.И.</td>
+                        <td>История<br>Сидоров С.С.</td><td></td></tr>
+                    </table>
+                """.trimIndent()
+                else -> error("No FPMI fixture for $url")
+            }
+        }
+
+        val matches = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport)
+                .search(UniversityIds.BSU, ScheduleProfileType.TEACHER, "Иванова")
+        }
+
+        assertEquals(1, matches.size)
+        assertEquals(ScheduleProfileType.TEACHER, matches.single().type)
+        assertEquals("Иванова И.И.", matches.single().name)
+        assertEquals(sheetUrl, matches.single().sourceUrl)
+        assertEquals("ФПМИ", BsuTeacherProfileSourceKey.decode(matches.single().sourceKey)?.facultyName)
     }
 
     @Test

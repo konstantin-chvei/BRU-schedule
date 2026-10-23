@@ -4,7 +4,9 @@ import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
 import com.example.bruschedule.data.remote.BsuScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
+import com.example.bruschedule.data.scraper.BsuBiologyTeacherPage
 import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
+import com.example.bruschedule.data.scraper.BsuTeacherProfileSourceKey
 import com.example.bruschedule.data.scraper.UniversityScheduleHtmlParser
 import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.ScheduleProfile
@@ -97,6 +99,38 @@ class BsuBiologyScheduleParserTest {
 
         val migratedLegacyProfileLessons = parser.parse(profile, html, LocalDate(2026, 10, 19))
         assertEquals(lessons.map { it.subjectName }, migratedLegacyProfileLessons.map { it.subjectName })
+    }
+
+    @Test
+    fun biologyTeacherProfileMergesMatchingLessonsAcrossFacultyGroupPages() {
+        val sourceUrls = listOf(
+            "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-19",
+            "https://bsu.bio/schedule.php?study=d&course=1&group=42&date=2026-10-19",
+        )
+        val teacherName = "Микитченко Надежда Владимировна"
+        val teacherProfile = ScheduleProfile(
+            id = "bsu-bio-teacher-mikitchenko",
+            type = ScheduleProfileType.TEACHER,
+            name = teacherName,
+            sourceUrl = sourceUrls.first(),
+            sourceKey = BsuTeacherProfileSourceKey.encode(teacherName, sourceUrls),
+            universityId = UniversityIds.BSU,
+        )
+        val parser = BsuBiologyScheduleHtmlParser()
+        val html = parser.combineTeacherPages(
+            listOf(
+                BsuBiologyTeacherPage("41", LocalDate(2026, 10, 19), biologyGroupPageHtml()),
+                BsuBiologyTeacherPage("42", LocalDate(2026, 10, 19), biologyGroupPageHtml()),
+            ),
+        )
+
+        val lessons = parser.parse(teacherProfile, html, LocalDate(2026, 10, 19))
+
+        assertEquals(2, lessons.size)
+        assertTrue(lessons.all { it.teacherName == teacherName })
+        assertTrue(lessons.map { it.sourceKey }.distinct().size == 2)
+        assertTrue(lessons.any { it.sourceKey.contains("bio:41:") })
+        assertTrue(lessons.any { it.sourceKey.contains("bio:42:") })
     }
 
     @Test
@@ -213,6 +247,47 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
+    fun biologyTeacherRefreshLoadsEveryMatchingGroupSourceForTheRequestedWeeks() = runTest {
+        val urls = listOf(
+            "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-23",
+            "https://bsu.bio/schedule.php?study=d&course=1&group=42&date=2026-10-23",
+        )
+        val requested = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return if (url.startsWith("https://bsu.bio/schedule.php?study=d&course=1&group=")) {
+                    biologyGroupPageHtml()
+                } else {
+                    error("Unexpected Biology teacher URL: $url")
+                }
+            }
+        }
+        val teacherName = "Микитченко Надежда Владимировна"
+        val teacherProfile = ScheduleProfile(
+            id = "bsu-bio-teacher-refresh",
+            type = ScheduleProfileType.TEACHER,
+            name = teacherName,
+            sourceUrl = urls.first(),
+            sourceKey = BsuTeacherProfileSourceKey.encode(teacherName, urls),
+            universityId = UniversityIds.BSU,
+        )
+        val window = ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 10, 25))
+
+        val combined = BruScheduleRemoteDataSource(transport).fetchHtml(teacherProfile, window)
+        val lessons = BsuBiologyScheduleHtmlParser().parse(teacherProfile, combined, LocalDate(2026, 10, 19))
+
+        val groupRequests = requested.filter { "group=" in it }
+        assertEquals(2, groupRequests.size)
+        assertTrue(groupRequests.all { it.contains("date=2026-10-19") })
+        assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL))
+        assertTrue(combined.contains("BSU-BIO-TEACHER-PAGE:41:2026-10-19"))
+        assertTrue(combined.contains("BSU-BIO-TEACHER-PAGE:42:2026-10-19"))
+        assertEquals(2, lessons.size)
+        assertTrue(lessons.all { it.teacherName == teacherName })
+    }
+
+    @Test
     fun biologyCatalogueSearchesTheNewStudyModeAndCourseFilters() {
         val indexUrl = "https://bsu.bio/schedule.php?study=d&course=3&date=2026-10-19"
         val expectedScheduleUrl = "https://bsu.bio/schedule.php?study=d&course=3&group=42&date=2026-10-19"
@@ -243,6 +318,41 @@ class BsuBiologyScheduleParserTest {
         assertEquals(15, requested.count { "?study=" in it })
         assertTrue(requested.none { "study=t" in it })
         assertTrue(progressUpdates.any { update -> update.any { it.sourceUrl == expectedScheduleUrl } })
+    }
+
+    @Test
+    fun biologyTeacherSearchScansEachCurrentGroupPageAndCombinesSourcesByTeacher() = runTest {
+        val indexUrl = "https://bsu.bio/schedule.php?study=d&course=3&date=2026-10-19"
+        val groupUrls = listOf(
+            "https://bsu.bio/schedule.php?study=d&course=3&group=41&date=2026-10-19",
+            "https://bsu.bio/schedule.php?study=d&course=3&group=42&date=2026-10-19",
+        )
+        val requested = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return when {
+                    url == indexUrl -> biologyGroupIndexHtml()
+                    url in groupUrls -> biologyGroupPageHtml()
+                    "?study=" in url -> "<html><body>No timetable for this course</body></html>"
+                    else -> error("No Biology teacher fixture for $url")
+                }
+            }
+        }
+        val fixedClock = object : Clock {
+            override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
+        }
+
+        val matches = BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
+            .search(UniversityIds.BSU, ScheduleProfileType.TEACHER, "Микитченко")
+
+        assertEquals(1, matches.size)
+        assertEquals(ScheduleProfileType.TEACHER, matches.single().type)
+        assertEquals("Микитченко Надежда Владимировна", matches.single().name)
+        assertEquals(2, BsuTeacherProfileSourceKey.decode(matches.single().sourceKey)?.urls?.size)
+        assertEquals(groupUrls.first(), matches.single().sourceUrl)
+        assertTrue(matches.single().subtitle.contains("расписаний: 2"))
+        assertTrue(groupUrls.all(requested::contains))
     }
 
     @Test
