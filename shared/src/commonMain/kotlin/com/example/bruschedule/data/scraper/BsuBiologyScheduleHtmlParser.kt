@@ -123,9 +123,15 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         requestedWeek: LocalDate,
         html: String,
     ): List<Lesson> {
+        val document = Ksoup.parse(html)
         val lines = htmlLines(html)
         val weekStart = weekStartFromLines(lines)
             ?: requestedWeek.minus(DatePeriod(days = requestedWeek.dayOfWeek.isoDayNumber - 1))
+        // The public bsu.bio page keeps subject and type in one inline .discipline-line;
+        // splitting that page into text lines loses the separator used by the legacy fallback below.
+        if (document.selectFirst("section.day .lesson-entry .discipline") != null) {
+            return parseStructuredGroupPage(profile, groupId, document, weekStart)
+        }
         var index = lines.indexOfFirst { WEEK_RANGE_MONTH_LEFT.containsMatchIn(it) || WEEK_RANGE_ONE_MONTH.containsMatchIn(it) }
             .takeIf { it >= 0 }?.plus(1) ?: 0
         var dayIndex: Int? = null
@@ -178,6 +184,74 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
             index = boundary
         }
         return result
+    }
+
+    private fun parseStructuredGroupPage(
+        profile: ScheduleProfile,
+        groupId: String,
+        document: com.fleeksoft.ksoup.nodes.Document,
+        weekStart: LocalDate,
+    ): List<Lesson> {
+        val result = mutableListOf<Lesson>()
+        val slotsByDate = mutableMapOf<String, Int>()
+        document.select("section.day").forEach dayLoop@ { daySection ->
+            val weekday = weekdayNumber(daySection.selectFirst(".day-title")?.text().orEmpty())
+                ?: return@dayLoop
+            val date = runCatching { weekStart.plus(DatePeriod(days = weekday - 1)) }.getOrNull()
+                ?: return@dayLoop
+            daySection.select(".lesson").forEach lessonLoop@ { lessonElement ->
+                val time = TIME_RANGE.find(lessonElement.selectFirst(".lesson-hours")?.text().orEmpty())
+                    ?: return@lessonLoop
+                val slot = SLOT_LINE.find(lessonElement.selectFirst(".lesson-number")?.text().orEmpty())
+                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    ?: ((slotsByDate[date.toString()] ?: 0) + 1)
+                slotsByDate[date.toString()] = maxOf(slotsByDate[date.toString()] ?: 0, slot)
+                lessonElement.select(".lesson-entry").toList().forEachIndexed entryLoop@ { entryIndex, entry ->
+                    val rawSubject = entry.selectFirst(".discipline")?.text()?.trim().orEmpty()
+                    if (rawSubject.isBlank()) return@entryLoop
+                    val subgroup = entry.selectFirst(".subgroup-label")?.text()
+                        ?.let { SUBGROUP_LINE.find(it) }
+                        ?.groupValues?.getOrNull(1)?.trim().orEmpty()
+                    val subject = if (subgroup.isBlank()) rawSubject else "$rawSubject · подгруппа $subgroup"
+                    val infoLines = entry.select(".lesson-info > div")
+                        .map { it.text().trim() }
+                        .filter(String::isNotBlank)
+                    val teacher = valueAfterLabel(infoLines, 0, infoLines.size, "преподаватель")
+                        .orEmpty()
+                        .takeUnless { it == "—" }
+                        .orEmpty()
+                    val room = roomFromLines(infoLines, 0, infoLines.size)
+                    val notes = infoLines.filter(::isWarning)
+                        .map { it.removePrefix("⚠️").trim() }
+                        .filter(String::isNotBlank)
+                        .joinToString(" · ")
+                    val start = normalizeTime(time.groupValues[1])
+                    val end = normalizeTime(time.groupValues[2])
+                    val type = lessonType(entry.selectFirst(".lesson-type")?.text().orEmpty())
+                    val sourceKey = "${profile.id}|$date|$slot|$start-$end|bio:$groupId:$entryIndex"
+                    result += Lesson(
+                        id = "web:$sourceKey",
+                        profileId = profile.id,
+                        subjectName = subject,
+                        teacherName = teacher,
+                        classroom = room,
+                        startTime = start,
+                        endTime = end,
+                        type = type,
+                        colorHex = LessonTypePalette.accent(type),
+                        isCustom = false,
+                        version = 1,
+                        lessonDate = date.toString(),
+                        dayOfWeek = date.dayOfWeek.isoDayNumber,
+                        slotNumber = slot,
+                        sourceKey = sourceKey,
+                        notes = notes,
+                    )
+                }
+            }
+        }
+        return result.distinctBy(Lesson::sourceKey)
+            .sortedWith(compareBy({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
     }
 
     private fun parseGroupSlot(
@@ -319,18 +393,23 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         val index = (start until end).firstOrNull { lines[it].startsWith("Ауд.", ignoreCase = true) }
             ?: return ""
         val inline = lines[index].substringAfter("Ауд.", "").trim().trimStart(':')
-        val number = inline.takeIf(String::isNotBlank) ?: (index + 1 until end).firstOrNull { candidate ->
-            lines[candidate].isNotBlank() && !isWarning(lines[candidate]) &&
-                !lines[candidate].startsWith("(") && lines[candidate] != "/" &&
-                !lines[candidate].startsWith("Преподаватель", ignoreCase = true)
-        }?.let { lines[it].trim() }.orEmpty()
-        val location = (index + 1 until end).firstOrNull { lines[it].startsWith("(") }
-            ?.let { lines[it].trim().removePrefix("(").removeSuffix(")") }
+        val inlineLocation = PARENTHESIZED_LOCATION.find(inline)?.groupValues?.getOrNull(1)?.trim()
+        val inlineNumber = PARENTHESIZED_LOCATION.replace(inline, "").trim()
+        val number = inlineNumber.takeIf(::isRoomNumber)
+            ?: (index + 1 until end).firstOrNull { candidate ->
+                lines[candidate].isNotBlank() && !isWarning(lines[candidate]) &&
+                    !lines[candidate].startsWith("(") && lines[candidate] != "/" &&
+                    !lines[candidate].startsWith("Преподаватель", ignoreCase = true)
+            }?.let { lines[it].trim().takeIf(::isRoomNumber) }.orEmpty()
+        val location = inlineLocation ?: (index + 1 until end).firstOrNull { lines[it].startsWith("(") }
+            ?.let { PARENTHESIZED_LOCATION.find(lines[it])?.groupValues?.getOrNull(1)?.trim() }
         return listOfNotNull(
-            number.takeIf { it.isNotBlank() && it != "—" },
+            number.takeIf(String::isNotBlank),
             location?.takeIf(String::isNotBlank),
         ).joinToString(" · ")
     }
+
+    private fun isRoomNumber(value: String): Boolean = value.isNotBlank() && value != "—" && value != "-"
 
     private fun lessonType(text: String): LessonType {
         val normalized = text.lowercase().replace('ё', 'е')
@@ -534,6 +613,7 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         private val TIME_RANGE = Regex("(\\d{1,2}[:.]\\d{2})\\s*[-–—−]\\s*(\\d{1,2}[:.]\\d{2})")
         private val EXPLICIT_DATE = Regex("(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})")
         private val SIMPLE_DATE = Regex("\\b\\d{1,2}\\.\\d{1,2}\\b")
+        private val PARENTHESIZED_LOCATION = Regex("\\(([^()]*)\\)")
         private val SLOT_LINE = Regex("(\\d+)\\s*пара", RegexOption.IGNORE_CASE)
         private val SUBGROUP_LINE = Regex("подгруппа\\s*(\\d+|[а-яёa-z])", RegexOption.IGNORE_CASE)
         private val GROUP_SCHEDULE_TITLE = Regex("группа\\s*(?:№|#)\\s*\\d+", RegexOption.IGNORE_CASE)

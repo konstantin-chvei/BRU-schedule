@@ -33,11 +33,11 @@ class BsuBiologyKtorLiveSmokeTest {
 
             assertTrue(parser.hasScheduleGrid(html), "Ktor did not receive the live group timetable")
             val profile = ScheduleProfile(
-                id = "live-bsu-biology-group-42",
+                id = "live-bsu-biology-course-1-group-41",
                 type = ScheduleProfileType.GROUP,
-                name = "Группа 42",
+                name = "Группа 41",
                 sourceUrl = LIVE_GROUP_URL,
-                sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}42",
+                sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}41",
                 universityId = UniversityIds.BSU,
             )
             val lessons = parser.parse(profile, html, LocalDate(2026, 10, 23))
@@ -59,6 +59,6 @@ class BsuBiologyKtorLiveSmokeTest {
 
     private companion object {
         const val LIVE_GROUP_URL =
-            "https://bsu.bio/schedule.php?study=d&course=3&group=42&date=2026-10-23"
+            "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-23"
     }
 }

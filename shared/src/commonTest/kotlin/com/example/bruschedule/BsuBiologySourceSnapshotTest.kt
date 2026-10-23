@@ -1,12 +1,14 @@
 package com.example.bruschedule
 
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
+import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class BsuBiologySourceSnapshotTest {
     @Test
@@ -42,7 +44,103 @@ class BsuBiologySourceSnapshotTest {
         assertEquals(2, lesson.slotNumber)
     }
 
+    @Test
+    fun attachedFirstCourseGroup41PageParsesWeekAndCombinedRoomLocation() {
+        val profile = ScheduleProfile(
+            id = "bsu-bio-course-1-group-41",
+            type = ScheduleProfileType.GROUP,
+            name = "Группа 41",
+            sourceUrl = "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-23",
+            sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}41",
+            universityId = UniversityIds.BSU,
+        )
+        val parser = BsuBiologyScheduleHtmlParser()
+
+        assertTrue(parser.hasScheduleGrid(LEGACY_GROUP_41_HTML))
+        val lessons = parser.parse(profile, LEGACY_GROUP_41_HTML, LocalDate(2026, 10, 19))
+
+        assertEquals(6, lessons.size)
+        assertEquals(
+            listOf("2026-10-19", "2026-10-19", "2026-10-19", "2026-10-19", "2026-10-19", "2026-10-22"),
+            lessons.map { it.lessonDate },
+        )
+        assertEquals(listOf("09:00", "10:35", "14:00", "14:00", "14:00", "12:10"), lessons.map { it.startTime })
+        assertEquals(
+            listOf(
+                "Физическая культура",
+                "Общая и неорганическая химия",
+                "Англ. язык (общ. влад.) · подгруппа 1",
+                "Англ. язык (общ. влад.) · подгруппа 2",
+                "Немецкий язык · подгруппа 3",
+                "Общая и неорганическая химия · подгруппа 1",
+            ),
+            lessons.map { it.subjectName },
+        )
+        assertEquals("Микитченко Надежда Владимировна", lessons.first().teacherName)
+        assertEquals("Курчатова 10", lessons.first().classroom)
+        assertEquals("3 · Курчатова 10", lessons[1].classroom)
+        assertEquals("114 · Курчатова 10", lessons[2].classroom)
+        assertEquals("Левандовская А.И.", lessons[2].teacherName)
+        assertEquals("Рудакевич Кристина Сергеевна", lessons[3].teacherName)
+        assertEquals(LessonType.PRACTICE, lessons.first().type)
+        assertEquals(LessonType.LECTURE, lessons[1].type)
+        assertEquals(LessonType.PRACTICE, lessons[2].type)
+        assertEquals(LessonType.LABORATORY, lessons.last().type)
+        assertEquals("Вершель Евгений Евгеньевич", lessons.last().teacherName)
+        assertEquals("413 · Ленинградская 14", lessons.last().classroom)
+        assertEquals(4, lessons.last().dayOfWeek)
+        assertTrue(lessons.last().notes.contains("Время занятий 11.50-14.50"))
+    }
+
     private companion object {
+        // The compact fragment was extracted from the user's live 2026-10-23 page for group 41.
+        // It preserves the site's real legacy markup, including an inline room and building.
+        val LEGACY_GROUP_41_HTML = """
+            <div class="schedule-heading"><h2>Группа №41 — Экология 6-05-0521-01</h2><div class="week">19–25 октября 2026</div></div>
+            <section class="day"><h2 class="day-title">Понедельник</h2>
+              <div class="lesson">
+                <div class="lesson-time"><div class="lesson-number">1 пара</div><div class="lesson-hours">09:00-10:25</div></div>
+                <div class="lesson-main"><div class="lesson-entry">
+                  <div class="discipline-line lesson-type-practice"><span class="discipline">Физическая культура</span><span class="type-sep">/</span><span class="lesson-type">Практика</span></div>
+                  <div class="lesson-info"><div>Преподаватель: Микитченко Надежда Владимировна</div><div>Ауд. — (Курчатова 10)</div></div>
+                </div></div>
+              </div>
+              <div class="lesson">
+                <div class="lesson-time"><div class="lesson-number">2 пара</div><div class="lesson-hours">10:35-12:00</div></div>
+                <div class="lesson-main"><div class="lesson-entry">
+                  <div class="discipline-line lesson-type-lecture"><span class="discipline">Общая и неорганическая химия</span><span class="type-sep">/</span><span class="lesson-type">Лекция</span></div>
+                  <div class="lesson-info"><div>Преподаватель: Богатиков Андрей Николаевич</div><div>Ауд. <strong>3</strong> (Курчатова 10)</div></div>
+                </div></div>
+              </div>
+              <div class="lesson">
+                <div class="lesson-time"><div class="lesson-number">4 пара</div><div class="lesson-hours">14:00-15:25</div></div>
+                <div class="lesson-main">
+                  <div class="lesson-entry"><div class="subgroup-label">Подгруппа 1</div>
+                    <div class="discipline-line lesson-type-practice"><span class="discipline">Англ. язык (общ. влад.)</span><span class="type-sep">/</span><span class="lesson-type">Практика</span></div>
+                    <div class="lesson-info"><div>Преподаватель: Левандовская А.И.</div><div>Ауд. <strong>114</strong> (Курчатова 10)</div></div>
+                  </div>
+                  <div class="lesson-entry"><div class="subgroup-label">Подгруппа 2</div>
+                    <div class="discipline-line lesson-type-practice"><span class="discipline">Англ. язык (общ. влад.)</span><span class="type-sep">/</span><span class="lesson-type">Практика</span></div>
+                    <div class="lesson-info"><div>Преподаватель: Рудакевич Кристина Сергеевна</div><div>Ауд. <strong>208</strong> (Курчатова 10)</div></div>
+                  </div>
+                  <div class="lesson-entry"><div class="subgroup-label">Подгруппа 3</div>
+                    <div class="discipline-line lesson-type-practice"><span class="discipline">Немецкий язык</span><span class="type-sep">/</span><span class="lesson-type">Практика</span></div>
+                    <div class="lesson-info"><div>Преподаватель: Ходасевич Светлана Александровна</div><div>Ауд. <strong>434</strong> (Курчатова 10)</div></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="day"><h2 class="day-title">Четверг</h2>
+              <div class="lesson">
+                <div class="lesson-time"><div class="lesson-number">3 пара</div><div class="lesson-hours">12:10-13:35</div></div>
+                <div class="lesson-main"><div class="lesson-entry"><div class="subgroup-label">Подгруппа 1</div>
+                  <div class="discipline-line lesson-type-lab"><span class="discipline">Общая и неорганическая химия</span><span class="type-sep">/</span><span class="lesson-type">Лабораторная</span></div>
+                  <div class="lesson-info"><div>Преподаватель: Вершель Евгений Евгеньевич</div><div>Ауд. <strong>413</strong> (Ленинградская 14)</div><div class="lesson-comment">⚠️ Время занятий 11.50-14.50</div></div>
+                </div></div>
+              </div>
+            </section>
+        """.trimIndent()
+
         // Real markup and server IDs from the user-provided 2026-10-19 Biology faculty snapshot.
         // Unrelated cells are omitted; the group headers, ID order and selected lesson are original.
         val ATTACHED_SOURCE_FRAGMENT = """
