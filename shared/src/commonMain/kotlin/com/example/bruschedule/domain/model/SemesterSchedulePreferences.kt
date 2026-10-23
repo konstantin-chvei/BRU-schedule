@@ -127,7 +127,8 @@ data class SemesterSchedulePreferences(
         val oldLegacyDate = if (oldTrack == AcademicTrack.IFZO) ifzoSessionEndDateIso else sessionEndDateIso
         val oldDefault = if (oldTrack == AcademicTrack.IFZO) DEFAULT_IFZO_SESSION_END else defaultSessionEndDate(oldTrack)
         val overrides = universitySessionEndDateOverridesIso.toMutableMap()
-        if (oldLegacyDate != oldDefault) overrides.putIfAbsent(preferenceKey(UniversityIds.BRU, oldTrack), oldLegacyDate)
+        val oldKey = preferenceKey(UniversityIds.BRU, oldTrack)
+        if (oldLegacyDate != oldDefault && oldKey !in overrides) overrides[oldKey] = oldLegacyDate
 
         val nextKey = preferenceKey(UniversityIds.BRU, selectedTrack)
         val nextDate = overrides[nextKey] ?: when (selectedTrack) {
