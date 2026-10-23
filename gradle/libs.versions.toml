@@ -19,6 +19,9 @@ ktor = "3.4.0"
 multiplatformSettings = "1.3.0"
 kotlinxDatetime = "0.7.1"
 kotlinxCoroutines = "1.10.2"
+kmpZip = "1.0.0"
+kexcel = "0.1.2"
+kitepdf = "0.13.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -50,6 +53,9 @@ ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "kto
 multiplatform-settings-no-arg = { module = "com.russhwolf:multiplatform-settings-no-arg", version.ref = "multiplatformSettings" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kmp-zip = { module = "no.synth:kmp-zip", version.ref = "kmpZip" }
+kexcel = { module = "com.gyanoba.kexcel:kexcel", version.ref = "kexcel" }
+kitepdf-pdf = { module = "io.github.yuroyami:kitepdf-pdf", version.ref = "kitepdf" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

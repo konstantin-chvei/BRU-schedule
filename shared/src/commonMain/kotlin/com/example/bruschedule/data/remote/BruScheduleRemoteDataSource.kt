@@ -2,6 +2,7 @@ package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
+import com.example.bruschedule.data.scraper.ScheduleDocumentHtmlAdapter
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
@@ -26,6 +27,7 @@ class BruScheduleRemoteDataSource(
     private val transport: HtmlTransport,
     private val directoryParser: BruScheduleDirectoryParser = BruScheduleDirectoryParser(),
     private val biologyScheduleParser: BsuBiologyScheduleHtmlParser = BsuBiologyScheduleHtmlParser(),
+    private val documentAdapter: ScheduleDocumentHtmlAdapter = ScheduleDocumentHtmlAdapter(),
 ) : ScheduleRemoteDataSource {
     override suspend fun fetchHtml(profile: ScheduleProfile, window: ScheduleWindow): String {
         if (profile.universityId != UniversityIds.BRU) {
@@ -41,6 +43,16 @@ class BruScheduleRemoteDataSource(
                 GoogleSheetsScheduleUrl.toHtmlTableUrl(timetableUrl) ?: timetableUrl
             } else {
                 timetableUrl
+            }
+            val documentFormat = documentAdapter.formatForUrl(fetchUrl)
+            if (documentFormat != null) {
+                require(documentFormat.isSupported) {
+                    "Формат ${documentFormat.extension} устаревший; откройте расписание в PDF или XLSX"
+                }
+                val binaryTransport = transport as? BinaryResourceTransport
+                    ?: error("Источник не поддерживает загрузку файлов расписания")
+                val bytes = binaryTransport.getBytes(documentAdapter.downloadUrl(fetchUrl))
+                return documentAdapter.toHtml(documentFormat, bytes)
             }
             return transport.get(fetchUrl)
         }

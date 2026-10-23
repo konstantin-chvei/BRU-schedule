@@ -72,6 +72,9 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.ktor.client.core)
+            implementation(libs.kmp.zip)
+            implementation(libs.kexcel)
+            implementation(libs.kitepdf.pdf)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

@@ -2,6 +2,8 @@ package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
+import com.example.bruschedule.data.scraper.ScheduleDocumentFormat
+import com.example.bruschedule.data.scraper.ScheduleDocumentHtmlAdapter
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
@@ -29,6 +31,7 @@ class BsuScheduleProfileCatalogRepository(
     private val parser: BsuScheduleHtmlParser = BsuScheduleHtmlParser(),
     private val clock: Clock = Clock.System,
     private val biologyParser: BsuBiologyScheduleHtmlParser = BsuBiologyScheduleHtmlParser(),
+    private val documentAdapter: ScheduleDocumentHtmlAdapter = ScheduleDocumentHtmlAdapter(),
 ) : ScheduleProfileCatalogRepository {
     override suspend fun search(type: ScheduleProfileType, query: String): List<ProfileCandidate> =
         search(UniversityIds.BSU, type, query)
@@ -122,11 +125,15 @@ class BsuScheduleProfileCatalogRepository(
                 if (!target.startsWith("https://", ignoreCase = true)) return@mapNotNull null
                 val labelGroups = parser.discoverGroupLabelsFromText(source.label)
                 val isSheet = GoogleSheetsScheduleUrl.toHtmlTableUrl(target) != null
-                if (!isSheet && (!isHtmlPage(target) || !sameHost(pageUrl, target))) return@mapNotNull null
+                val documentFormat = documentAdapter.formatForUrl(target)
+                val isDocument = documentFormat != null
+                if (!isSheet && !isDocument &&
+                    (!isHtmlPage(target) || (!sameHost(pageUrl, target) && !isDropboxHost(target)))
+                ) return@mapNotNull null
                 val routeText = "${source.label} $target".lowercase()
                 val routeLooksRelevant = ROUTE_HINTS.any { hint -> routeText.contains(hint) }
                 if (!isSheet && labelGroups.isEmpty() && !routeLooksRelevant) return@mapNotNull null
-                LinkTarget(target, labelGroups, isSheet, routeLooksRelevant)
+                LinkTarget(target, labelGroups, isSheet, documentFormat, routeLooksRelevant)
             }
                 .distinctBy(LinkTarget::url)
                 .sortedWith(
@@ -137,7 +144,35 @@ class BsuScheduleProfileCatalogRepository(
                 .take(MAX_LINKS_PER_PAGE)
 
             links.forEach { link ->
-                if (link.isSheet) {
+                val documentFormat = link.documentFormat
+                if (documentFormat != null) {
+                    if (!documentFormat.isSupported) {
+                        requestFailures++
+                        return@forEach
+                    }
+                    val binaryTransport = transport as? BinaryResourceTransport
+                    if (binaryTransport == null) {
+                        requestFailures++
+                        return@forEach
+                    }
+                    val documentHtml = try {
+                        val bytes = binaryTransport.getBytes(documentAdapter.downloadUrl(link.url))
+                        pagesLoaded++
+                        documentAdapter.toHtml(documentFormat, bytes)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        requestFailures++
+                        null
+                    } ?: return@forEach
+                    val documentLabels = (parser.discoverTableGroupLabels(documentHtml) + link.groupLabels)
+                        .distinctBy(::normalize)
+                    if (isTimetablePage(documentHtml)) {
+                        documentLabels.filter { matchesQuery(it, normalizedQuery) }.forEach { group ->
+                            candidates += candidate(faculty, group, link.url, documentFormat.displayName)
+                        }
+                    }
+                } else if (link.isSheet) {
                     val htmlUrl = GoogleSheetsScheduleUrl.toHtmlTableUrl(link.url) ?: return@forEach
                     val sheetHtml = fetch(htmlUrl) ?: return@forEach
                     val sheetLabels = (parser.discoverTableGroupLabels(sheetHtml) + link.groupLabels)
@@ -249,6 +284,11 @@ class BsuScheduleProfileCatalogRepository(
     private fun sameHost(first: String, second: String): Boolean =
         host(first).equals(host(second), ignoreCase = true)
 
+    private fun isDropboxHost(url: String): Boolean {
+        val host = host(url)
+        return host.equals("dropbox.com", ignoreCase = true) || host.endsWith(".dropbox.com", ignoreCase = true)
+    }
+
     private fun host(url: String): String = url.substringAfter("://", "").substringBefore('/').substringBefore(':')
 
     private fun resolveUrl(baseUrl: String, href: String): String? {
@@ -314,6 +354,7 @@ class BsuScheduleProfileCatalogRepository(
         val url: String,
         val groupLabels: List<String>,
         val isSheet: Boolean,
+        val documentFormat: ScheduleDocumentFormat?,
         val looksRelevant: Boolean,
     )
 
@@ -371,7 +412,7 @@ class BsuScheduleProfileCatalogRepository(
         )
 
         val ROUTE_HINTS = listOf(
-            "raspis", "timetable", "schedule", "занят", "распис", "дневн", "заочн", "курс", "group", "групп",
+            "raspis", "timetable", "schedule", "занят", "распис", "дневн", "заочн", "курс", "group", "групп", "dropbox",
         )
         val DAY_OR_DATE_HINTS = listOf(
             "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье",
