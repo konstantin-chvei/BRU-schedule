@@ -1,4 +1,4 @@
-rootProject.name = "BRUSchedule"
+rootProject.name = "Schedule"
 
 pluginManagement {
     repositories {
