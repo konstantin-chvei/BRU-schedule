@@ -128,7 +128,7 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
-    fun biologyRemoteMigratesLegacyProfilesAndLoadsEachWeekThroughTheSemesterCoverageHorizon() {
+    fun biologyRemoteMigratesLegacyProfilesAndLoadsEachWeekThroughTheSemesterCoverageHorizon() = runTest {
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
@@ -142,7 +142,7 @@ class BsuBiologyScheduleParserTest {
             semesterCoverageEndDate = LocalDate(2026, 11, 5),
         )
 
-        val combined = runSuspending { BruScheduleRemoteDataSource(transport).fetchHtml(profile, window) }
+        val combined = BruScheduleRemoteDataSource(transport).fetchHtml(profile, window)
 
         val weekRequests = requested.filter { "date=" in it }
         assertEquals(
@@ -159,7 +159,7 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
-    fun biologyRemoteStopsAfterTheFirstRejectedWeekInsteadOfFetchingTheWholeSemester() {
+    fun biologyRemoteStopsAfterTheFirstRejectedWeekInsteadOfFetchingTheWholeSemester() = runTest {
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
@@ -175,7 +175,7 @@ class BsuBiologyScheduleParserTest {
         )
 
         val failure = checkNotNull(runCatching {
-            runSuspending { BruScheduleRemoteDataSource(transport).fetchHtml(groupPageProfile, window) }
+            BruScheduleRemoteDataSource(transport).fetchHtml(groupPageProfile, window)
         }.exceptionOrNull())
 
         assertTrue(failure.message.orEmpty().contains("406"))
@@ -184,7 +184,7 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
-    fun biologyGroupPageRemoteUsesTheDateParameterForEveryWeek() {
+    fun biologyGroupPageRemoteUsesTheDateParameterForEveryWeek() = runTest {
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
@@ -198,7 +198,7 @@ class BsuBiologyScheduleParserTest {
             semesterCoverageEndDate = LocalDate(2026, 11, 5),
         )
 
-        val combined = runSuspending { BruScheduleRemoteDataSource(transport).fetchHtml(groupPageProfile, window) }
+        val combined = BruScheduleRemoteDataSource(transport).fetchHtml(groupPageProfile, window)
 
         val weekRequests = requested.filter { "date=" in it }
         assertEquals(
