@@ -1,6 +1,7 @@
 package com.example.bruschedule
 
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
+import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
@@ -50,14 +51,15 @@ class BsuBiologySourceSnapshotTest {
             id = "bsu-bio-course-1-group-41",
             type = ScheduleProfileType.GROUP,
             name = "Группа 41",
-            sourceUrl = "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-23",
+            sourceUrl = "https://konstantin-chvei.github.io/BRU-schedule/schedule-data/universities/bsu/schedules/groups/biology-group-41.html",
             sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}41",
             universityId = UniversityIds.BSU,
         )
-        val parser = BsuBiologyScheduleHtmlParser()
+        val biologyParser = BsuBiologyScheduleHtmlParser()
 
-        assertTrue(parser.hasScheduleGrid(LEGACY_GROUP_41_HTML))
-        val lessons = parser.parse(profile, LEGACY_GROUP_41_HTML, LocalDate(2026, 10, 19))
+        assertTrue(biologyParser.isBiologyProfile(profile))
+        assertTrue(biologyParser.hasScheduleGrid(LEGACY_GROUP_41_HTML))
+        val lessons = BsuScheduleHtmlParser().parse(profile, LEGACY_GROUP_41_HTML, LocalDate(2026, 10, 19))
 
         assertEquals(6, lessons.size)
         assertEquals(

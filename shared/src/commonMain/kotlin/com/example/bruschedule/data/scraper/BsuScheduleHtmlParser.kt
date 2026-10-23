@@ -72,6 +72,7 @@ class BsuScheduleHtmlParser(
             "Для чётного или нечётного расписания нужны даты в таблице"
         }
         val facultyName = BsuTeacherProfileSourceKey.decode(profile.sourceKey)?.facultyName
+            ?: profile.sourceKey?.takeIf { it in BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames }
         val facultyParser = BsuFacultyTeacherScheduleParserRegistry.parserFor(facultyName)
             ?: BsuGenericFacultyTeacherScheduleParser()
         return facultyParser.parse(

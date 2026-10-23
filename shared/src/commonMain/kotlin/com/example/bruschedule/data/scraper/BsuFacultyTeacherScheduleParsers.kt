@@ -177,7 +177,6 @@ private fun parseFacultyTeacherSchedule(
     preferGeneric: Boolean,
 ): List<Lesson> {
     val teacherName = BsuTeacherProfileSourceKey.teacherName(profile.sourceKey)
-        ?: profile.sourceKey?.takeIf(String::isNotBlank)
         ?: profile.name
 
     fun matching(lessons: List<Lesson>): List<Lesson> = lessons

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import argparse
+import csv
+import tempfile
 import unittest
 from email.message import Message
+from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 
 from tools.schedules.build_schedule_tree import (
     BuildError,
     PoliteFetcher,
+    build,
     normalize_snapshot_data,
     safe_relative_path,
 )
@@ -71,6 +76,49 @@ class SchedulePathValidationTest(unittest.TestCase):
         ):
             with self.subTest(path=unsafe), self.assertRaises(BuildError):
                 safe_relative_path(unsafe, "groups")
+
+
+class ScheduleBuildMetadataTest(unittest.TestCase):
+    def test_static_index_keeps_parser_key_but_does_not_publish_source_url(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            registry = root / "registry"
+            (registry / "bsu").mkdir(parents=True)
+            local_snapshot = root / "imports/bsu/group-41.html"
+            local_snapshot.parent.mkdir(parents=True)
+            local_snapshot.write_text("<html>schedule</html>", encoding="utf-8")
+            (registry / "universities.csv").write_text(
+                """id,name,website_url
+bsu,Белорусский государственный университет,https://bsu.by
+""",
+                encoding="utf-8",
+            )
+            (registry / "bsu/groups.csv").write_text(
+                """id,name,subtitle,source_url,source_key,schedule_path,local_file
+biology-group-41,41,Биофак,https://bsu.bio/schedule.php?group=41,bio-group-number:41,schedules/groups/biology-group-41.html,imports/bsu/group-41.html
+""",
+                encoding="utf-8",
+            )
+
+            build(argparse.Namespace(
+                registry=registry,
+                output=root / "schedule-data",
+                repository_root=root,
+                university=None,
+                profile_id=None,
+                fetch=False,
+                delay_seconds=0.0,
+                retries=0,
+            ))
+
+            index_path = root / "schedule-data/universities/bsu/groups/index.csv"
+            with index_path.open("r", encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle)
+                row = next(reader)
+                self.assertIn("source_key", reader.fieldnames or [])
+                self.assertNotIn("source_url", reader.fieldnames or [])
+            self.assertEqual("bio-group-number:41", row["source_key"])
+            self.assertEqual("ready", row["status"])
 
 
 class _Response:

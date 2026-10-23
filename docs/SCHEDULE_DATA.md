@@ -22,10 +22,10 @@ schedule-data/
         └── schedules/...
 ```
 
-`groups/index.csv` и `teachers/index.csv` раздельны для каждого университета. Их обязательные поля:
+`groups/index.csv` и `teachers/index.csv` раздельны для каждого университета. Обязательные поля — `id`, `name`, `schedule_path`, `status`; `subtitle`, `source_key` и `updated_at` необязательны. `source_key` нужен, когда парсеру требуется исходный код группы или адаптер факультета. Для статических профилей преподавателей БГУ указывается точное имя факультета из реестра адаптеров (например, `ФПМИ`); URL сайта приложения не получает.
 
 ```csv
-id,name,subtitle,schedule_path,status,updated_at
+id,name,subtitle,source_key,schedule_path,status,updated_at
 ```
 
 `status=ready` означает, что файл существует и его можно выбрать. `status=missing` оставляет профиль видимым в результатах, но не даёт выбрать его до публикации расписания. `schedule_path` — путь внутри папки этого вуза, например `schedules/groups/mpr-261.html`. Пути автоматически проверяются на обход каталогов.
@@ -47,7 +47,8 @@ HTML/PDF/Office-файлы разбираются существующими а�
 - `tools/schedules/registry/<id>/groups.csv` — группы;
 - `tools/schedules/registry/<id>/teachers.csv` — преподаватели;
 - `local_file` — сохранённый локальный HTML/PDF/Office-снимок;
-- `source_url` — ссылка-источник только для скрипта обновления; приложение её не получает.
+- `source_url` — ссылка-источник только для скрипта обновления; приложение её не получает;
+- `source_key` — необязательный ключ KMP-парсера; он не задаёт сетевой адрес.
 
 1. Добавьте или исправьте строку профиля в нужном CSV-реестре. Укажите постоянный `id`, `source_url` и путь `schedules/groups/...` либо `schedules/teachers/...`.
 2. Чтобы обновить уже сохранённые HTML-примеры БРУ офлайн, выполните:

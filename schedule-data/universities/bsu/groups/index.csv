@@ -1,2 +1,2 @@
-id,name,subtitle,schedule_path,status,updated_at
-biology-group-41,41,Биологический факультет · дневное отделение · курс 1,schedules/groups/biology-group-41.html,ready,2026-10-23T21:22:37Z
+id,name,subtitle,source_key,schedule_path,status,updated_at
+biology-group-41,41,Биологический факультет · дневное отделение · курс 1,bio-group-number:41,schedules/groups/biology-group-41.html,ready,2026-10-23T21:49:50Z

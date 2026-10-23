@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PROFILE_TYPES = ("groups", "teachers")
 INDEX_FIELDS = ("id", "name", "subtitle", "schedule_path", "status", "updated_at")
+INDEX_FIELDS_WITH_SOURCE_KEY = ("id", "name", "subtitle", "source_key", "schedule_path", "status", "updated_at")
 ALLOWED_SUFFIXES = {".html", ".htm", ".csv", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip"}
 MAX_DOWNLOAD_BYTES = 30 * 1024 * 1024
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
@@ -219,6 +220,7 @@ def process_profile(
         "id": row["id"],
         "name": row["name"],
         "subtitle": row.get("subtitle", ""),
+        "source_key": row.get("source_key", ""),
         "schedule_path": relative_path.as_posix(),
         "status": status,
         "updated_at": file_timestamp(target) if exists else "",
@@ -265,10 +267,11 @@ def build(args: argparse.Namespace) -> int:
                     ready_total += 1
                 else:
                     missing_total += 1
+            index_fields = INDEX_FIELDS_WITH_SOURCE_KEY if any(row["source_key"] for row in index_rows) else INDEX_FIELDS
             write_csv(
                 university_dir / profile_type / "index.csv",
                 index_rows,
-                INDEX_FIELDS,
+                index_fields,
             )
 
         metadata = {

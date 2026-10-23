@@ -139,7 +139,10 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
     }
 
     fun isBiologyProfile(profile: ScheduleProfile): Boolean =
-        profile.sourceUrl?.let { sourceUrl ->
+        profile.sourceKey?.let { sourceKey ->
+            sourceKey.startsWith(BIO_GROUP_SOURCE_KEY_PREFIX) ||
+                sourceKey.startsWith(BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX)
+        } == true || profile.sourceUrl?.let { sourceUrl ->
             sourceUrl.contains(BIOLOGY_HOST_PATH, ignoreCase = true) ||
                 sourceUrl.contains(BIOLOGY_GROUP_PAGE_PATH, ignoreCase = true)
         } == true
@@ -156,7 +159,6 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         referenceDate: LocalDate,
     ): List<Lesson> {
         val targetTeacher = BsuTeacherProfileSourceKey.teacherName(profile.sourceKey)
-            ?: profile.sourceKey?.takeIf(String::isNotBlank)
             ?: profile.name
         val markers = TEACHER_PAGE_MARKER.findAll(html).toList()
         val lessons = if (markers.isNotEmpty()) {

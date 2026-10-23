@@ -311,12 +311,8 @@ class BsuScheduleHtmlParserTest {
             id = "bsu-teacher-fpmi-subgroup",
             type = ScheduleProfileType.TEACHER,
             name = "Иванова И.И.",
-            sourceUrl = "https://docs.google.com/spreadsheets/d/fpmi/edit?gid=795046734",
-            sourceKey = BsuTeacherProfileSourceKey.encode(
-                "Иванова И.И.",
-                listOf("https://docs.google.com/spreadsheets/d/fpmi/edit?gid=795046734"),
-                facultyName = "ФПМИ",
-            ),
+            sourceUrl = "https://konstantin-chvei.github.io/BRU-schedule/schedule-data/universities/bsu/schedules/teachers/ivanova-ii.html",
+            sourceKey = "ФПМИ",
             universityId = "bsu",
         )
         val html = """

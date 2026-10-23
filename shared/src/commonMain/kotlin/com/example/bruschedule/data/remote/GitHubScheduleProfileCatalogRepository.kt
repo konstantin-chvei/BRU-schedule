@@ -103,6 +103,7 @@ class GitHubScheduleProfileCatalogRepository(
         val pathColumn = columns.find("schedule_path", "schedule", "path")
         val statusColumn = columns.find("status", "availability")
         val updatedColumn = columns.find("updated_at", "updated")
+        val sourceKeyColumn = columns.find("source_key", "profile_key", "key")
         val expectedFolder = if (type == ScheduleProfileType.GROUP) "groups" else "teachers"
 
         return rows.drop(1).mapNotNull { row ->
@@ -127,7 +128,7 @@ class GitHubScheduleProfileCatalogRepository(
                 type = type,
                 name = name,
                 sourceUrl = scheduleUrl,
-                sourceKey = id,
+                sourceKey = row.valueAt(sourceKeyColumn).trim().ifBlank { id },
                 subtitle = details,
                 universityId = universityId,
                 scheduleAvailable = available,

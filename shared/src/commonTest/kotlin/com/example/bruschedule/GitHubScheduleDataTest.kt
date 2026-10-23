@@ -27,9 +27,9 @@ class GitHubScheduleDataTest {
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
                 requestedUrls += url
-                return """id,name,subtitle,schedule_path,status,updated_at
-biology-group-41,41,Биофак · курс 1,schedules/groups/biology-group-41.html,ready,2026-10-23T12:00:00Z
-biology-group-42,42,Биофак · курс 1,schedules/groups/biology-group-42.html,missing,
+                return """id,name,subtitle,source_key,schedule_path,status,updated_at
+biology-group-41,41,Биофак · курс 1,bio-group-number:41,schedules/groups/biology-group-41.html,ready,2026-10-23T12:00:00Z
+biology-group-42,42,Биофак · курс 1,,schedules/groups/biology-group-42.html,missing,
 """
             }
         }
@@ -44,15 +44,35 @@ biology-group-42,42,Биофак · курс 1,schedules/groups/biology-group-42
             requestedUrls.single(),
         )
         assertEquals("41", first.single().name)
+        assertEquals("bio-group-number:41", first.single().sourceKey)
         assertTrue(first.single().scheduleAvailable)
         assertEquals(
             "${GitHubScheduleDataPaths.UNIVERSITIES_ROOT}/bsu/schedules/groups/biology-group-41.html",
             first.single().sourceUrl,
         )
         assertEquals("42", second.single().name)
+        assertEquals("biology-group-42", second.single().sourceKey)
         assertFalse(second.single().scheduleAvailable)
         assertTrue(second.single().subtitle.contains("ещё не опубликовано"))
         assertTrue(requestedUrls.none { "bsu.bio" in it || "rasp.bru.by" in it })
+    }
+
+    @Test
+    fun bsuTeacherIndexPassesFacultyParserKeyWithoutPublishingItsSourceUrl() = runSuspend {
+        val repository = GitHubScheduleProfileCatalogRepository(object : HtmlTransport {
+            override suspend fun get(url: String): String = """id,name,subtitle,source_key,schedule_path,status
+ivanova-ii,Иванова И.И.,ФПМИ,ФПМИ,schedules/teachers/ivanova-ii.html,ready
+"""
+        })
+
+        val candidate = repository.search(UniversityIds.BSU, ScheduleProfileType.TEACHER, "Иванова").single()
+
+        assertEquals("ФПМИ", candidate.sourceKey)
+        assertEquals(
+            "${GitHubScheduleDataPaths.UNIVERSITIES_ROOT}/bsu/schedules/teachers/ivanova-ii.html",
+            candidate.sourceUrl,
+        )
+        assertFalse(candidate.sourceUrl.contains("fpmi.bsu.by"))
     }
 
     @Test
