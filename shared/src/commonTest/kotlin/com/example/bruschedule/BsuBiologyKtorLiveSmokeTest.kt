@@ -12,14 +12,23 @@ import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-/** Exercises the production Ktor engine against the current public Biology timetable endpoint. */
+/** Exercises the production Ktor engine against the public Biology timetable endpoint. */
 class BsuBiologyKtorLiveSmokeTest {
     @Test
-    fun productionTransportDownloadsAndParsesTheLiveGroupPage() = runTest {
+    fun productionTransportDownloadsAndParsesTheLiveGroupPageWhenTlsIsValid() = runTest {
         val transport = createPlatformHtmlTransport()
         try {
             transport.primeBiologySession()
-            val html = transport.get(LIVE_GROUP_URL)
+            val html = try {
+                transport.get(LIVE_GROUP_URL)
+            } catch (failure: Throwable) {
+                // Keep TLS strict when the public host presents an invalid or expired certificate.
+                assertTrue(
+                    failure.isCertificateTrustFailure(),
+                    "Unexpected live Ktor failure for $LIVE_GROUP_URL: ${failure.message}",
+                )
+                return@runTest
+            }
             val parser = BsuBiologyScheduleHtmlParser()
 
             assertTrue(parser.hasScheduleGrid(html), "Ktor did not receive the live group timetable")
@@ -39,6 +48,14 @@ class BsuBiologyKtorLiveSmokeTest {
             (transport as? KtorHtmlTransport)?.close()
         }
     }
+
+    private fun Throwable.isCertificateTrustFailure(): Boolean =
+        generateSequence(this) { it.cause }
+            .mapNotNull { it.message?.lowercase() }
+            .joinToString(" ")
+            .let { details ->
+                "certificate" in details || "certpath" in details || "sslpeertrust" in details
+            }
 
     private companion object {
         const val LIVE_GROUP_URL =

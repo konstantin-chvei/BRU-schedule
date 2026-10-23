@@ -43,6 +43,9 @@ data class ScheduleErrorInfo(
             val source = diagnostic.take(MAX_DIAGNOSTIC_LENGTH).ifBlank { "unknown failure" }
             val normalized = source.lowercase()
             val status = HTTP_STATUS.find(source)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            val certificateFailure = listOf(
+                "certificate", "certpath", "sslpeertrust", "sslpeerunverified", "сертификат",
+            ).any(normalized::contains)
             val networkFailure = listOf(
                 "timeout", "timed out", "timedout", "unknownhost", "unable to resolve", "could not resolve host",
                 "failed host lookup", "failed to connect", "connection refused", "connection reset", "no route to host",
@@ -63,6 +66,10 @@ data class ScheduleErrorInfo(
                         in 500..599 -> "Сайт расписания временно недоступен (HTTP $status). Попробуйте позже."
                         else -> "Сайт не принял запрос (HTTP $status). Проверьте источник и попробуйте снова."
                     }
+                }
+                certificateFailure -> {
+                    category = "TLS"
+                    message = "Сайт расписания не подтвердил безопасность соединения. Попробуйте позже; локальные данные не изменены."
                 }
                 networkFailure -> {
                     category = if (listOf("timeout", "timed out", "timedout").any(normalized::contains)) "TIMEOUT" else "NETWORK"

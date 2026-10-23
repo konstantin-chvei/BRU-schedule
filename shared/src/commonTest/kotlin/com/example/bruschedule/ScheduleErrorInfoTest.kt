@@ -33,6 +33,22 @@ class ScheduleErrorInfoTest {
     }
 
     @Test
+    fun invalidTlsCertificatesGetASafeActionableSummary() {
+        val error = ScheduleErrorInfo.fromThrowable(
+            IllegalStateException(
+                "DarwinHttpRequestException: NSURLErrorDomain Code=-1202 " +
+                    "The certificate for this server is invalid for https://bsu.bio/schedule.php",
+            ),
+        )
+
+        assertTrue(error.message.contains("безопасности соединения"))
+        assertTrue(error.message.contains("данные не изменены"))
+        assertFalse(error.message.contains("https://"))
+        assertTrue(error.code.contains("TLS"))
+        assertTrue(error.code.length < 50)
+    }
+
+    @Test
     fun networkAndMissingSourceFailuresHaveUsefulShortMessages() {
         val network = ScheduleErrorInfo.fromThrowable(IllegalStateException("ConnectTimeoutException: request timed out"))
         val unavailableCatalog = ScheduleErrorInfo.fromThrowable(
