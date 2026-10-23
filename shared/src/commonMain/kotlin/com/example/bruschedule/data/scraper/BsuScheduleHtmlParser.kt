@@ -74,9 +74,11 @@ class BsuScheduleHtmlParser(
                 allRows.drop(numberedHeaderIndex + 1).forEach { row ->
                     groupColumns.forEach { column ->
                         val value = row.getOrNull(column)?.text()?.trim().orEmpty()
-                        NUMERIC_GROUP_VALUE.findAll(value).mapNotNull { it.value.toIntOrNull() }
-                            .filter { it in 1..99 }
-                            .forEach { number -> labels += "$number группа" }
+                        if (NUMERIC_GROUP_LIST.matches(value)) {
+                            NUMERIC_GROUP_VALUE.findAll(value).mapNotNull { it.value.toIntOrNull() }
+                                .filter { it in 1..99 }
+                                .forEach { number -> labels += "$number группа" }
+                        }
                     }
                 }
             }
@@ -625,7 +627,17 @@ class BsuScheduleHtmlParser(
             ?: NUMERIC_ROOM_LINE.matchEntire(line)?.value?.takeIf(String::isNotBlank)
 
     private fun groupLabelsIn(text: String): List<String> {
-        val codes = GROUP_CODE.findAll(text).map { it.value }.toList()
+        val codes = GROUP_CODE.findAll(text).mapNotNull { match ->
+            val left = text.getOrNull(match.range.first - 1)
+            val beforeLeft = text.getOrNull(match.range.first - 2)
+            val right = text.getOrNull(match.range.last + 1)
+            val afterRight = text.getOrNull(match.range.last + 2)
+            val partOfNumberBefore =
+                (left == '.' || left == '-' || left == ':') && beforeLeft?.isDigit() == true
+            val partOfNumberAfter =
+                (right == '.' || right == '-' || right == ':') && afterRight?.isDigit() == true
+            match.value.takeUnless { partOfNumberBefore || partOfNumberAfter }
+        }.toList()
         val descriptor = parseGroupDescriptor(text)
         val descriptorLabel = descriptor?.let { group ->
             if (group.subgroup == null) "${group.number} группа"
@@ -798,6 +810,7 @@ class BsuScheduleHtmlParser(
         val DATE_CONDITION = Regex("(?:только|кроме)\\s+\\d{1,2}\\.\\d{1,2}(?:\\.\\d{4})?\\.?", RegexOption.IGNORE_CASE)
         val GROUP_DESCRIPTOR = Regex("(\\d{1,2})\\s*(?:групп[аы]?|group)\\s*([а-яёa-z])?", RegexOption.IGNORE_CASE)
         val GROUP_CODE = Regex("\\b\\d{1,2}-\\d{1,3}\\b")
+        val NUMERIC_GROUP_LIST = Regex("^\\s*\\d{1,2}(?:\\s*[,;/]\\s*\\d{1,2})*\\s*$")
         val NUMERIC_GROUP_VALUE = Regex("\\b\\d{1,2}\\b")
         val SUBGROUP_HEADER = Regex("^[а-яёa-z]$", RegexOption.IGNORE_CASE)
         val TEACHER_LINE = Regex("(?:преподаватель|преп\\.?|teacher|викладчык)\\s*[:–-]?\\s*(.+)", RegexOption.IGNORE_CASE)
