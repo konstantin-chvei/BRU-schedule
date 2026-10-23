@@ -1,12 +1,21 @@
 package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
+import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 
 /**
  * Uses the configured direct HTML page for user-added universities. BRU profiles are resolved
@@ -16,9 +25,13 @@ import kotlinx.coroutines.CancellationException
 class BruScheduleRemoteDataSource(
     private val transport: HtmlTransport,
     private val directoryParser: BruScheduleDirectoryParser = BruScheduleDirectoryParser(),
+    private val biologyScheduleParser: BsuBiologyScheduleHtmlParser = BsuBiologyScheduleHtmlParser(),
 ) : ScheduleRemoteDataSource {
     override suspend fun fetchHtml(profile: ScheduleProfile, window: ScheduleWindow): String {
         if (profile.universityId != UniversityIds.BRU) {
+            if (profile.universityId == UniversityIds.BSU && biologyScheduleParser.isBiologyProfile(profile)) {
+                return fetchBiologyWeeks(profile, window)
+            }
             val timetableUrl = profile.sourceUrl?.trim()?.takeIf(String::isNotBlank)
                 ?: error("Для этого вуза укажите прямую ссылку на страницу расписания")
             require(timetableUrl.startsWith("https://", ignoreCase = true)) {
@@ -99,6 +112,67 @@ class BruScheduleRemoteDataSource(
         }
     }
 
+    private suspend fun fetchBiologyWeeks(profile: ScheduleProfile, window: ScheduleWindow): String {
+        val sourceUrl = profile.sourceUrl?.trim()?.takeIf(String::isNotBlank)
+            ?: error("В профиле Биофака отсутствует ссылка на расписание")
+        val firstMonday = window.startDate.minus(DatePeriod(days = window.startDate.dayOfWeek.isoDayNumber - 1))
+        val throughDate = window.semesterCoverageEndDate ?: window.endDate
+        val mondays = buildList {
+            var week = firstMonday
+            while (week <= throughDate && size < MAX_BIOLOGY_WEEKS) {
+                add(week)
+                week = week.plus(DatePeriod(days = 7))
+            }
+        }
+        require(mondays.isNotEmpty()) { "Не удалось определить недели расписания Биофака" }
+        require(mondays.last() <= throughDate || mondays.size < MAX_BIOLOGY_WEEKS) {
+            "Период расписания Биофака превышает допустимый диапазон"
+        }
+        val responses = supervisorScope {
+            mondays.map { week ->
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    val result = try {
+                        Result.success(transport.get(withWeekDate(sourceUrl, week.toString())))
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Throwable) {
+                        Result.failure(failure)
+                    }
+                    week to result
+                }
+            }.awaitAll()
+        }
+        val failed = responses.firstOrNull { (_, result) -> result.isFailure }
+        if (failed != null) {
+            val detail = failed.second.exceptionOrNull()?.message?.takeIf(String::isNotBlank)
+                ?: "сайт не вернул страницу"
+            error("Не удалось загрузить расписание Биофака на неделю ${failed.first}: $detail")
+        }
+        return biologyScheduleParser.combineWeeklyPages(
+            responses.map { (week, result) -> week to result.getOrThrow() },
+        )
+    }
+
+    private fun withWeekDate(url: String, weekDate: String): String {
+        val fragmentIndex = url.indexOf('#')
+        val fragment = if (fragmentIndex >= 0) url.substring(fragmentIndex) else ""
+        val withoutFragment = if (fragmentIndex >= 0) url.substring(0, fragmentIndex) else url
+        val queryIndex = withoutFragment.indexOf('?')
+        val base = if (queryIndex >= 0) withoutFragment.substring(0, queryIndex) else withoutFragment
+        val parameters = if (queryIndex >= 0) {
+            withoutFragment.substring(queryIndex + 1).split('&').filter(String::isNotBlank).toMutableList()
+        } else {
+            mutableListOf()
+        }
+        val dateParameterIndex = parameters.indexOfFirst { it.substringBefore('=') == "week_date" }
+        if (dateParameterIndex >= 0) {
+            parameters[dateParameterIndex] = "week_date=$weekDate"
+        } else {
+            parameters += "week_date=$weekDate"
+        }
+        return "$base?${parameters.joinToString("&")}$fragment"
+    }
+
     private suspend fun findGroupSchedule(
         profile: ScheduleProfile,
         window: ScheduleWindow,
@@ -149,5 +223,9 @@ class BruScheduleRemoteDataSource(
             error("Ошибка доступа к каталогам расписаний rasp.bru.by: $detail")
         }
         return null
+    }
+
+    private companion object {
+        const val MAX_BIOLOGY_WEEKS = 54
     }
 }

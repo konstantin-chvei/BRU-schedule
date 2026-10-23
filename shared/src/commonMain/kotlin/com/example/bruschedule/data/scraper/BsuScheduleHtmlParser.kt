@@ -14,16 +14,18 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
 /**
- * First-phase BSU adapters: ordinary timetable tables (for example, MMF) and public Google Sheets.
- * Document formats and JavaScript-only calendars remain outside this parser by design.
+ * BSU HTML adapters for ordinary faculty timetables, public Google Sheets, and the Biology
+ * faculty's server-rendered group grid. Binary Office/PDF sources use dedicated document readers.
  */
 class BsuScheduleHtmlParser(
     private val genericParser: GenericHtmlScheduleParser = GenericHtmlScheduleParser(),
+    private val biologyParser: BsuBiologyScheduleHtmlParser = BsuBiologyScheduleHtmlParser(),
 ) : ScheduleHtmlParser {
-    override val formatVersion: Int = 1
+    override val formatVersion: Int = 3
 
     override fun parse(profile: ScheduleProfile, html: String, referenceDate: LocalDate): List<Lesson> {
         require(html.isNotBlank()) { "Страница расписания пуста" }
+        if (biologyParser.isBiologyProfile(profile)) return biologyParser.parse(profile, html, referenceDate)
         val document = Ksoup.parse(html)
         val pageText = normalize(document.text()).lowercase().replace('ё', 'е')
         val hasDateAnchor = document.select("table th, table td").any { EXPLICIT_DATE.containsMatchIn(it.text()) }
@@ -41,6 +43,8 @@ class BsuScheduleHtmlParser(
 
     /** Returns group labels found in matrix table headers. */
     fun discoverTableGroupLabels(html: String): List<String> {
+        val biologyGroups = biologyParser.discoverGroups(html).map(BsuBiologyGroup::name)
+        if (biologyGroups.isNotEmpty()) return biologyGroups
         val document = Ksoup.parse(html)
         val labels = linkedSetOf<String>()
         document.select("table").forEach { table ->
@@ -83,7 +87,11 @@ class BsuScheduleHtmlParser(
         return (hasOneParity && hasTime && hasDateAnchor) || genericParser.hasAlternatingTwoWeekCycle(html)
     }
 
+    override fun hasAlternatingTwoWeekCycle(profile: ScheduleProfile, html: String): Boolean =
+        if (biologyParser.isBiologyProfile(profile)) false else hasAlternatingTwoWeekCycle(html)
+
     override fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean {
+        if (biologyParser.isBiologyProfile(profile)) return biologyParser.hasWeeklyScheduleTemplate(profile, html)
         if (!profile.sourceUrl.isGoogleSheetsUrl()) {
             return genericParser.hasWeeklyScheduleTemplate(profile, html)
         }

@@ -51,6 +51,7 @@ import com.example.bruschedule.domain.model.DeadlineReminderIntervals
 import com.example.bruschedule.domain.model.DeadlineReminderPreferences
 import com.example.bruschedule.domain.model.AcademicTrack
 import com.example.bruschedule.domain.model.SemesterSchedulePreferences
+import com.example.bruschedule.domain.model.University
 import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.TypographyPreferences
 import com.example.bruschedule.domain.model.TypographyRole
@@ -106,10 +107,11 @@ fun ScheduleSettingsScreen(
 
         SemesterScheduleSettingsCard(
             preferences = state.semesterSchedulePreferences,
+            university = state.selectedUniversity,
             selectedProfileId = state.selectedProfile?.id,
             selectedProfileName = state.selectedProfile?.name,
             onTrackSelected = viewModel::setAcademicTrack,
-            onIfzoDateChanged = viewModel::setIfzoSessionEndDate,
+            onUniversitySessionEndDateChanged = viewModel::setUniversitySessionEndDate,
             onProfileSessionEndDateChanged = viewModel::setProfileSessionEndDate,
         )
 
@@ -369,16 +371,20 @@ private const val PROJECT_TELEGRAM_BOT_URL = "https://t.me/bru_schedule_suggesti
 @Composable
 private fun SemesterScheduleSettingsCard(
     preferences: SemesterSchedulePreferences,
+    university: University,
     selectedProfileId: String?,
     selectedProfileName: String?,
-    onTrackSelected: (AcademicTrack) -> Unit,
-    onIfzoDateChanged: (String) -> Unit,
+    onTrackSelected: (String, AcademicTrack) -> Unit,
+    onUniversitySessionEndDateChanged: (String, String?) -> Unit,
     onProfileSessionEndDateChanged: (String, String?) -> Unit,
 ) {
+    val universityId = university.id
+    val selectedTrack = preferences.trackForUniversity(universityId)
+    val universityDate = preferences.sessionEndDateIsoForUniversity(universityId)
     val profileDateOverride = selectedProfileId?.let(preferences.profileSessionEndDatesIso::get)
-    val profileDate = profileDateOverride ?: preferences.sessionEndDateIso
-    var ifzoDateText by remember(preferences.track, preferences.sessionEndDateIso) {
-        mutableStateOf(formatIsoDateForInput(preferences.sessionEndDateIso))
+    val profileDate = profileDateOverride ?: universityDate
+    var universityDateText by remember(universityId, selectedTrack, universityDate) {
+        mutableStateOf(formatIsoDateForInput(universityDate))
     }
     var profileDateText by remember(selectedProfileId, profileDate) {
         mutableStateOf(formatIsoDateForInput(profileDate))
@@ -386,14 +392,14 @@ private fun SemesterScheduleSettingsCard(
     Surface(shape = RoundedCornerShape(21.dp), color = BruColors.surface, border = BorderStroke(1.dp, BruColors.outline)) {
         Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("СЕССИЯ 2026/27", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                Text("СЕССИЯ 2026/27 · ${university.name.uppercase()}", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
                 Text("Период календаря", color = BruColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Показываем расписание с сегодняшнего дня до недели после последнего дня сессии.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("Расписание доступно с сегодняшнего дня до недели после окончания сессии. Даты по умолчанию ориентировочные — проверьте их для своего факультета и курса.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
-            AcademicTrack.entries.forEach { track ->
-                val selected = preferences.track == track
+            AcademicTrack.availableForUniversity(universityId).forEach { track ->
+                val selected = selectedTrack == track
                 Surface(
-                    onClick = { onTrackSelected(track) },
+                    onClick = { onTrackSelected(universityId, track) },
                     shape = RoundedCornerShape(13.dp),
                     color = if (selected) BruColors.indigo.copy(alpha = 0.14f) else BruColors.elevatedSurface,
                     border = BorderStroke(1.dp, if (selected) BruColors.indigo else BruColors.outline),
@@ -406,7 +412,7 @@ private fun SemesterScheduleSettingsCard(
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(track.label, color = BruColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             Text(
-                                sessionTrackHint(track, preferences),
+                                sessionTrackHint(track),
                                 color = if (selected) BruColors.cyan else BruColors.muted,
                                 fontSize = 9.sp,
                                 lineHeight = 13.sp,
@@ -415,25 +421,35 @@ private fun SemesterScheduleSettingsCard(
                         Text(if (selected) "✓" else "○", color = if (selected) BruColors.cyan else BruColors.dim, fontSize = 14.sp)
                     }
                 }
-                if (track == AcademicTrack.IFZO && selected) {
-                    OutlinedTextField(
-                        value = ifzoDateText,
-                        onValueChange = { value ->
-                            val formatted = maskRussianDate(value)
-                            ifzoDateText = formatted
-                            if (formatted.length == 10) {
-                                parseRussianDate(formatted)?.let(onIfzoDateChanged)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = typographyTextStyle(TypographyRole.BODY),
-                        label = { Text("Последний день сессии") },
-                        placeholder = { Text("30.01.2027") },
-                        singleLine = true,
-                    )
-                    Text("ИФЗО: введите вашу дату; календарь автоматически захватит ещё 7 дней.", color = BruColors.dim, fontSize = 9.sp, lineHeight = 13.sp)
+            }
+            OutlinedTextField(
+                value = universityDateText,
+                onValueChange = { value ->
+                    val formatted = maskRussianDate(value)
+                    universityDateText = formatted
+                    if (formatted.length == 10) {
+                        parseRussianDate(formatted)?.let { date ->
+                            onUniversitySessionEndDateChanged(universityId, date)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = typographyTextStyle(TypographyRole.BODY),
+                label = { Text("Последний день сессии для вуза") },
+                placeholder = { Text("24.01.2027") },
+                singleLine = true,
+            )
+            if (preferences.hasUniversitySessionEndDateOverride(universityId)) {
+                TextButton(onClick = { onUniversitySessionEndDateChanged(universityId, null) }) {
+                    Text("Использовать дату по умолчанию для вуза", color = BruColors.cyan, fontSize = 10.sp)
                 }
             }
+            Text(
+                "Покрытие автоматически продлевается ещё на ${SemesterCoveragePolicy.DAYS_AFTER_SESSION} дней после указанной даты.",
+                color = BruColors.dim,
+                fontSize = 9.sp,
+                lineHeight = 13.sp,
+            )
             if (selectedProfileId != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     val profileLabel = selectedProfileName ?: "выбранного расписания"
@@ -457,13 +473,13 @@ private fun SemesterScheduleSettingsCard(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = typographyTextStyle(TypographyRole.BODY),
-                        label = { Text("Последний день сессии") },
-                        placeholder = { Text("10.01.2027") },
+                        label = { Text("Последний день сессии для расписания") },
+                        placeholder = { Text("24.01.2027") },
                         singleLine = true,
                     )
                     if (profileDateOverride != null) {
                         TextButton(onClick = { onProfileSessionEndDateChanged(selectedProfileId, null) }) {
-                            Text("Использовать общую дату", color = BruColors.cyan, fontSize = 10.sp)
+                            Text("Использовать дату вуза", color = BruColors.cyan, fontSize = 10.sp)
                         }
                     }
                 }
@@ -472,14 +488,10 @@ private fun SemesterScheduleSettingsCard(
     }
 }
 
-private fun sessionTrackHint(track: AcademicTrack, preferences: SemesterSchedulePreferences): String = when (track) {
-    AcademicTrack.BELARUSIAN -> "Сессия 22.12.2026–10.01.2027 · календарь до 17.01.2027"
-    AcademicTrack.RUSSIAN -> "Сессия 29.12.2026–25.01.2027 · календарь до 01.02.2027"
-    AcademicTrack.IFZO -> {
-        val end = runCatching { LocalDate.parse(preferences.ifzoSessionEndDateIso) }.getOrNull()
-        end?.let { "Сессия до ${it.toRussianDate()} · календарь до ${it.plus(DatePeriod(days = SemesterCoveragePolicy.DAYS_AFTER_SESSION)).toRussianDate()}" }
-            ?: "Индивидуальные даты сессии"
-    }
+private fun sessionTrackHint(track: AcademicTrack): String {
+    val end = runCatching { LocalDate.parse(track.defaultSessionEndDateIso) }.getOrNull() ?: return track.hint
+    val calendarEnd = end.plus(DatePeriod(days = SemesterCoveragePolicy.DAYS_AFTER_SESSION))
+    return "${track.hint} · дата по умолчанию до ${end.toRussianDate()}, календарь до ${calendarEnd.toRussianDate()}"
 }
 
 private fun formatIsoDateForInput(isoDate: String): String =

@@ -144,6 +144,8 @@ data class ProfileSyncState(
 data class ScheduleWindow(
     val startDate: LocalDate,
     val endDate: LocalDate,
+    /** Optional semester horizon for sources that expose a separate dated page for every week. */
+    val semesterCoverageEndDate: LocalDate? = null,
 ) {
     companion object {
         /** Monday of this week through Sunday of next week (the site's rolling source view, later cycle-expanded). */

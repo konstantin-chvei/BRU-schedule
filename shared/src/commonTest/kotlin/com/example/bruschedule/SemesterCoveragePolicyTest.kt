@@ -69,6 +69,53 @@ class SemesterCoveragePolicyTest {
     }
 
     @Test
+    fun bsuCoverageUsesTheSelectedUniversityTrackManualDatesAndFacultyOverride() {
+        val defaults = SemesterSchedulePreferences()
+        assertEquals(
+            LocalDate(2027, 1, 31),
+            SemesterCoveragePolicy.coverageEndDateForUniversity(
+                LocalDate(2026, 10, 23),
+                defaults,
+                com.example.bruschedule.domain.model.UniversityIds.BSU,
+            ),
+        )
+        assertEquals(
+            LocalDate(2027, 1, 17),
+            SemesterCoveragePolicy.coverageEndDateForUniversity(
+                LocalDate(2026, 10, 23),
+                defaults,
+                com.example.bruschedule.domain.model.UniversityIds.BRU,
+            ),
+        )
+
+        val summer = defaults
+            .withTrackForUniversity(
+                com.example.bruschedule.domain.model.UniversityIds.BSU,
+                AcademicTrack.BSU_DAYTIME_1_3_SUMMER,
+            )
+            .withUniversitySessionEndDate(com.example.bruschedule.domain.model.UniversityIds.BSU, "2027-06-27")
+            .copy(profileSessionEndDatesIso = mapOf("bio-profile" to "2027-06-29"))
+
+        assertEquals(
+            LocalDate(2027, 7, 4),
+            SemesterCoveragePolicy.coverageEndDateForUniversity(
+                LocalDate(2026, 10, 23),
+                summer,
+                com.example.bruschedule.domain.model.UniversityIds.BSU,
+            ),
+        )
+        assertEquals(
+            LocalDate(2027, 7, 6),
+            SemesterCoveragePolicy.coverageEndDateForUniversity(
+                LocalDate(2026, 10, 23),
+                summer,
+                com.example.bruschedule.domain.model.UniversityIds.BSU,
+                "bio-profile",
+            ),
+        )
+    }
+
+    @Test
     fun coverageCannotEndBeforeTodayWhenAStoredSessionDateHasExpired() {
         val preferences = SemesterSchedulePreferences(
             track = AcademicTrack.BELARUSIAN,

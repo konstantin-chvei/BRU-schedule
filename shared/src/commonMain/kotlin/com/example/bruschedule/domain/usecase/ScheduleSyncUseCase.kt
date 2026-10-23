@@ -12,6 +12,7 @@ import com.example.bruschedule.domain.repository.SemesterSchedulePreferencesRepo
 import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -44,7 +45,17 @@ class RefreshScheduleUseCase(
         return try {
             val profile: ScheduleProfile = schedules.getProfile(profileId)
                 ?: error("Профиль расписания не найден")
-            val window = ScheduleWindow.currentAndNextWeek(clock)
+            val today = clock.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .date
+            val preferences = semesterSchedulePreferences.observe().first()
+            val semesterEnd = SemesterCoveragePolicy.coverageEndDateForUniversity(
+                today,
+                preferences,
+                profile.universityId,
+                profile.id,
+            )
+            val window = ScheduleWindow.currentAndNextWeek(clock).copy(semesterCoverageEndDate = semesterEnd)
             val html = remote.fetchHtml(profile, window)
             val parsed = scraper.parse(
                 profile = profile,
@@ -54,17 +65,15 @@ class RefreshScheduleUseCase(
             if (parsed.isEmpty()) {
                 error("На странице не найдено ни одной пары. Локальное расписание не изменено.")
             }
-            val today = clock.now()
-                .toLocalDateTime(TimeZone.currentSystemDefault())
-                .date
-            val preferences = semesterSchedulePreferences.observe().first()
-            val semesterEnd = SemesterCoveragePolicy.coverageEndDate(today, preferences, profile.id)
             val websiteLessons = when {
                 scraper.hasAlternatingTwoWeekCycle(profile, html) ->
                     ScheduleCycleExpander.expand(parsed, today, semesterEnd)
                 scraper.hasWeeklyScheduleTemplate(profile, html) ->
                     ScheduleCycleExpander.expandWeekly(parsed, today, semesterEnd)
-                else -> parsed
+                else -> parsed.filter { lesson ->
+                    val date = runCatching { LocalDate.parse(lesson.lessonDate) }.getOrNull()
+                    date == null || date in today..semesterEnd
+                }
             }
             if (websiteLessons.isEmpty()) {
                 error("Не удалось развернуть пары на семестровый период. Локальное расписание не изменено.")

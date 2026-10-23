@@ -11,6 +11,7 @@ object SemesterCoveragePolicy {
 
     fun coverageStartDate(today: LocalDate): LocalDate = today
 
+    /** Backwards-compatible BRU default used by older callers and persisted profiles. */
     fun sessionEndDate(preferences: SemesterSchedulePreferences): LocalDate =
         LocalDate.parse(preferences.sessionEndDateIso)
 
@@ -21,11 +22,29 @@ object SemesterCoveragePolicy {
         return profileEndDate ?: sessionEndDate(preferences)
     }
 
+    fun sessionEndDateForUniversity(
+        preferences: SemesterSchedulePreferences,
+        universityId: String,
+        profileId: String? = null,
+    ): LocalDate {
+        val profileEndDate = profileId
+            ?.let(preferences.profileSessionEndDatesIso::get)
+            ?.let { value -> runCatching { LocalDate.parse(value) }.getOrNull() }
+        return profileEndDate ?: LocalDate.parse(preferences.sessionEndDateIsoForUniversity(universityId))
+    }
+
     fun coverageEndDate(preferences: SemesterSchedulePreferences): LocalDate =
         sessionEndDate(preferences).plus(DatePeriod(days = DAYS_AFTER_SESSION))
 
     fun coverageEndDate(preferences: SemesterSchedulePreferences, profileId: String?): LocalDate =
         sessionEndDate(preferences, profileId).plus(DatePeriod(days = DAYS_AFTER_SESSION))
+
+    fun coverageEndDateForUniversity(
+        preferences: SemesterSchedulePreferences,
+        universityId: String,
+        profileId: String? = null,
+    ): LocalDate = sessionEndDateForUniversity(preferences, universityId, profileId)
+        .plus(DatePeriod(days = DAYS_AFTER_SESSION))
 
     /** A stale saved date must never make the selectable calendar end before today. */
     fun coverageEndDate(today: LocalDate, preferences: SemesterSchedulePreferences): LocalDate =
@@ -36,5 +55,13 @@ object SemesterCoveragePolicy {
         preferences: SemesterSchedulePreferences,
         profileId: String?,
     ): LocalDate = coverageEndDate(preferences, profileId)
+        .let { configuredEnd -> if (configuredEnd < today) today else configuredEnd }
+
+    fun coverageEndDateForUniversity(
+        today: LocalDate,
+        preferences: SemesterSchedulePreferences,
+        universityId: String,
+        profileId: String? = null,
+    ): LocalDate = coverageEndDateForUniversity(preferences, universityId, profileId)
         .let { configuredEnd -> if (configuredEnd < today) today else configuredEnd }
 }
