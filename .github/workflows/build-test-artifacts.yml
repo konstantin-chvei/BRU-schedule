@@ -60,7 +60,9 @@ jobs:
           } 2>&1 | tee "$LOG_PATH"
 
       - name: Compile and test the importer with university-network access disabled
-        run: bash gradlew :androidApp:testDebugUnitTest --tests com.example.bruschedule.tools.ScheduleDataImporterTest --no-daemon
+        run: |
+          set -euo pipefail
+          bash gradlew :androidApp:testDebugUnitTest --tests com.example.bruschedule.tools.ScheduleDataImporterTest --stacktrace --no-daemon 2>&1 | tee -a "$RUNNER_TEMP/android-build.log"
 
       - name: Report Android build errors
         if: failure()
@@ -90,7 +92,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ci-android-build-log
-          path: ${{ runner.temp }}/android-build.log
+          path: |
+            ${{ runner.temp }}/android-build.log
+            androidApp/build/test-results/testDebugUnitTest/
           if-no-files-found: ignore
           retention-days: 7
 
