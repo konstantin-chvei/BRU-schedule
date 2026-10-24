@@ -79,10 +79,16 @@ jobs:
               print("::error::Android build failed before a log file was created")
           else:
               lines = log.read_text(errors="replace").splitlines()
+              diagnostics = [i for i, line in enumerate(lines) if re.search(r"(^e:\s|error:|unresolved reference|unresolved[_ ]import|type mismatch|overload resolution|cannot access|kotlin compiler)", line, re.I)]
               anchors = [i for i, line in enumerate(lines) if re.search(r"error:|failed|failure|exception|not found|could not|http [45][0-9][0-9]|aar metadata|compile.?sdk|minCompileSdk", line, re.I)]
-              selected_indices = sorted({j for i in anchors[-15:] for j in range(max(0, i - 2), min(len(lines), i + 3))})
-              selected = [lines[i] for i in selected_indices] if selected_indices else lines[-40:]
-              for line in selected[-45:]:
+              selected_indices = {
+                  j for i in anchors[-15:] for j in range(max(0, i - 2), min(len(lines), i + 3))
+              }
+              selected_indices.update(
+                  j for i in diagnostics[-15:] for j in range(max(0, i - 2), min(len(lines), i + 3))
+              )
+              selected = [lines[i] for i in sorted(selected_indices)] if selected_indices else lines[-40:]
+              for line in selected[-90:]:
                   escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
                   print(f"::error title=Android build log::{escaped}")
           PY
