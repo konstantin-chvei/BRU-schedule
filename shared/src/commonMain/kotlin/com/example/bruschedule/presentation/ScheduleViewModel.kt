@@ -167,6 +167,9 @@ class ScheduleViewModel(
     private val notice = MutableStateFlow<String?>(null)
     private val profileSearch = MutableStateFlow(ProfileSearchUiState())
     private var profileSearchJob: Job? = null
+    private val profileSearchGeneration = MutableStateFlow(0L)
+    private val pendingRefreshProfileIds = mutableListOf<String>()
+    private var activeRefreshProfileId: String? = null
     private var dailyMessageRefreshJob: Job? = null
     private val nowEpochMillis = MutableStateFlow(clock.now().toEpochMilliseconds())
     private val appearance = appearancePreferences.observe().stateIn(
@@ -435,6 +438,7 @@ class ScheduleViewModel(
     }
 
     fun selectUniversity(universityId: String) {
+        profileSearchGeneration.value = profileSearchGeneration.value + 1
         profileSearchJob?.cancel()
         profileSearchJob = null
         if (uiState.value.universities.none { it.id == universityId }) {
@@ -640,7 +644,14 @@ class ScheduleViewModel(
     }
 
     private fun launchRefresh(profileId: String) {
-        if (refreshing.value) return
+        if (refreshing.value) {
+            if (profileId != activeRefreshProfileId && profileId !in pendingRefreshProfileIds) {
+                pendingRefreshProfileIds += profileId
+                notice.value = "Расписание добавлено в очередь на обновление после текущей загрузки"
+            }
+            return
+        }
+        activeRefreshProfileId = profileId
         refreshing.value = true
         viewModelScope.launch {
             try {
@@ -659,6 +670,12 @@ class ScheduleViewModel(
                 notice.value = "${error.message} · Код: ${error.code}"
             } finally {
                 refreshing.value = false
+                activeRefreshProfileId = null
+                val nextProfileId = pendingRefreshProfileIds.firstOrNull()
+                if (nextProfileId != null) {
+                    pendingRefreshProfileIds.removeAt(0)
+                    launchRefresh(nextProfileId)
+                }
             }
         }
     }
@@ -703,6 +720,8 @@ class ScheduleViewModel(
 
     fun searchProfiles(type: ScheduleProfileType, query: String) {
         profileSearchJob?.cancel()
+        val requestGeneration = profileSearchGeneration.value + 1
+        profileSearchGeneration.value = requestGeneration
         profileSearchJob = null
         val university = uiState.value.selectedUniversity
         if (query.isBlank()) {
@@ -716,14 +735,18 @@ class ScheduleViewModel(
                 val candidates = withContext(Dispatchers.Default) {
                     profileCatalog.search(university.id, type, query) { partialCandidates ->
                         val currentSearch = profileSearch.value
-                        if (uiState.value.selectedUniversity.id == university.id &&
-                            currentSearch.query == query && currentSearch.type == type && currentSearch.loading
+                        if (requestGeneration == profileSearchGeneration.value &&
+                            uiState.value.selectedUniversity.id == university.id &&
+                            currentSearch.query == query && currentSearch.type == type
                         ) {
-                            profileSearch.value = currentSearch.copy(candidates = partialCandidates)
+                            profileSearch.value = currentSearch.copy(
+                                candidates = partialCandidates,
+                                loading = currentSearch.loading && partialCandidates.isEmpty(),
+                            )
                         }
                     }
                 }
-                if (uiState.value.selectedUniversity.id != university.id) return@launch
+                if (requestGeneration != profileSearchGeneration.value || uiState.value.selectedUniversity.id != university.id) return@launch
                 profileSearch.value = ProfileSearchUiState(query, type, candidates = candidates)
                 if (candidates.isEmpty()) {
                     val profileLabel = if (type == ScheduleProfileType.GROUP) "группу" else "преподавателя"
@@ -732,7 +755,7 @@ class ScheduleViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                if (uiState.value.selectedUniversity.id != university.id) return@launch
+                if (requestGeneration != profileSearchGeneration.value || uiState.value.selectedUniversity.id != university.id) return@launch
                 val partialCandidates = profileSearch.value
                     .takeIf { it.query == query && it.type == type }
                     ?.candidates
@@ -748,6 +771,7 @@ class ScheduleViewModel(
     }
 
     fun addProfileCandidate(candidate: ProfileCandidate) {
+        profileSearchGeneration.value = profileSearchGeneration.value + 1
         profileSearchJob?.cancel()
         profileSearchJob = null
         if (!candidate.scheduleAvailable) {
@@ -767,7 +791,8 @@ class ScheduleViewModel(
                 schedules.saveProfile(profile)
                 selectedProfileId.value = profile.id
                 profileSearch.value = ProfileSearchUiState(type = candidate.type)
-                notice.value = "Профиль «${candidate.name}» добавлен · обновите расписание в настройках"
+                notice.value = "Профиль «${candidate.name}» добавлен · загружаем расписание…"
+                launchRefresh(profile.id)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {

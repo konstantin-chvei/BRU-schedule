@@ -97,8 +97,8 @@
       profiles: [],
       schedules: {},
       tasks: [],
-      appearance: { theme: "BLUE", lessonAccents: { ...DEFAULT_ACCENTS } },
-      typography: { displayScale: 1, headingScale: 1, bodyScale: 1, captionScale: 1 },
+      appearance: { theme: "WHITE", lessonAccents: { ...DEFAULT_ACCENTS } },
+      typography: { displayScale: 1.1, headingScale: 1.1, bodyScale: 1.1, captionScale: 1.1 },
       semester: { tracksByUniversityId: {}, endDateOverrides: {}, profileEndDates: {} },
       reminders: { enabled: true, offsetsMinutes: [1440], lessonNotifications: false },
       dailyMessages: [],
@@ -116,11 +116,12 @@
       next.schedules = saved.schedules && typeof saved.schedules === "object" ? saved.schedules : {};
       next.selectedUniversityId = UNIVERSITY_LIST.some((u) => u.id === saved.selectedUniversityId) ? saved.selectedUniversityId : base.selectedUniversityId;
       next.appearance = { ...base.appearance, ...(saved.appearance || {}), lessonAccents: { ...DEFAULT_ACCENTS, ...(saved.appearance?.lessonAccents || {}) } };
+      if (!["BLUE", "BLACK", "WHITE"].includes(next.appearance.theme)) next.appearance.theme = "WHITE";
       for (const type of Object.keys(DEFAULT_ACCENTS)) next.appearance.lessonAccents[type] = safeHexColor(next.appearance.lessonAccents[type], DEFAULT_ACCENTS[type]);
       next.typography = { ...base.typography, ...(saved.typography || {}) };
       for (const key of Object.keys(base.typography)) {
         const scale = Number(next.typography[key]);
-        next.typography[key] = Number.isFinite(scale) ? Math.min(1.5, Math.max(1, scale)) : 1;
+        next.typography[key] = Number.isFinite(scale) ? Math.min(1.5, Math.max(1, scale)) : 1.1;
       }
       next.semester = { ...base.semester, ...(saved.semester || {}), tracksByUniversityId: { ...(saved.semester?.tracksByUniversityId || {}) }, endDateOverrides: { ...(saved.semester?.endDateOverrides || {}) }, profileEndDates: { ...(saved.semester?.profileEndDates || {}) } };
       next.reminders = { ...base.reminders, ...(saved.reminders || {}) };
@@ -248,13 +249,16 @@
     return messages[index] || messages[0] || "Собери день по расписанию.";
   }
   function applyTheme() {
-    const theme = String(state.appearance.theme || "BLUE").toLowerCase();
-    appRoot.className = `theme-${["blue", "black", "white"].includes(theme) ? theme : "blue"}`;
+    const theme = String(state.appearance.theme || "WHITE").toLowerCase();
+    const activeTheme = ["blue", "black", "white"].includes(theme) ? theme : "white";
+    appRoot.className = `theme-${activeTheme}`;
+    const themeColor = { blue: "#0A0D12", black: "#000000", white: "#F4F6FA" }[activeTheme];
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", themeColor);
     const typography = state.typography;
-    appRoot.style.setProperty("--scale-display", String(typography.displayScale ?? 1));
-    appRoot.style.setProperty("--scale-heading", String(typography.headingScale ?? 1));
-    appRoot.style.setProperty("--scale-body", String(typography.bodyScale ?? 1));
-    appRoot.style.setProperty("--scale-caption", String(typography.captionScale ?? 1));
+    appRoot.style.setProperty("--scale-display", String(typography.displayScale ?? 1.1));
+    appRoot.style.setProperty("--scale-heading", String(typography.headingScale ?? 1.1));
+    appRoot.style.setProperty("--scale-body", String(typography.bodyScale ?? 1.1));
+    appRoot.style.setProperty("--scale-caption", String(typography.captionScale ?? 1.1));
     appRoot.style.setProperty("--lesson-lecture", safeHexColor(state.appearance.lessonAccents.lecture, DEFAULT_ACCENTS.lecture));
     appRoot.style.setProperty("--lesson-lab", safeHexColor(state.appearance.lessonAccents.laboratory, DEFAULT_ACCENTS.laboratory));
     appRoot.style.setProperty("--lesson-practice", safeHexColor(state.appearance.lessonAccents.practice, DEFAULT_ACCENTS.practice));
@@ -271,9 +275,9 @@
   }
   function glyph(name, className = "") {
     const paths = {
-      calendar: '<rect x="3.8" y="6.5" width="16.4" height="14" rx="3.2"/><path d="M7.5 3.8v5M16.5 3.8v5M4.2 10.3h15.6M8 14h.1M12 14h.1M16 14h.1M8 17.5h.1M12 17.5h.1"/>',
-      deadlines: '<rect x="4.1" y="4" width="15.8" height="17" rx="3"/><path d="M8 8h8M8 12h5M8 16h3M6.4 8h.1M6.4 12h.1M6.4 16h.1"/>',
-      settings: '<path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4m9.2 9.2L18 18m0-12-1.4 1.4m-9.2 9.2L6 18"/><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>',
+      calendar: '<rect x="3.6" y="5" width="16.8" height="16" rx="3"/><path d="M3.8 10.2h16.4M8 3v4.4M16 3v4.4"/><g fill="currentColor" stroke="none"><rect x="6" y="13.2" width="2.4" height="2.4" rx=".6"/><rect x="11" y="13.2" width="2.4" height="2.4" rx=".6"/><rect x="16" y="13.2" width="2.4" height="2.4" rx=".6"/><rect x="6" y="17.4" width="2.4" height="2.4" rx=".6"/><rect x="11" y="17.4" width="2.4" height="2.4" rx=".6"/><rect x="16" y="17.4" width="2.4" height="2.4" rx=".6"/></g>',
+      deadlines: '<rect x="4.3" y="4" width="15.4" height="17.3" rx="2.8"/><rect x="9" y="2.6" width="6" height="4.2" rx="1.4" fill="currentColor"/><path d="m7 9.3 1.2 1.2 2-2.6M12 9.3h5.5m-10.5 3.6 1.2 1.2 2-2.6M12 13h5.5m-10.5 3.6 1.2 1.2 2-2.6M12 16.7h5.5"/>',
+      settings: '<path d="M12 5v-2m0 18v-2m7-7h2m-18 0h2M7.4 7.4 6 6m12 12-1.4-1.4m0-9.2L18 6M6 18l1.4-1.4M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z"/><circle cx="12" cy="12" r="2.6"/>',
       pin: '<path d="M19 10.2c0 4.3-7 10.2-7 10.2S5 14.5 5 10.2a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.1"/>',
       cap: '<path d="m2.8 9.3 9.2-5 9.2 5-9.2 5-9.2-5Z"/><path d="M6.4 11.5v4.1c3.3 2.4 7.9 2.4 11.2 0v-4.1M20.9 9.5v5.4"/>',
       clock: '<circle cx="12" cy="12" r="8.7"/><path d="M12 7v5.4l3.7 2.2"/>',
@@ -285,9 +289,9 @@
     const title = route === "schedule" ? "РАСПИСАНИЕ" : route === "deadlines" ? "ДЕДЛАЙНЫ" : "НАСТРОЙКИ";
     const subtitle = route === "schedule" ? dailyQuote() : route === "deadlines" ? "Задачи и даты, которые важно не пропустить." : "Настрой приложение под себя.";
     return `<header class="brand-row">
-      <svg class="brand-glyph" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="8" y="11" width="32" height="29" rx="5"/><path d="M16 7v9M32 7v9M8.5 20h31"/>
-        <path d="M16 27h.1M24 27h.1M32 27h.1M16 34h.1M24 34h.1M32 34h.1" stroke-width="3.2"/>
+      <svg class="brand-glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M14 3v9M30 3v9"/><rect x="5" y="7" width="34" height="30" rx="5"/><path d="M5 17h34"/>
+        <g fill="currentColor" stroke="none"><rect x="12.45" y="21" width="3.2" height="3.2" rx="1"/><rect x="17.75" y="21" width="3.2" height="3.2" rx="1"/><rect x="23.05" y="21" width="3.2" height="3.2" rx="1" fill="var(--cyan)"/><rect x="28.35" y="21" width="3.2" height="3.2" rx="1"/><rect x="12.45" y="28" width="3.2" height="3.2" rx="1"/><rect x="17.75" y="28" width="3.2" height="3.2" rx="1"/><rect x="23.05" y="28" width="3.2" height="3.2" rx="1"/><rect x="28.35" y="28" width="3.2" height="3.2" rx="1"/></g>
       </svg>
       <div class="brand-copy"><p class="brand-title">${title}</p><p class="brand-quote">${esc(subtitle)}</p></div>
     </header>`;
@@ -304,7 +308,7 @@
     return `<button class="university-card" type="button" data-action="open-university-picker" aria-label="Выбрать вуз">
       <span class="university-badge">ВУЗ</span>
       <span class="university-copy"><span class="university-name">${esc(university.name)}</span><span class="university-label">КАТАЛОГ GITHUB · ${esc(university.short)}</span></span>
-      <span class="university-change">СМЕНИТЬ&nbsp; ⌄</span>
+      <span class="university-change">СМЕНИТЬ&nbsp;<span class="chevron-down" aria-hidden="true"></span></span>
     </button>`;
   }
   function renderProfileRail() {
@@ -364,7 +368,7 @@
         const disabled = date < todayISO() || date > Engine.toISO(end);
         cells.push(`<button class="month-day${date === todayISO() ? " is-today" : ""}${date === state.selectedDate ? " is-selected" : ""}${hasLessons ? " has-lessons" : ""}" type="button" data-action="select-date" data-date="${date}" ${disabled ? "disabled" : ""}>${day}<span class="month-day-mark"></span></button>`);
       }
-      months.push(`<section class="semester-month"><h3 class="month-nav-title">${esc(monthLabel(Engine.toISO(first)))}</h3><div class="month-grid">${weekdays}${cells.join("")}</div></section>`);
+      months.push(`<section class="semester-month"><h3 class="month-nav-title">${esc(monthLabel(Engine.toISO(first)))}</h3><div class="month-weekdays">${weekdays}</div><div class="month-grid">${cells.join("")}</div></section>`);
       cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1, 12);
     }
     return `<div class="semester-months">${months.join("")}</div>`;
@@ -406,12 +410,17 @@
     const rating = Number.isInteger(lesson.rating) && lesson.rating >= 1 && lesson.rating <= 5 ? lesson.rating : 0;
     const stickers = Array.isArray(lesson.stickers) ? lesson.stickers.filter((sticker) => LESSON_STICKERS.includes(sticker)) : [];
     return `<article class="lesson-card${current ? " is-current" : ""}" style="--lesson-color:${esc(getLessonAccent(lesson))}" data-action="edit-lesson" data-id="${esc(lesson.id)}" tabindex="0" role="group" aria-label="Пара: ${esc(lesson.subjectName)}">
-      <div class="lesson-time"><span class="lesson-start">${esc(lesson.startTime)}</span><span class="lesson-end">${esc(lesson.endTime)}</span><span class="lesson-slot">${lesson.slotNumber || "—"} ПАРА</span></div>
-      <div class="lesson-main"><div class="lesson-topline"><div class="lesson-badges"><span class="lesson-type">${esc(typeLabel.toUpperCase())}</span>${current ? '<span class="lesson-current">СЕЙЧАС</span>' : ""}${lesson.isCustom ? '<span class="lesson-custom">МОЁ</span>' : ""}</div>${pending ? `<span class="lesson-task-count">${pending}</span>` : ""}</div>
-        <h3 class="lesson-name">${esc(lesson.subjectName)}</h3>
-        <div class="lesson-meta">${lesson.teacherName ? `<span class="lesson-meta-row">${esc(lesson.teacherName)}</span>` : ""}${lesson.classroom ? `<span class="lesson-meta-row">Ауд. ${esc(lesson.classroom)}</span>` : ""}${lesson.groupName ? `<span class="lesson-meta-row">${esc(lesson.groupName)}</span>` : ""}</div>
-        ${lesson.notes ? `<div class="lesson-notes">Заметка · ${esc(lesson.notes)}</div>` : ""}
-        <div class="lesson-feedback"><div class="lesson-stickers"><button class="lesson-sticker-add" type="button" data-action="open-sticker-picker" data-id="${esc(lesson.id)}" aria-label="Добавить стикер">+</button>${stickers.map((sticker) => `<button class="lesson-sticker" type="button" data-action="toggle-lesson-sticker" data-id="${esc(lesson.id)}" data-sticker="${esc(sticker)}" aria-label="Убрать стикер ${esc(sticker)}">${esc(sticker)}</button>`).join("")}</div><div class="lesson-rating" role="group" aria-label="Оценка пары: ${rating} из 5">${[1, 2, 3, 4, 5].map((value) => `<button class="lesson-star${value <= rating ? " is-selected" : ""}" type="button" data-action="rate-lesson" data-id="${esc(lesson.id)}" data-rating="${value}" aria-label="${value} из 5">${value <= rating ? "★" : "☆"}</button>`).join("")}</div></div>
+      <span class="lesson-accent" aria-hidden="true"></span>
+      <div class="lesson-content${pending ? " has-task-count" : ""}">
+        <div class="lesson-time"><span class="lesson-start">${esc(lesson.startTime)}</span><span class="lesson-end">${esc(lesson.endTime)}</span><span class="lesson-slot">${lesson.slotNumber || "—"} ПАРА</span></div>
+        <div class="lesson-main">
+          <div class="lesson-topline"><div class="lesson-badges"><span class="lesson-type">${esc(typeLabel.toUpperCase())}</span>${current ? '<span class="lesson-current">СЕЙЧАС</span>' : ""}${lesson.isCustom ? '<span class="lesson-custom">МОЁ</span>' : ""}</div></div>
+          <h3 class="lesson-name">${esc(lesson.subjectName || "Новая пара")}</h3>
+          <div class="lesson-meta">${lesson.teacherName ? `<span class="lesson-meta-row">${esc(lesson.teacherName)}</span>` : ""}${lesson.classroom ? `<span class="lesson-meta-row"><span class="lesson-meta-icon">${glyph("pin", "lesson-meta-pin")}</span>${esc(lesson.classroom)}</span>` : ""}</div>
+          ${lesson.notes ? `<div class="lesson-notes">Заметка · ${esc(lesson.notes)}</div>` : ""}
+          <div class="lesson-feedback"><div class="lesson-stickers"><button class="lesson-sticker-add" type="button" data-action="open-sticker-picker" data-id="${esc(lesson.id)}" aria-label="Добавить стикер">+</button>${stickers.map((sticker) => `<button class="lesson-sticker" type="button" data-action="toggle-lesson-sticker" data-id="${esc(lesson.id)}" data-sticker="${esc(sticker)}" aria-label="Убрать стикер ${esc(sticker)}">${esc(sticker)}</button>`).join("")}</div><div class="lesson-rating" role="group" aria-label="Оценка пары: ${rating} из 5">${[1, 2, 3, 4, 5].map((value) => `<button class="lesson-star${value <= rating ? " is-selected" : ""}" type="button" data-action="rate-lesson" data-id="${esc(lesson.id)}" data-rating="${value}" aria-label="${value} из 5">${value <= rating ? "★" : "☆"}</button>`).join("")}</div></div>
+        </div>
+        ${pending ? `<span class="lesson-task-count">${pending}</span>` : ""}
       </div>
     </article>`;
   }
@@ -424,20 +433,20 @@
     const record = scheduleFor(profile.id);
     const loaded = Boolean(record.lastSuccessAt) || record.lessons.some((lesson) => !lesson.isCustom);
     const errorCode = profile.scheduleAvailable === false ? "SYNC404" : "SYNC001";
-    if (!loaded && ui.busyProfileId === profile.id) return `<div class="schedule-status-card is-loading"><span class="status-spinner"></span><span>Загружаем расписание и сохраняем его на устройстве. Это займёт несколько секунд.</span></div>`;
-    if (loaded && ui.busyProfileId === profile.id) return `<div class="schedule-status-card is-loading"><span class="status-spinner"></span><span>Обновляем семестровый цикл · сохранённое расписание доступно.</span></div>`;
-    if (record.lastError && loaded) return `<div class="schedule-status-card is-warning"><strong>Показана сохранённая копия.</strong><span>${esc(record.lastError)} Код ${errorCode}. Пришлите скриншот и опишите действие.</span></div>`;
-    if (!loaded && record.lastError) return `<div class="schedule-status-card is-error"><strong>Не удалось загрузить расписание.</strong><span>${esc(record.lastError)} Код ${errorCode}. Пришлите скриншот и опишите действие.</span><button class="text-button" type="button" data-action="open-settings">Открыть настройки&nbsp; →</button></div>`;
-    if (!loaded) return `<div class="schedule-status-card"><span class="settings-label">РАСПИСАНИЕ ЕЩЁ НЕ ЗАГРУЖЕНО</span><span>Чтобы загрузить расписание и сохранить его офлайн, откройте настройки и нажмите «Обновить расписание».</span><button class="text-button" type="button" data-action="open-settings">Открыть настройки&nbsp; →</button></div>`;
+    if (!loaded && ui.busyProfileId === profile.id) return `<div class="schedule-status-card is-loading"><span class="status-spinner"></span><span class="schedule-status-copy"><strong>Загружаем расписание</strong><span>Получаем расписание и сохраняем его на устройстве. Это может занять несколько секунд.</span></span></div>`;
+    if (loaded && ui.busyProfileId === profile.id) return `<div class="schedule-status-card is-refreshing"><span class="status-spinner"></span><span>Обновляем семестровый цикл · сохранённое расписание доступно</span></div>`;
+    if (record.lastError && loaded) return `<div class="schedule-status-card is-warning"><strong>Показана сохранённая локальная копия расписания.</strong><span>${esc(record.lastError)} Код ${errorCode}. Пришлите скриншот и опишите действие.</span></div>`;
+    if (!loaded && record.lastError) return `<div class="schedule-status-card is-error"><strong>Не удалось загрузить расписание.</strong><span>${esc(record.lastError)} Код ${errorCode}. Пришлите скриншот и опишите действие.</span><button class="text-button" type="button" data-action="open-settings">Открыть настройки&nbsp;<span class="inline-arrow" aria-hidden="true"></span></button></div>`;
+    if (!loaded) return `<div class="schedule-status-card"><span class="settings-label">РАСПИСАНИЕ ЕЩЁ НЕ ЗАГРУЖЕНО</span><span>Чтобы загрузить расписание и сохранить его офлайн, откройте настройки и нажмите «Обновить расписание».</span><button class="text-button" type="button" data-action="open-settings">Открыть настройки&nbsp;<span class="inline-arrow" aria-hidden="true"></span></button></div>`;
     return "";
   }
   function renderFirstProfileCard() {
-    return `<section class="empty-card first-profile-card" style="margin-top:18px"><h2>Добавьте расписание</h2><p>Найдите свою группу или преподавателя.</p><div class="button-row"><button class="primary-button" type="button" data-action="open-add-profile">Найти расписание&nbsp; →</button></div></section>`;
+    return `<section class="empty-card first-profile-card" style="margin-top:18px"><h2>Добавьте расписание</h2><p>Найдите свою группу или преподавателя.</p><div class="button-row"><button class="primary-button" type="button" data-action="open-add-profile">Найти расписание&nbsp;<span class="inline-arrow" aria-hidden="true"></span></button></div></section>`;
   }
   function renderSchedulePage() {
     normalizeSelectedDate();
     const profile = selectedProfile();
-    const heading = `<div class="app-shell"><main class="page-content">${brandRow("schedule")}${renderUniversityCard()}`;
+    const heading = `<div class="app-shell"><main class="page-content schedule-page">${brandRow("schedule")}${renderUniversityCard()}`;
     if (!profile) return `${heading}${renderFirstProfileCard()}</main>${renderNav()}${renderModal()}</div>`;
     const lessons = lessonsOnDate(profile.id, state.selectedDate);
     const pendingCount = pendingTaskCountForDay(profile.id, state.selectedDate);
@@ -450,18 +459,18 @@
       website: websiteLessons.filter((remote) => getTimeMinutes(personal.startTime) < getTimeMinutes(remote.endTime) && getTimeMinutes(personal.endTime) > getTimeMinutes(remote.startTime)),
     })).filter((conflict) => conflict.website.length);
     const conflictNotice = conflicts.length ? `<div class="schedule-conflicts"><p class="conflict-heading">НАКЛАДКИ ПАР</p>${conflicts.map(({ personal, website }) => {
-      const summaries = website.slice(0, 2).map((lesson) => `${lesson.subjectName} · ${lesson.startTime}–${lesson.endTime}`).join(" · ");
+      const summaries = website.slice(0, 2).map((lesson) => `${lesson.subjectName} · ${lesson.lessonDate} ${lesson.startTime}–${lesson.endTime}`).join(" · ");
       const more = website.length > 2 ? ` · ещё ${website.length - 2}` : "";
       const linkedCount = state.tasks.filter((task) => task.lessonId === personal.id).length;
-      return `<article class="schedule-conflict-card"><strong>Личная пара пересекается с расписанием сайта</strong><p>Ваша: ${esc(personal.subjectName)} · ${esc(personal.startTime)}–${esc(personal.endTime)}</p><p>С сайта: ${esc(summaries)}${more}</p>${linkedCount ? `<p class="conflict-deadline-note">Связанных дедлайнов: ${linkedCount}. При переносе пары можно перенести и их даты.</p>` : ""}<div class="conflict-actions"><button type="button" class="text-button" data-action="edit-lesson" data-id="${esc(personal.id)}">Изменить день / время</button><button type="button" class="text-button is-danger" data-action="delete-lesson" data-id="${esc(personal.id)}">Удалить мою пару</button></div></article>`;
+      return `<article class="schedule-conflict-card"><strong>Личная пара пересекается с расписанием сайта</strong><p>Ваша: ${esc(personal.subjectName)} · ${esc(personal.lessonDate)} ${esc(personal.startTime)}–${esc(personal.endTime)}</p><p>С сайта: ${esc(summaries)}${more}</p>${linkedCount ? `<p class="conflict-deadline-note">Связанных дедлайнов: ${linkedCount}. При переносе пары можно перенести и их даты.</p>` : ""}<div class="conflict-actions"><button type="button" class="text-button" data-action="edit-lesson" data-id="${esc(personal.id)}">Изменить день / время</button><button type="button" class="text-button is-danger" data-action="delete-lesson" data-id="${esc(personal.id)}">Удалить мою пару</button></div></article>`;
     }).join("")}</div>` : "";
     const scheduleContent = `<div class="summary-row">
         <div class="summary-card"><span class="summary-eyebrow">${esc(dateEyebrow)}</span><div class="summary-value-row"><span class="summary-value">${String(lessons.length).padStart(2, "0")}</span><span class="summary-label">пар в расписании</span></div></div>
         <div class="summary-card"><span class="summary-eyebrow">АКАДЕМИЧЕСКИЕ ЗАДАЧИ</span><div class="summary-value-row"><span class="summary-value is-task-count${pendingCount ? " has-pending" : ""}">${String(pendingCount).padStart(2, "0")}</span><span class="summary-label">открытых задач</span></div></div>
       </div>
-      ${renderScheduleStatus(profile)}
+      <div class="schedule-status-slot">${renderScheduleStatus(profile)}</div>
       ${conflictNotice}
-      ${lessons.length ? `<div class="lesson-list">${lessons.map(renderLessonCard).join("")}<button class="add-lesson-button" type="button" data-action="new-lesson">+ Добавить свою пару</button></div>` : hasRemoteSchedule ? `<div class="empty-card day-empty-card"><span class="empty-icon">◷</span><h3>Пар нет · ${esc(formatDate(state.selectedDate, { day: "numeric", month: "long" }))}</h3><p>Добавьте пользовательскую пару или оставьте день свободным.</p><div class="button-row"><button class="secondary-button" type="button" data-action="new-lesson">Добавить пару</button></div></div>` : ""}`;
+      ${lessons.length ? `<div class="lesson-list">${lessons.map(renderLessonCard).join("")}<button class="add-lesson-button" type="button" data-action="new-lesson">+ Добавить свою пару</button></div>` : hasRemoteSchedule ? `<div class="empty-card day-empty-card"><span class="day-empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.2"/></svg></span><h3>Окно для своих дел</h3><p>На ${esc(formatDate(state.selectedDate, { weekday: "long" }).toLowerCase())} занятий нет. Можно добавить личную пару или оставить день свободным.</p><button class="primary-button" type="button" data-action="new-lesson">+ Своя пара</button></div>` : ""}`;
     return `${heading}${renderProfileRail()}${renderCalendar(profile)}${scheduleContent}</main>${renderNav()}${renderModal()}</div>`;
   }
   function getAllLessons() {
@@ -513,16 +522,21 @@
       return true;
     });
     const filters = [["active", "Активные"], ["completed", "Закрытые"], ["all", "Все"]];
-    return `<div class="app-shell"><main class="page-content">
+    return `<div class="app-shell"><main class="page-content deadlines-page">
       <div class="page-heading"><h1>Дедлайны</h1><p>Задачи и важные даты.</p></div>
       <div class="deadline-summary"><div class="summary-card"><span class="summary-eyebrow">АКТИВНЫЕ</span><span class="summary-value is-active-count">${String(active.length).padStart(2, "0")}</span></div><div class="summary-card"><span class="summary-eyebrow">ВСЕГО</span><span class="summary-value is-total-count">${String(tasks.length).padStart(2, "0")}</span></div></div>
       <button class="primary-button deadline-add-button" type="button" data-action="new-task">+&nbsp; Добавить дедлайн</button>
       <div class="deadline-filters">${filters.map(([id, label]) => `<button class="deadline-filter${ui.deadlineFilter === id ? " is-active" : ""}" type="button" data-action="deadline-filter" data-filter="${id}">${esc(label)}</button>`).join("")}</div>
-      ${filterTasks.length ? `<div class="deadline-list">${filterTasks.map(renderDeadlineCard).join("")}</div>` : `<div class="empty-card deadline-empty"><span class="empty-icon">${tasks.length ? "✓" : "◈"}</span><h3>${tasks.length === 0 ? "Список чист" : ui.deadlineFilter === "active" ? "Все задачи закрыты" : "Пока пусто"}</h3><p>${tasks.length === 0 ? "Добавьте дедлайн здесь или из карточки пары. Его можно связать с предметом, своей парой или оставить без привязки." : "Здесь появятся задания из выбранного раздела."}</p></div>`}
-      <p class="small-note">Напоминания и дедлайны сохраняются локально на этом устройстве.</p>
+      ${filterTasks.length ? `<div class="deadline-list">${filterTasks.map(renderDeadlineCard).join("")}</div>` : `<div class="empty-card deadline-empty"><span class="deadline-empty-icon">${tasks.length ? "✓" : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 9.3 9.3-9.3 9.3L2.7 12 12 2.7Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>'}</span><h3>${tasks.length === 0 ? "Список чист" : ui.deadlineFilter === "active" ? "Все задачи закрыты" : "Пока пусто"}</h3><p>${tasks.length === 0 ? "Добавьте дедлайн здесь или из карточки пары. Его можно связать с предметом, своей парой или оставить без привязки." : "Здесь появятся задания из выбранного раздела."}</p></div>`}
     </main>${renderNav()}${renderModal()}</div>`;
   }
 
+  function swatchCheckColor(value) {
+    const hex = safeHexColor(value, "#A6B0C2").slice(1);
+    const channels = [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255);
+    const luminance = channels.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * luminance[0] + 0.7152 * luminance[1] + 0.0722 * luminance[2] < 0.48 ? "#FFFFFF" : "#000000";
+  }
   function renderThemeSettings() {
     const preview = {
       BLUE: { background: "#0A0D12", accent: "#8FD9F4", foreground: "#F2F5FA", outline: "#263241" },
@@ -542,7 +556,7 @@
       }).join("")}</div>
       <div class="settings-divider"></div>
       <div class="settings-subhead"><div><h3>ЦВЕТА ЗАНЯТИЙ</h3><p>Выберите акцент для каждого типа пары</p></div><button class="text-button" type="button" data-action="reset-accents">Сбросить</button></div>
-      ${Object.entries(labels).map(([type, label]) => `<div class="lesson-accent-editor"><div class="accent-heading"><span>${label}</span><code>${esc(state.appearance.lessonAccents[type].toUpperCase())}</code></div><div class="swatch-row">${ACCENT_OPTIONS.map((color) => `<button class="swatch${state.appearance.lessonAccents[type].toLowerCase() === color.toLowerCase() ? " is-active" : ""}" type="button" style="--swatch:${color}" data-action="set-accent" data-type="${type}" data-color="${color}" aria-label="${label}: ${color}">${state.appearance.lessonAccents[type].toLowerCase() === color.toLowerCase() ? "✓" : ""}</button>`).join("")}</div></div>`).join("")}
+      ${Object.entries(labels).map(([type, label]) => `<div class="lesson-accent-editor"><div class="accent-heading"><span>${label}</span><code>${esc(state.appearance.lessonAccents[type].toUpperCase())}</code></div><div class="swatch-row">${ACCENT_OPTIONS.map((color) => `<button class="swatch${state.appearance.lessonAccents[type].toLowerCase() === color.toLowerCase() ? " is-active" : ""}" type="button" style="--swatch:${color};--swatch-check:${swatchCheckColor(color)}" data-action="set-accent" data-type="${type}" data-color="${color}" aria-label="${label}: ${color}">${state.appearance.lessonAccents[type].toLowerCase() === color.toLowerCase() ? "✓" : ""}</button>`).join("")}</div></div>`).join("")}
     </div></section>`;
   }
   function renderTypographySettings() {
@@ -557,7 +571,8 @@
       <div class="typography-preview"><span class="preview-display">РАСПИСАНИЕ</span><span class="preview-heading">Заголовок карточки</span><span class="preview-body">Обычный текст расписания на день</span><span class="preview-caption">Мелкая подпись · время 09:40</span></div>
       <div class="typography-controls">${rows.map(([key, label, role]) => {
         const value = Math.round(Number(state.typography[key] ?? 1) * 100);
-        return `<div class="typography-control"><div class="typography-control-heading"><label for="scale-${key}">${label}</label><span data-scale-value="${key}">${value}%</span></div><input id="scale-${key}" type="range" min="100" max="150" step="5" value="${value}" data-scale="${key}" aria-label="${label}, масштаб текста"><div class="range-limits"><span>100%</span><span>150%</span></div></div>`;
+        const rangeFill = `${Math.min(100, Math.max(0, (value - 100) * 2))}%`;
+        return `<div class="typography-control"><div class="typography-control-heading"><label for="scale-${key}">${label}</label><span data-scale-value="${key}">${value}%</span></div><input id="scale-${key}" type="range" min="100" max="150" step="5" value="${value}" style="--range-fill:${rangeFill}" data-scale="${key}" aria-label="${label}, масштаб текста"><div class="range-limits"><span>100%</span><span>150%</span></div></div>`;
       }).join("")}</div>
       <button class="text-button typography-reset" type="button" data-action="reset-typography">Сбросить все размеры к 100%</button>
     </div></section>`;
@@ -612,25 +627,22 @@
     const profiles = currentProfiles();
     const profile = selectedProfile();
     const record = profile ? scheduleFor(profile.id) : null;
-    const status = !profile ? "Нет выбранного расписания" : ui.busyProfileId === profile.id ? "Обновляем" : record.lastError ? "Ошибка загрузки" : record.lastSuccessAt ? "Синхронизировано" : profile.scheduleAvailable === false ? "Файл не опубликован" : "Не загружено";
+    const status = !profile ? "Не загружено" : ui.busyProfileId === profile.id ? "Обновляем" : record.lastError ? "Ошибка загрузки" : record.lastSuccessAt ? "Синхронизировано" : "Не загружено";
     const statusClass = !profile ? "" : ui.busyProfileId === profile.id ? "is-loading" : record.lastError ? "is-error" : record.lastSuccessAt ? "is-success" : "";
     const rows = record ? `<div class="management-journal"><div><span>Последнее успешное обновление</span><strong>${record.lastSuccessAt ? esc(formatDateTime(record.lastSuccessAt)) : "Пока нет"}</strong></div><div><span>Последняя попытка</span><strong>${record.lastAttemptAt ? esc(formatDateTime(record.lastAttemptAt)) : "Ещё не запускали"}</strong></div><div><span>Локальный сейв</span><strong>${record.previousSnapshotAt ? esc(formatDateTime(record.previousSnapshotAt)) : record.previousLessons.length ? "Предыдущая версия сохранена" : "Пока не создан"}</strong></div></div>` : "";
     const error = record?.lastError ? `<div class="schedule-status-card is-error"><strong>${profile.scheduleAvailable === false ? "Расписание больше недоступно в каталоге." : "Последняя попытка обновления завершилась ошибкой."}</strong><span>${esc(record.lastError)} Код ${profile.scheduleAvailable === false ? "SYNC404" : "SYNC001"}. Пришлите скриншот и опишите действие.</span></div>` : "";
     return `<section class="settings-section management-settings"><div class="settings-card">
-      <div class="settings-card-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ РАСПИСАНИЕМ</p><h2 class="section-title">Управление расписанием</h2></div></div>
-      ${profiles.length ? `<label class="settings-label" for="managed-profile">Выбранное расписание</label><div class="profile-select-wrap"><select id="managed-profile" class="form-control" data-setting-profile>${profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === profile?.id ? "selected" : ""}>${esc(item.name)} · ${TYPE_LABELS[item.type] || "Профиль"}</option>`).join("")}<option value="" disabled>Добавить расписание…</option></select></div>
-        <div class="management-status ${statusClass}"><span class="management-status-dot"></span><span>${esc(status)}</span><span class="management-lesson-count">${record.lessons.length} занятий</span></div>
-        ${rows}<p class="form-help">Профиль не загружается автоматически. Для обновления нажмите кнопку ниже.</p>${error}
-        <div class="management-actions"><button class="primary-button" type="button" data-action="refresh-profile" data-id="${esc(profile.id)}" ${ui.busyProfileId === profile.id ? "disabled" : ""}>${ui.busyProfileId === profile.id ? "Обновляем расписание…" : "Обновить расписание"}</button><button class="secondary-button" type="button" data-action="rollback-profile" data-id="${esc(profile.id)}" ${record.previousLessons.length ? "" : "disabled"}>↶&nbsp; Восстановить локальный сейв</button><button class="danger-outline-button" type="button" data-action="delete-profile" data-id="${esc(profile.id)}" ${ui.busyProfileId === profile.id ? "disabled" : ""}>Удалить это расписание</button></div>
-        <p class="form-help">Пользовательские пары и заметки сохраняются при обновлении расписания.</p>` : `<p class="settings-copy">Сначала добавьте расписание на главном экране.</p><button class="primary-button" style="width:100%;margin-top:9px" type="button" data-action="open-add-profile">Добавить расписание</button>`}
+      <div class="settings-card-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ РАСПИСАНИЕМ</p></div></div>
+      ${profiles.length ? `<div class="profile-select-wrap"><div class="profile-selector"><span class="profile-selector-copy"><span class="profile-selector-label">Выбранное расписание</span><strong>${esc(profile?.name || "Добавьте расписание")}</strong></span><span class="profile-selector-status ${statusClass}">${esc(status)}</span><span class="profile-selector-chevron"><span class="chevron-down" aria-hidden="true"></span></span><select id="managed-profile" class="profile-selector-native" data-setting-profile aria-label="Выбранное расписание">${profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === profile?.id ? "selected" : ""}>${esc(item.name)} · ${TYPE_LABELS[item.type] || "Профиль"}</option>`).join("")}<option value="" disabled>Добавить расписание…</option></select></div></div>
+        <div class="settings-divider"></div>${rows}<p class="form-help">Профиль не загружается автоматически. Для обновления нажмите кнопку ниже.</p>${error}
+        <div class="management-actions"><button class="primary-button" type="button" data-action="refresh-profile" data-id="${esc(profile.id)}" ${ui.busyProfileId === profile.id ? "disabled" : ""}>${ui.busyProfileId === profile.id ? "Обновляем расписание…" : "Обновить расписание"}</button><button class="secondary-button" type="button" data-action="rollback-profile" data-id="${esc(profile.id)}" ${record.previousLessons.length ? "" : "disabled"}>Восстановить локальный сейв</button><button class="danger-outline-button" type="button" data-action="delete-profile" data-id="${esc(profile.id)}" ${ui.busyProfileId === profile.id ? "disabled" : ""}>Удалить это расписание</button></div>` : `<p class="settings-copy">Сначала добавьте расписание на главном экране.</p><button class="primary-button" style="width:100%;margin-top:9px" type="button" data-action="open-add-profile">Добавить расписание</button>`}
     </div></section>`;
   }
   function renderDailySettings() {
-    const updated = state.dailyMessagesUpdatedAt ? `Обновлено ${formatDateTime(state.dailyMessagesUpdatedAt)}` : "Список сохраняется на устройстве.";
-    return `<section class="settings-section daily-message-settings"><div class="settings-card"><p class="eyebrow">ЕЖЕДНЕВНЫЕ СООБЩЕНИЯ</p><p class="daily-message-text">${esc(dailyQuote())}</p><p class="settings-copy">${esc(updated)} Проверка GitHub запускается только по кнопке.</p><button class="secondary-button" type="button" data-action="refresh-daily-message" ${ui.loadingDailyMessage ? "disabled" : ""}>${ui.loadingDailyMessage ? "Загружаем…" : "Проверить обновления фраз"}</button></div></section>`;
+    return `<section class="settings-section daily-message-settings"><div class="settings-card"><p class="eyebrow">ЕЖЕДНЕВНЫЕ СООБЩЕНИЯ</p><p class="daily-message-text">${esc(dailyQuote())}</p><p class="settings-copy">Список сохраняется на устройстве. Проверка GitHub запускается только по кнопке.</p><button class="secondary-button" type="button" data-action="refresh-daily-message" ${ui.loadingDailyMessage ? "disabled" : ""}>${ui.loadingDailyMessage ? "Загружаем…" : "Проверить обновления фраз"}</button></div></section>`;
   }
   function renderInfoSettings() {
-    return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/bru_schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот ↗</a><a class="secondary-button install-guide-link" href="./ios-install.html">Установка на iPhone / iPad</a><p class="form-help">Расписания загружаются из GitHub по запросу. Личные данные хранятся на устройстве.</p></div></section>`;
+    return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/bru_schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a><a class="secondary-button install-guide-link" href="./ios-install.html">Установка на iPhone / iPad</a></div></section>`;
   }
   function renderSettingsPage() {
     const profile = selectedProfile();
@@ -647,8 +659,9 @@
     else appRoot.innerHTML = renderSchedulePage();
   }
 
-  function modalShell(kicker, title, body, footer = "", dialog = false) {
-    return `<div class="modal-backdrop" role="presentation"><section class="modal-sheet${dialog ? " is-dialog" : ""}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+  function modalShell(kicker, title, body, footer = "", dialog = false, variant = "") {
+    const variantClass = variant ? ` ${variant}` : "";
+    return `<div class="modal-backdrop${dialog ? " is-dialog-backdrop" : ""}" role="presentation"><section class="modal-sheet${dialog ? " is-dialog" : ""}${variantClass}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
       <div class="sheet-handle"></div><header class="modal-header"><div class="modal-header-copy"><p class="modal-kicker">${esc(kicker)}</p><h2 class="modal-title">${esc(title)}</h2></div><button class="modal-close" type="button" data-action="close-modal" aria-label="Закрыть">×</button></header>
       <div class="modal-body">${body}</div>${footer ? `<footer class="modal-footer">${footer}</footer>` : ""}
     </section></div>`;
@@ -661,33 +674,35 @@
   }
   function renderAddProfileModal() {
     const university = universityById(ui.search.universityId);
-    const typeLabel = ui.search.type === "GROUP" ? "Группа" : "Преподаватель";
-    const inputLabel = ui.search.type === "GROUP" ? "Код или название группы" : "Фамилия или имя преподавателя";
+    const inputLabel = ui.search.type === "GROUP" ? "Код или название группы" : "Имя преподавателя";
     const placeholder = ui.search.type === "GROUP" ? "Например, МПР-261 или 41" : "Например, Агеева Т.Н.";
     const resultMarkup = ui.search.loading
-      ? `<div class="notice-card"><span class="notice-icon">↻</span><div class="notice-copy"><strong>Ищем в подготовленном каталоге…</strong><p>Запрос выполняется только после нажатия кнопки.</p></div></div>`
+      ? ""
       : ui.search.error
         ? `<p class="form-error">${esc(ui.search.error)}</p>`
         : ui.search.results.length
           ? `<div class="search-results">${ui.search.results.map((candidate, index) => {
             const duplicate = state.profiles.some((profile) => profile.universityId === candidate.universityId && profile.type === candidate.type && profile.sourceKey === candidate.sourceKey);
             return `<button class="search-result" type="button" data-action="add-profile-result" data-index="${index}" ${duplicate || !candidate.scheduleAvailable ? "disabled" : ""}>
-              <span class="search-result-copy"><span class="search-result-name">${esc(candidate.name)}</span><span class="search-result-subtitle">${esc(candidate.subtitle || `${university.short} · ${typeLabel}`)}</span></span>
+              <span class="search-result-copy"><span class="search-result-name">${esc(candidate.name)}</span><span class="search-result-subtitle">${esc(candidate.subtitle || `${university.short} · ${ui.search.type === "GROUP" ? "Группа" : "Преподаватель"}`)}</span></span>
               <span class="search-result-status${candidate.scheduleAvailable ? "" : " is-offline"}">${duplicate ? "Добавлено" : candidate.scheduleAvailable ? "Добавить" : "Нет файла"}</span>
             </button>`;
           }).join("")}</div>`
           : ui.search.searched
-            ? `<div class="empty-card"><h3>Совпадений нет</h3><p>Проверьте запрос или выберите другой тип профиля.</p></div>`
-            : `<p class="form-help">Индекс каталога будет загружен после нажатия «Найти». Сайты вузов не опрашиваются.</p>`;
-    const body = `<form id="profile-search-form" data-form="profile-search">
-      <div class="modal-section form-field"><label for="profile-university">ВУЗ</label><select id="profile-university" class="form-control" data-search-university>${UNIVERSITY_LIST.map((item) => `<option value="${item.id}" ${item.id === ui.search.universityId ? "selected" : ""}>${esc(item.name)}</option>`).join("")}</select></div>
-      <div class="modal-section"><span class="settings-label">ТИП ПРОФИЛЯ</span><div class="choice-row"><button class="choice-pill${ui.search.type === "GROUP" ? " is-active" : ""}" type="button" data-action="set-search-type" data-type="GROUP">Группа</button><button class="choice-pill${ui.search.type === "TEACHER" ? " is-active" : ""}" type="button" data-action="set-search-type" data-type="TEACHER">Преподаватель</button></div></div>
-      <div class="modal-section form-field"><label for="profile-query">${inputLabel}</label><div class="search-box-row"><input id="profile-query" class="form-control" name="query" type="search" value="${esc(ui.search.query)}" placeholder="${esc(placeholder)}" autocomplete="off" data-search-query required><button class="primary-button" type="submit" ${ui.search.loading ? "disabled" : ""}>Найти</button></div></div>
-    </form>
-    <div class="modal-section">${resultMarkup}</div>
-    <p class="small-note">Добавить можно только профиль с опубликованным файлом расписания. Если ранее загруженный файл станет недоступен, его локальная копия сохранится. Односимвольные коды групп поддерживаются.</p>`;
-    const footer = `<button class="secondary-button" type="button" data-action="close-modal">Закрыть</button>`;
-    return modalShell("НОВЫЙ ПРОФИЛЬ", "Добавить группу или преподавателя", body, footer);
+            ? `<p class="add-profile-empty-results">В опубликованном каталоге совпадений нет. Проверьте ввод или дождитесь, пока расписание добавят в GitHub.</p>`
+            : "";
+    const body = `<div class="add-profile-content">
+      <p class="add-profile-intro">${esc(university.name)}. Введите код группы или имя преподавателя. Поиск читает опубликованный каталог GitHub — сайты вузов приложение не опрашивает.</p>
+      <div class="choice-row add-profile-types"><button class="choice-pill${ui.search.type === "GROUP" ? " is-active" : ""}" type="button" data-action="set-search-type" data-type="GROUP">Группа</button><button class="choice-pill${ui.search.type === "TEACHER" ? " is-active" : ""}" type="button" data-action="set-search-type" data-type="TEACHER">Преподаватель</button></div>
+      <form id="profile-search-form" class="add-profile-search-form" data-form="profile-search" novalidate>
+        <div class="form-field add-profile-query-field"><label for="profile-query">${inputLabel}</label><input id="profile-query" class="form-control" name="query" type="search" value="${esc(ui.search.query)}" placeholder="${esc(placeholder)}" autocomplete="off" data-search-query></div>
+        <button class="primary-button add-profile-search-button" type="submit" ${ui.search.loading || !ui.search.query.trim() ? "disabled" : ""}>${ui.search.loading ? '<span class="loading-spinner" aria-hidden="true"></span>Ищем в каталоге GitHub' : "Искать расписание"}</button>
+      </form>
+      ${resultMarkup}
+      <p class="add-profile-note">Пары загружаются только после явного нажатия «Обновить» в настройках. По ссылке добавить расписание нельзя. Односимвольные коды групп поддерживаются.</p>
+      <button class="text-button add-profile-close" type="button" data-action="close-modal">Закрыть</button>
+    </div>`;
+    return modalShell("НОВОЕ РАСПИСАНИЕ", "Найти профиль", body, "", false, "add-profile-sheet");
   }
   function formInput(label, name, value, options = {}) {
     const { type = "text", placeholder = "", full = false, required = false, maxLength = null, help = "", min = null, max = null, step = null } = options;
@@ -695,8 +710,8 @@
     return `<div class="form-field${full ? " is-full" : ""}"><label for="field-${esc(name)}">${esc(label)}</label><input class="form-control" id="field-${esc(name)}" type="${esc(type)}" name="${esc(name)}" value="${esc(value)}" placeholder="${esc(placeholder)}" ${required ? "required" : ""} ${maxLength != null ? `maxlength="${maxLength}"` : ""} ${attrs} data-field="${esc(name)}">${help ? `<p class="form-help">${esc(help)}</p>` : ""}</div>`;
   }
   function formTextarea(label, name, value, options = {}) {
-    const { full = false, placeholder = "", maxLength = 500 } = options;
-    return `<div class="form-field${full ? " is-full" : ""}"><label for="field-${esc(name)}">${esc(label)}</label><textarea class="form-control" id="field-${esc(name)}" name="${esc(name)}" placeholder="${esc(placeholder)}" maxlength="${maxLength}" data-field="${esc(name)}">${esc(value)}</textarea><p class="form-help">До ${maxLength} символов.</p></div>`;
+    const { full = false, placeholder = "", maxLength = 500, help = true } = options;
+    return `<div class="form-field${full ? " is-full" : ""}"><label for="field-${esc(name)}">${esc(label)}</label><textarea class="form-control" id="field-${esc(name)}" name="${esc(name)}" placeholder="${esc(placeholder)}" maxlength="${maxLength}" data-field="${esc(name)}">${esc(value)}</textarea>${help ? `<p class="form-help">До ${maxLength} символов.</p>` : ""}</div>`;
   }
   function renderLessonModal() {
     const modal = ui.modal;
@@ -706,25 +721,28 @@
     const typeOptions = [["lecture", "Лекция"], ["laboratory", "Лабораторная"], ["practice", "Практика"], ["unknown", "Другое / неизвестно"]];
     const recurrenceOptions = [["NONE", "Без повтора"], ["WEEKLY", "Раз в неделю"], ["BIWEEKLY", "Раз в две недели"], ["MONTHLY", "Раз в месяц"]];
     const conflictSection = modal.overlaps?.length ? `<div class="schedule-status-card is-warning modal-conflict-panel"><strong>Личная пара пересекается с расписанием сайта.</strong><span>Измените дату или время выше. Если пара всё равно нужна, её можно сохранить вместе с занятиями сайта.</span><div class="modal-conflict-list">${modal.overlaps.map((lesson) => `<div><strong>${esc(lesson.subjectName)}</strong><span>${esc(lesson.startTime)}–${esc(lesson.endTime)}</span></div>`).join("")}</div><button class="secondary-button" type="button" data-action="save-lesson-anyway">Оставить обе пары</button></div>` : "";
-    const body = `<form id="lesson-form" data-form="lesson" novalidate>
-      <div class="form-grid">
-        ${formInput("Название предмета", "subjectName", fields.subjectName, { full: true, required: true, placeholder: "Например, Математика" })}
-        ${formInput("Преподаватель", "teacherName", fields.teacherName, { full: true, placeholder: "Необязательно" })}
-        ${formInput("Аудитория", "classroom", fields.classroom, { placeholder: "Например, 204" })}
-        ${formInput("Номер пары", "slotNumber", fields.slotNumber, { type: "number", min: 1, max: 12, placeholder: "—" })}
-        ${formInput("Дата", "lessonDate", fields.lessonDate, { type: "date", required: true })}
-        ${formInput("Начало", "startTime", fields.startTime, { type: "time", required: true })}
-        ${formInput("Окончание", "endTime", fields.endTime, { type: "time", required: true })}
-        <div class="form-field is-full"><label for="field-type">Тип занятия</label><select id="field-type" class="form-control" name="type" data-field="type">${typeOptions.map(([value, label]) => `<option value="${value}" ${fields.type === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
-        ${formTextarea("Заметка к паре", "notes", fields.notes, { full: true, placeholder: "Подготовить, взять с собой…" })}
-      </div>
-      ${!existing ? `<div class="modal-section form-field"><label for="field-recurrence">Повтор</label><select id="field-recurrence" class="form-control" data-field="recurrence">${recurrenceOptions.map(([value, label]) => `<option value="${value}" ${fields.recurrence === value ? "selected" : ""}>${label}</option>`).join("")}</select><p class="form-help">Повторы создаются до конца выбранного учебного периода.</p></div>` : `<div class="notice-card" style="margin-top:11px"><span class="notice-icon">✎</span><div class="notice-copy"><strong>${existing.isCustom ? "Пользовательская пара" : "Пара из каталога"}</strong><p>${existing.isCustom ? "Изменения сохранятся отдельно и не будут затёрты обновлением." : "Изменения сохранятся как локальное переопределение и переживут обновление."}${linkedCount ? ` С этой парой связано дедлайнов: ${linkedCount}.` : ""}</p></div></div>
-        ${linkedCount ? `<label class="checkbox-inline" style="margin-top:10px"><input type="checkbox" data-field="moveLinkedDeadlines" ${fields.moveLinkedDeadlines ? "checked" : ""}><span>Перенести сроки привязанных дедлайнов вместе с парой</span></label>` : ""}
-        <div class="lesson-editor-actions"><button class="secondary-button" type="button" data-action="add-deadline-from-lesson" data-id="${esc(existing.id)}">+&nbsp; Добавить дедлайн</button>${existing.isCustom ? `<button class="danger-button" type="button" data-action="delete-lesson" data-id="${esc(existing.id)}">Удалить эту пару</button>` : ""}</div>`}
-      ${modal.validationError ? `<p class="form-error">${esc(modal.validationError)}</p>` : ""}${conflictSection}
-    </form>`;
-    const footer = `<button class="secondary-button" type="button" data-action="close-modal">Отмена</button><button class="primary-button" type="submit" form="lesson-form">${existing ? "Сохранить" : "Добавить пару"}</button>`;
-    return modalShell("РАСПИСАНИЕ · ПАРА", existing ? "Изменить занятие" : "Новая пара", body, footer);
+    const typeField = `<div class="lesson-dropdown-field"><label class="lesson-dropdown-label" for="field-type">ТИП ЗАНЯТИЯ</label><div class="lesson-dropdown-control"><select id="field-type" name="type" data-field="type">${typeOptions.map(([value, label]) => `<option value="${value}" ${fields.type === value ? "selected" : ""}>${label}</option>`).join("")}</select><span class="select-chevron" aria-hidden="true"></span></div></div>`;
+    const recurrenceField = `<div class="lesson-dropdown-field"><label class="lesson-dropdown-label" for="field-recurrence">ПОВТОРЕНИЕ</label><div class="lesson-dropdown-control"><select id="field-recurrence" data-field="recurrence">${recurrenceOptions.map(([value, label]) => `<option value="${value}" ${fields.recurrence === value ? "selected" : ""}>${label}</option>`).join("")}</select><span class="select-chevron" aria-hidden="true"></span></div></div>`;
+    const linkedDeadlines = linkedCount ? `<label class="checkbox-inline lesson-linked-deadlines"><input type="checkbox" data-field="moveLinkedDeadlines" ${fields.moveLinkedDeadlines ? "checked" : ""}><span>Перенести ${linkedCount} связанных дедлайнов на дату этой пары</span></label>` : "";
+    const sourceNote = existing && !existing.isCustom ? `<p class="lesson-source-note">Пара из каталога. Изменения сохранятся как локальное переопределение.</p>` : "";
+    const existingActions = existing ? `<div class="lesson-editor-actions"><button class="secondary-button" type="button" data-action="add-deadline-from-lesson" data-id="${esc(existing.id)}">+ Добавить дедлайн к этой паре</button>${existing.isCustom ? `<button class="danger-button" type="button" data-action="delete-lesson" data-id="${esc(existing.id)}">Удалить эту пару</button>` : ""}</div>` : "";
+    const body = `<form id="lesson-form" class="lesson-editor-form" data-form="lesson" novalidate><div class="lesson-editor-stack">
+      ${formInput("Предмет", "subjectName", fields.subjectName, { required: true })}
+      ${formInput("Преподаватель", "teacherName", fields.teacherName)}
+      ${formInput("Корпус / аудитория", "classroom", fields.classroom)}
+      ${formTextarea("Заметки · необязательно", "notes", fields.notes, { placeholder: "Например: ручку и линейку", help: false })}
+      <div class="lesson-field-row lesson-date-slot-row">${formInput("Дата · ГГГГ-ММ-ДД", "lessonDate", fields.lessonDate, { type: "date", required: true })}${formInput("Пара №", "slotNumber", fields.slotNumber, { type: "number", min: 1, max: 12 })}</div>
+      <div class="lesson-field-row lesson-time-row">${formInput("Начало", "startTime", fields.startTime, { type: "time", required: true })}${formInput("Конец", "endTime", fields.endTime, { type: "time", required: true })}</div>
+      ${typeField}
+      ${!existing ? `${recurrenceField}<p class="lesson-recurrence-note">Повторы создаются до конца периода расписания. Каждый экземпляр можно изменить отдельно.</p>` : ""}
+      ${modal.validationError ? `<p class="form-error lesson-validation-error">${esc(modal.validationError)}</p>` : ""}
+      ${sourceNote}<p class="lesson-sync-note">Ручные пары не перезаписываются при синхронизации с сайтом.</p>
+      ${linkedDeadlines}${conflictSection}
+      <div class="lesson-editor-save-row"><button class="text-button" type="button" data-action="close-modal">Закрыть</button><button class="primary-button" type="submit" form="lesson-form">Сохранить правку</button></div>
+      ${existingActions}
+    </div></form>`;
+    const kicker = `${existing ? "РУЧНАЯ ПРАВКА" : "НОВАЯ"} · ПАРА`;
+    return modalShell(kicker, existing ? "Изменить расписание" : "Добавить пару", body, "", false, "lesson-editor-sheet");
   }
   function renderDeadlineModal() {
     const modal = ui.modal;
@@ -737,7 +755,7 @@
     const linkedLesson = lessons.find((lesson) => lesson.id === fields.lessonId);
     const existingTask = modal.taskId ? state.tasks.find((task) => task.id === modal.taskId) : null;
     const linkControls = `<div class="modal-section"><span class="settings-label">ПРИВЯЗКА</span><div class="choice-row"><button class="choice-pill${linkType === "SUBJECT" ? " is-active" : ""}" type="button" data-action="deadline-link-type" data-type="SUBJECT">Предмет</button><button class="choice-pill${linkType === "LESSON" ? " is-active" : ""}" type="button" data-action="deadline-link-type" data-type="LESSON">Пара</button><button class="choice-pill${linkType === "NONE" ? " is-active" : ""}" type="button" data-action="deadline-link-type" data-type="NONE">Без привязки</button></div></div>`;
-    let associationFields = `<div class="notice-card" style="margin-top:9px"><span class="notice-icon">◉</span><div class="notice-copy"><strong>Общий дедлайн</strong><p>Задача не будет связана с профилем, предметом или одной конкретной парой.</p></div></div>`;
+    let associationFields = `<div class="notice-card" style="margin-top:9px"><span class="notice-icon" aria-hidden="true"><span class="icon-ring"></span></span><div class="notice-copy"><strong>Общий дедлайн</strong><p>Задача не будет связана с профилем, предметом или одной конкретной парой.</p></div></div>`;
     if (linkType !== "NONE") {
       associationFields = `<div class="modal-section form-field"><label for="field-profileId">ПРОФИЛЬ</label><select id="field-profileId" class="form-control" data-field="profileId"><option value="">Выберите профиль</option>${state.profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === profileId ? "selected" : ""}>${esc(item.name)} · ${esc(universityById(item.universityId).short)}</option>`).join("")}</select></div>`;
       if (linkType === "SUBJECT") {
@@ -798,7 +816,6 @@
     ui.search = { universityId: state.selectedUniversityId, type: "GROUP", query: "", results: [], searched: false, loading: false, error: "" };
     ui.modal = { kind: "add-profile" };
     render();
-    window.setTimeout(() => document.querySelector("#profile-query")?.focus(), 60);
   }
   function openLessonEditor(lessonId = null) {
     const profile = selectedProfile();
@@ -848,7 +865,7 @@
   async function fetchCatalogText(path, accept = "text/plain,text/html,*/*;q=0.8") {
     const url = new URL(path, DATA_ROOT);
     if (url.origin !== DATA_ROOT.origin || !url.pathname.includes("/schedule-data/")) throw new Error("Небезопасный путь к каталогу.");
-    const response = await fetch(url, { headers: { Accept: accept }, cache: "no-cache" });
+    const response = await fetch(url, { headers: { Accept: accept }, cache: "default" });
     if (!response.ok) {
       const error = new Error(`GitHub вернул HTTP ${response.status}.`);
       error.status = response.status;
@@ -882,9 +899,8 @@
     render();
     await registerServiceWorkerAfterUserAction();
     try {
-      const rows = await loadIndex(ui.search.universityId, ui.search.type, true);
+      const rows = await loadIndex(ui.search.universityId, ui.search.type);
       const university = universityById(ui.search.universityId);
-      const folder = ui.search.type === "GROUP" ? "groups" : "teachers";
       const matches = rows.filter((row) => [row.name, row.subtitle, row.id, row.source_key].some((value) => Engine.normalize(value).includes(query)))
         .slice(0, MAX_RESULTS)
         .map((row) => {
@@ -1370,7 +1386,11 @@
   }
   function onInput(event) {
     const target = event.target;
-    if (target.matches("[data-search-query]")) ui.search.query = target.value;
+    if (target.matches("[data-search-query]")) {
+      ui.search.query = target.value;
+      const submit = target.form?.querySelector(".add-profile-search-button");
+      if (submit) submit.disabled = ui.search.loading || !target.value.trim();
+    }
     if (target.matches("[data-field]")) updateModalField(target);
     if (target.matches("[data-session-date]")) {
       const digits = target.value.replace(/\D/g, "").slice(0, 8);
@@ -1390,6 +1410,7 @@
     if (target.matches("[data-scale]")) {
       const key = target.dataset.scale;
       state.typography[key] = Number(target.value) / 100;
+      target.style.setProperty("--range-fill", `${Math.min(100, Math.max(0, (Number(target.value) - 100) * 2))}%`);
       const value = appRoot.querySelector(`[data-scale-value="${key}"]`);
       if (value) value.textContent = `${target.value}%`;
       saveState(); applyTheme();
@@ -1581,7 +1602,8 @@
     } else if (action === "reset-accents") {
       state.appearance.lessonAccents = { ...DEFAULT_ACCENTS }; saveState(); render();
     } else if (action === "reset-typography") {
-      state.typography = { displayScale: 1, headingScale: 1, bodyScale: 1, captionScale: 1 }; saveState(); render();
+      state.typography = { displayScale: 1, headingScale: 1, bodyScale: 1, captionScale: 1 };
+      saveState(); render();
     } else if (action === "set-track") {
       setTrack(button.dataset.track);
     } else if (action === "reset-university-session-date") {

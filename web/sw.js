@@ -1,9 +1,10 @@
-const SHELL_CACHE = "schedule-shell-v4";
+const SHELL_CACHE = "schedule-shell-v6";
 const DATA_CACHE = "schedule-data-v2";
 const SHELL_FILES = [
   "./",
   "./index.html",
   "./styles.css",
+  "./fonts/RobotoVariable.ttf",
   "./schedule-engine.js",
   "./app.js",
   "./manifest.webmanifest",
