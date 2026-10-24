@@ -46,6 +46,7 @@ biology-group-42,42,Биофак · курс 1,,schedules/groups/biology-group-4
         assertEquals("41", first.single().name)
         assertEquals("bio-group-number:41", first.single().sourceKey)
         assertTrue(first.single().scheduleAvailable)
+        assertTrue(first.single().subtitle.contains("Расписание доступно"))
         assertEquals(
             "${GitHubScheduleDataPaths.UNIVERSITIES_ROOT}/bsu/schedules/groups/biology-group-41.html",
             first.single().sourceUrl,
@@ -53,7 +54,7 @@ biology-group-42,42,Биофак · курс 1,,schedules/groups/biology-group-4
         assertEquals("42", second.single().name)
         assertEquals("biology-group-42", second.single().sourceKey)
         assertFalse(second.single().scheduleAvailable)
-        assertTrue(second.single().subtitle.contains("ещё не опубликовано"))
+        assertTrue(second.single().subtitle.contains("Расписание пока недоступно"))
         assertTrue(requestedUrls.none { "bsu.bio" in it || "rasp.bru.by" in it })
     }
 
