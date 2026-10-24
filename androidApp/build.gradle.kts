@@ -19,6 +19,8 @@ dependencies {
     debugImplementation(libs.compose.uiTooling)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.datetime)
+    testImplementation(libs.kotlinx.coroutines.core)
     testImplementation(libs.ktor.client.core)
     testImplementation(libs.ktor.client.cio)
 }
