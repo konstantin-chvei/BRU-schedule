@@ -350,7 +350,7 @@ private class UniversalScheduleDatasetImporter(
 
     private fun readIndex(path: Path): List<CatalogEntry> {
         if (!Files.isRegularFile(path)) return emptyList()
-        val rows = parseCsv(Files.readString(path, StandardCharsets.UTF_8))
+        val rows = parseCsv(String(Files.readAllBytes(path), StandardCharsets.UTF_8))
         if (rows.isEmpty()) return emptyList()
         val header = rows.first().map { it.removePrefix("\uFEFF").trim().lowercase(Locale.ROOT) }
         fun indexOf(vararg names: String): Int? = header.indexOfFirst { it in names }.takeIf { it >= 0 }
@@ -517,38 +517,12 @@ private class UniversalScheduleDatasetImporter(
     private fun atomicWrite(path: Path, content: String) {
         Files.createDirectories(path.parent)
         val temp = path.resolveSibling("${path.fileName}.tmp")
-        Files.writeString(temp, content, StandardCharsets.UTF_8)
+        Files.write(temp, content.toByteArray(StandardCharsets.UTF_8))
         try {
             Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         } catch (_: AtomicMoveNotSupportedException) {
             Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING)
         }
-    }
-
-    private fun redactUrls(value: String): String {
-        val output = StringBuilder()
-        var index = 0
-        while (index < value.length) {
-            val schemeLength = when {
-                value.startsWith("https://", index, ignoreCase = true) -> 8
-                value.startsWith("http://", index, ignoreCase = true) -> 7
-                else -> 0
-            }
-            if (schemeLength == 0) {
-                output.append(value[index])
-                index++
-            } else {
-                output.append("[source URL]")
-                index += schemeLength
-                while (
-                    index < value.length && !value[index].isWhitespace() && value[index] != '"' &&
-                    value[index] != '\'' && value[index] != '<' && value[index] != '>'
-                ) {
-                    index++
-                }
-            }
-        }
-        return output.toString().replace('\n', ' ').replace('\r', ' ').trim()
     }
 
     private fun normalize(value: String): String = value.lowercase(Locale.ROOT)
@@ -755,6 +729,32 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
         const val NANOS_PER_MILLISECOND = 1_000_000L
         const val USER_AGENT = "ScheduleGitHubDatasetImporter/1.0 (explicit manual import)"
     }
+}
+
+private fun redactUrls(value: String): String {
+    val output = StringBuilder()
+    var index = 0
+    while (index < value.length) {
+        val schemeLength = when {
+            value.startsWith("https://", index, ignoreCase = true) -> 8
+            value.startsWith("http://", index, ignoreCase = true) -> 7
+            else -> 0
+        }
+        if (schemeLength == 0) {
+            output.append(value[index])
+            index++
+        } else {
+            output.append("[source URL]")
+            index += schemeLength
+            while (
+                index < value.length && !value[index].isWhitespace() && value[index] != '"' &&
+                value[index] != '\'' && value[index] != '<' && value[index] != '>'
+            ) {
+                index++
+            }
+        }
+    }
+    return output.toString().replace('\n', ' ').replace('\r', ' ').trim()
 }
 
 private fun csvCell(value: String): String {
