@@ -17,7 +17,7 @@
 
 Debug APK: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Он подписан отладочным ключом и предназначен только для проверки.
 
-Идентификатор Android-приложения и iOS Bundle ID: `com.konstantinchvei.bruschedule`. Перед первой публикацией подтвердите, что это желаемый и доступный идентификатор в аккаунтах магазинов; после выпуска его нельзя менять без создания нового приложения.
+Подтверждённый идентификатор Android-приложения и iOS Bundle ID: `com.konstantinchvei.universalschedule`. Перед публикацией проверьте его доступность в аккаунтах магазинов; после выпуска его нельзя менять без создания нового приложения.
 
 Для релизного Android App Bundle выполните `:androidApp:bundleRelease` или используйте **Build → Generate Signed Bundle / APK** в Android Studio. Перед распространением подпишите сборку собственным keystore. Keystore и пароли храните вне Git; все обновления должны быть подписаны тем же ключом. Текущая CI-сборка не создаёт подписанный релиз.
 
@@ -25,7 +25,7 @@ Debug APK: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Он по�
 
 Пользовательская версия для iOS — PWA в `web/`, устанавливаемая из Safari. Инструкция находится в [`IOS_WEB_APP.md`](IOS_WEB_APP.md) и доступна в настройках приложения.
 
-Нативный проект `iosApp` оставлен для сборки и проверки общего кода. Его Bundle ID — `com.konstantinchvei.bruschedule`; перед подписанием укажите Apple Team ID в `iosApp/Configuration/Config.xcconfig`. Публикация нативной версии требует Apple Developer Program и подписывания в Xcode.
+Нативный проект `iosApp` оставлен для сборки и проверки общего кода. Его Bundle ID — `com.konstantinchvei.universalschedule`; перед подписанием укажите Apple Team ID в `iosApp/Configuration/Config.xcconfig`. Публикация нативной версии требует Apple Developer Program и подписывания в Xcode.
 
 ## CI и публикация PWA
 
