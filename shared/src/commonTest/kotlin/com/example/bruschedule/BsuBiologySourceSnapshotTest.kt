@@ -51,7 +51,7 @@ class BsuBiologySourceSnapshotTest {
             id = "bsu-bio-course-1-group-41",
             type = ScheduleProfileType.GROUP,
             name = "Группа 41",
-            sourceUrl = "https://konstantin-chvei.github.io/schedule/schedule-data/universities/bsu/schedules/groups/biology-group-41.html",
+            sourceUrl = "https://konstantin-chvei.github.io/Schedule/schedule-data/universities/bsu/schedules/groups/biology-group-41.html",
             sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}41",
             universityId = UniversityIds.BSU,
         )
@@ -63,7 +63,7 @@ class BsuBiologySourceSnapshotTest {
                 profile.copy(
                     type = ScheduleProfileType.TEACHER,
                     name = "Иванова И.И.",
-                    sourceUrl = "https://konstantin-chvei.github.io/schedule/schedule-data/universities/bsu/schedules/teachers/ivanova-ii.html",
+                    sourceUrl = "https://konstantin-chvei.github.io/Schedule/schedule-data/universities/bsu/schedules/teachers/ivanova-ii.html",
                     sourceKey = BsuBiologyScheduleHtmlParser.BIOLOGY_FACULTY_SOURCE_KEY,
                 ),
             ),

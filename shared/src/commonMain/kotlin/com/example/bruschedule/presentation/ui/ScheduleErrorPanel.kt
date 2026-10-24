@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.ui.theme.ScheduleColors
 
-private const val ERROR_REPORT_BOT_URL = "https://t.me/bru_schedule_suggestion_bot"
+private const val ERROR_REPORT_BOT_URL = "https://t.me/schedule_suggestion_bot"
 
 @Composable
 fun ScheduleErrorPanel(

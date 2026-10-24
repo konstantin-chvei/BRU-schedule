@@ -123,8 +123,8 @@ ivanova-ii,Иванова И.И.,ФПМИ,ФПМИ,schedules/teachers/ivanova-ii
 
     @Test
     fun onlyPublicGitHubPagesIndexesAndScheduleFilesAreAccepted() {
-        assertEquals("schedule", GitHubScheduleDataPaths.REPOSITORY)
-        assertEquals("https://konstantin-chvei.github.io/schedule/", GitHubScheduleDataPaths.PAGES_URL)
+        assertEquals("Schedule", GitHubScheduleDataPaths.REPOSITORY)
+        assertEquals("https://konstantin-chvei.github.io/Schedule/", GitHubScheduleDataPaths.PAGES_URL)
         assertEquals(
             "${GitHubScheduleDataPaths.PAGES_URL}content/daily-messages.txt",
             GitHubDailyMessagesRemoteDataSource.DAILY_MESSAGES_URL,

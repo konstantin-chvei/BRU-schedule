@@ -390,7 +390,7 @@ private fun TypographyScaleControl(
     }
 }
 
-private const val PROJECT_TELEGRAM_BOT_URL = "https://t.me/bru_schedule_suggestion_bot"
+private const val PROJECT_TELEGRAM_BOT_URL = "https://t.me/schedule_suggestion_bot"
 
 @Composable
 private fun SemesterScheduleSettingsCard(

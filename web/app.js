@@ -647,7 +647,7 @@
     </div></section>`;
   }
   function renderInfoSettings() {
-    return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/bru_schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a></div></section>
+    return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a></div></section>
       <section class="settings-section install-guide-settings"><div class="settings-card"><a class="secondary-button install-guide-link" href="./ios-install.html">Установка на iPhone / iPad</a></div></section>`;
   }
   function renderSettingsPage() {

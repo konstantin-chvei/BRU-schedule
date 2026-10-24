@@ -4,7 +4,7 @@ import com.example.bruschedule.domain.model.ScheduleProfileType
 
 object GitHubScheduleDataPaths {
     const val OWNER = "konstantin-chvei"
-    const val REPOSITORY = "schedule"
+    const val REPOSITORY = "Schedule"
     const val DATA_DIRECTORY = "schedule-data"
 
     // Transitional read fallback for profiles and Pages data created before the repository rename.
