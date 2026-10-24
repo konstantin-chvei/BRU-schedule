@@ -1,31 +1,31 @@
-This is a Kotlin Multiplatform project targeting Android, iOS.
+# Расписание
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+Мобильное приложение для расписания занятий и дедлайнов. Android и нативная iOS-оболочка используют Kotlin Multiplatform и Compose Multiplatform; для iPhone и iPad доступна устанавливаемая PWA.
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+## Возможности
 
-### Running the apps
+- Расписания поддерживаемых групп и преподавателей из опубликованных каталогов GitHub.
+- Локальная база, офлайн-доступ и обновление по запросу.
+- Ручные пары, заметки, повторы, конфликты и связанные дедлайны.
+- Неделя и семестр, индивидуальные даты окончания, темы и масштаб текста.
+- Напоминания о задачах и ежедневные сообщения.
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+Клиент не обращается к сайтам вузов. Подготовка файлов расписаний выполняется отдельно; новые данные загружаются только по явному действию пользователя.
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+## Сборка
 
-### Running tests
+Требуются JDK 21 и Android SDK Platform 37.
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+```bash
+./gradlew :shared:allTests
+./gradlew :androidApp:assembleDebug
+```
 
-- Android tests: `./gradlew :shared:testAndroidHostTest`
-- iOS tests: `./gradlew :shared:iosSimulatorArm64Test`
+Релизная сборка и подпись описаны в [`docs/BUILD_AND_DISTRIBUTE.md`](docs/BUILD_AND_DISTRIBUTE.md). Установка PWA на iPhone/iPad — в [`docs/IOS_WEB_APP.md`](docs/IOS_WEB_APP.md).
 
----
+## Документация
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Каталог расписаний](docs/SCHEDULE_DATA.md)
+- [Сборка и выпуск](docs/BUILD_AND_DISTRIBUTE.md)
+- [iOS PWA](docs/IOS_WEB_APP.md)
