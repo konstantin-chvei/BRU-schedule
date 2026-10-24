@@ -1,6 +1,5 @@
 package com.example.bruschedule.domain.model
 
-/** A short, user-safe error summary. Raw exception text is never shown in the UI or persisted. */
 data class ScheduleErrorInfo(
     val message: String,
     val code: String,
@@ -12,7 +11,6 @@ data class ScheduleErrorInfo(
         private val HTTP_STATUS = Regex("(?:кодом\\s*|HTTP(?:/\\d(?:\\.\\d)?)?\\s*)(\\d{3})", RegexOption.IGNORE_CASE)
         private val DARWIN_TLS_STATUS = Regex("nsurlerrordomain.*code\\s*=\\s*-120[0-6]\\b")
 
-        /** Converts an exception chain to a concise message and a stable, short diagnostic code. */
         fun fromThrowable(failure: Throwable, operation: String = "SYNC"): ScheduleErrorInfo {
             val messages = mutableListOf<String>()
             var cause: Throwable? = failure
@@ -28,7 +26,6 @@ data class ScheduleErrorInfo(
             return fromDiagnostic(messages.joinToString(" | ").ifBlank { "unknown failure" }, operation)
         }
 
-        /** Decodes new compact entries and safely summarizes verbose entries from older versions. */
         fun decodeStored(value: String): ScheduleErrorInfo {
             if (value.startsWith(STORAGE_PREFIX)) {
                 val payload = value.removePrefix(STORAGE_PREFIX)

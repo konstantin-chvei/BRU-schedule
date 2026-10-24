@@ -1,6 +1,5 @@
 package com.example.bruschedule.data.remote
 
-/** Converts a public Google Sheets sharing/edit URL to the HTML table endpoint used by the app. */
 object GoogleSheetsScheduleUrl {
     private val SHEET_URL = Regex(
         "^https://docs\\.google\\.com/spreadsheets/d/(e/)?([^/?#]+)(?:/([^?#]*))?(?:\\?([^#]*))?(?:#(.*))?$",
@@ -8,7 +7,6 @@ object GoogleSheetsScheduleUrl {
     )
     private val GID = Regex("(?:^|[&#])gid=([0-9]+)(?:$|[&#])", RegexOption.IGNORE_CASE)
 
-    /** Returns null for non-Sheets URLs so callers can fetch regular HTML pages unchanged. */
     fun toHtmlTableUrl(url: String): String? {
         val match = SHEET_URL.matchEntire(url.trim()) ?: return null
         val publishedPrefix = match.groupValues[1]

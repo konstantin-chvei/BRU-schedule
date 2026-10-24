@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 
-/** SQLDelight stores the university catalogue; KMP Settings remembers the current selection. */
 class SqlDelightUniversityRepository(
     private val database: ScheduleDatabase,
     private val settings: Settings,

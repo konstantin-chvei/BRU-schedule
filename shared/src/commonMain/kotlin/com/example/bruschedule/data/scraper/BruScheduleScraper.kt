@@ -12,11 +12,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
-/**
- * Parser for the real static HTML emitted by rasp.bru.by. It reads only the desktop
- * .schedule-table (the site also renders a duplicate mobile card list), but also supports both
- * group .lesson-card blocks and teacher .occ-card blocks.
- */
 class BruScheduleScraper : ScheduleHtmlParser {
     override val formatVersion: Int = PARSER_FORMAT_VERSION
 
@@ -127,13 +122,11 @@ class BruScheduleScraper : ScheduleHtmlParser {
             }
         }
 
-        // Protect against markup that renders the same event twice in a single desktop cell.
         return result.distinctBy { it.sourceKey }
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
     }
 
     override fun hasAlternatingTwoWeekCycle(html: String): Boolean {
-        // Inspect rendered text instead of relying on one CSS class: the site has multiple layouts.
         val pageText = Ksoup.parse(html).text().lowercase().replace('ё', 'е')
         return WEEK_ONE_HEADER.containsMatchIn(pageText) && WEEK_TWO_HEADER.containsMatchIn(pageText)
     }
@@ -157,7 +150,6 @@ class BruScheduleScraper : ScheduleHtmlParser {
                 if (headerYear != null) {
                     year = headerYear
                 } else if (previousMonth != null && month < previousMonth!!) {
-                    // A two-week timetable can cross December/January.
                     year += 1
                 }
                 previousMonth = month
@@ -276,7 +268,6 @@ class BruScheduleScraper : ScheduleHtmlParser {
             val classes = classNames.joinToString(" ").lowercase()
             val label = visibleType.lowercase().replace('ё', 'е')
 
-            // Semantic class/label is authoritative. rasp.bru.by has changed its lab colors before.
             if (classes.contains("lesson-lecture") || classes.contains("occ-lecture") ||
                 label.contains("лекци") || label.contains("lecture")
             ) return LessonType.LECTURE
@@ -287,7 +278,6 @@ class BruScheduleScraper : ScheduleHtmlParser {
                 label.contains("практик") || label.contains("practice")
             ) return LessonType.PRACTICE
 
-            // These site event types are outside the requested 3-way enum; a red PE card is not a lab.
             val explicitlyUnsupportedClass = listOf(
                 "lesson-pe", "occ-pe", "lesson-exam", "occ-exam", "lesson-credit", "occ-credit",
                 "consultation", "coursework", "in_class_control", "curator_hour", "parttime",

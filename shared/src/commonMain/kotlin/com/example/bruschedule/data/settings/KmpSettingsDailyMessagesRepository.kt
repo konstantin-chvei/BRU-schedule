@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.time.Clock
 
-/** Displays the persisted list immediately; a user-triggered refresh checks GitHub at most once per day. */
 class KmpSettingsDailyMessagesRepository(
     private val settings: Settings,
     private val remote: DailyMessagesRemoteDataSource,

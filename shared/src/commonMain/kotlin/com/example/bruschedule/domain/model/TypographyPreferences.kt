@@ -1,6 +1,5 @@
 package com.example.bruschedule.domain.model
 
-/** Independent text-size multipliers grouped by their visual role in the interface. */
 data class TypographyPreferences(
     val displayScale: Float = DEFAULT_FONT_SCALE,
     val headingScale: Float = DEFAULT_FONT_SCALE,

@@ -14,10 +14,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
-/**
- * BSU HTML adapters for ordinary faculty timetables, public Google Sheets, and the Biology
- * faculty's server-rendered group grid. Binary Office/PDF sources use dedicated document readers.
- */
 class BsuScheduleHtmlParser(
     private val genericParser: GenericHtmlScheduleParser = GenericHtmlScheduleParser(),
     private val biologyParser: BsuBiologyScheduleHtmlParser = BsuBiologyScheduleHtmlParser(),
@@ -49,10 +45,8 @@ class BsuScheduleHtmlParser(
 
     fun discoverGroupLabelsFromText(text: String): List<String> = groupLabelsIn(text)
 
-    /** Returns teacher names found in a faculty's public timetable page. */
     fun discoverTeacherNames(html: String): List<String> = genericParser.discoverTeacherNames(html)
 
-    /** Uses the same faculty adapter during discovery and later when loading the selected teacher. */
     fun discoverTeacherNames(facultyName: String?, html: String): List<String> =
         BsuFacultyTeacherScheduleParserRegistry.parserFor(facultyName)
             ?.discoverTeacherNames(html, genericParser)
@@ -84,7 +78,6 @@ class BsuScheduleHtmlParser(
         )
     }
 
-    /** Returns group labels found in matrix table headers. */
     fun discoverTableGroupLabels(html: String): List<String> {
         val biologyGroups = biologyParser.discoverGroups(html).map(BsuBiologyGroup::name)
         if (biologyGroups.isNotEmpty()) return biologyGroups
@@ -129,7 +122,6 @@ class BsuScheduleHtmlParser(
         return labels.toList()
     }
 
-    /** Returns group labels found in matrix headers and group links for the picker. */
     fun discoverGroupLabels(html: String): List<String> {
         val document = Ksoup.parse(html)
         val labels = linkedSetOf<String>()
@@ -339,11 +331,6 @@ class BsuScheduleHtmlParser(
         includeAllGroups = true,
     )
 
-    /**
-     * Normalizes PDF/Office tables that put weekdays in the first data column and omit a weekday
-     * label from the header (for example, the current FSC PDFs). Each group/subgroup column is
-     * projected into a small day/time/subject/room table before using the shared KMP parser.
-     */
     internal fun parseDayFirstDocumentTables(
         profile: ScheduleProfile,
         html: String,

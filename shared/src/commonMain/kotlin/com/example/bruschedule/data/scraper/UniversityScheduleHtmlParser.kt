@@ -5,7 +5,6 @@ import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.repository.ScheduleHtmlParser
 import kotlinx.datetime.LocalDate
 
-/** Routes a saved profile to the parser for its selected university. */
 class UniversityScheduleHtmlParser(
     private val bruParser: ScheduleHtmlParser = BruScheduleScraper(),
     private val bsuParser: ScheduleHtmlParser = BsuScheduleHtmlParser(),

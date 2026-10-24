@@ -320,7 +320,6 @@ textarea.form-control { min-height: 82px; padding: 11px; resize: vertical; line-
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-/* Compose parity: native mobile rhythm, cards, calendar and settings hierarchy. */
 .page-content { padding: calc(16px + env(safe-area-inset-top)) 20px calc(112px + env(safe-area-inset-bottom)); }
 .university-card { min-height: 66px; gap: 11px; padding: 12px 13px; border-radius: 17px; }
 .university-badge { width: auto; min-width: 42px; height: 35px; padding: 0 9px; border: 0; border-radius: 11px; background: color-mix(in srgb, var(--indigo) 14%, var(--surface-raised)); color: var(--cyan); font-size: 9px; font-weight: 750; letter-spacing: .04em; }
@@ -606,3 +605,16 @@ textarea.form-control { min-height: 82px; padding: 11px; resize: vertical; line-
 .modal-conflict-panel .modal-conflict-list > div + div { border-top: 1px solid var(--line-soft); }
 .modal-conflict-panel .modal-conflict-list strong { color: var(--text); font-size: inherit; font-weight: 550; }
 .modal-conflict-panel .secondary-button { width: 100%; margin-top: 2px; }
+
+.lesson-feedback { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: 9px; }
+.lesson-stickers { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.lesson-sticker-add, .lesson-sticker { flex: none; width: 30px; height: 30px; display: inline-grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); color: var(--text); font-size: 17px; line-height: 1; }
+.lesson-sticker-add { color: var(--muted); font-size: 20px; }
+.lesson-sticker { border-color: transparent; background: color-mix(in srgb, var(--lesson-color, var(--cyan)) 12%, var(--surface-raised)); }
+.lesson-rating { flex: none; display: flex; align-items: center; gap: 0; }
+.lesson-star { width: 26px; height: 30px; display: inline-grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--dim); font-size: 21px; line-height: 1; }
+.lesson-star.is-selected { color: var(--amber); }
+.lesson-sticker-add:focus-visible, .lesson-sticker:focus-visible, .lesson-star:focus-visible, .sticker-picker-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.sticker-picker-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.sticker-picker-item { width: 100%; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-raised); color: var(--text); font-size: 24px; }
+.sticker-picker-item.is-selected { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 15%, var(--surface-raised)); }

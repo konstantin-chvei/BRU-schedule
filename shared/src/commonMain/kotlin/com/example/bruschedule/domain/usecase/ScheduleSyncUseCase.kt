@@ -27,10 +27,6 @@ sealed interface RefreshOutcome {
     data class Failure(val error: ScheduleErrorInfo) : RefreshOutcome
 }
 
-/**
- * Coordinates network -> university HTML parser -> validation -> one database transaction. No cache
- * is ever deleted on fetch/parse failure, so saved schedules remain available while a source is down.
- */
 class RefreshScheduleUseCase(
     private val schedules: ScheduleRepository,
     private val syncRepository: ScheduleSyncRepository,

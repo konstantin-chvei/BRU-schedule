@@ -3,7 +3,6 @@ package com.example.bruschedule.data.settings
 import com.example.bruschedule.domain.repository.ParserVersionRepository
 import com.russhwolf.settings.Settings
 
-/** Settings are metadata only; SQLDelight migrations remain the source of truth for DB schema. */
 class KmpSettingsParserVersionFlags(
     private val settings: Settings,
 ) : ParserVersionRepository {

@@ -1,6 +1,5 @@
 package com.example.bruschedule.domain.model
 
-/** Local fallback used before GitHub has been reached successfully on a first launch. */
 val DEFAULT_DAILY_MESSAGES: List<String> = listOf(
     "Идеальный хаос начинается с расписания.",
     "План на день: знать, куда идти.",

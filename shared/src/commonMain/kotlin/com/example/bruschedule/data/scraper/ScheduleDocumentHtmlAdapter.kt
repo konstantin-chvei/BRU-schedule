@@ -11,7 +11,6 @@ import no.synth.kmpzip.io.ByteArrayOutputStream
 import no.synth.kmpzip.io.readBytes
 import no.synth.kmpzip.zip.ZipInputStream
 
-/** Public timetable document types supported by the common KMP readers. */
 enum class ScheduleDocumentFormat(val extension: String, val displayName: String, val isSupported: Boolean) {
     PDF(".pdf", "PDF", true),
     XLSX(".xlsx", "XLSX", true),
@@ -21,10 +20,6 @@ enum class ScheduleDocumentFormat(val extension: String, val displayName: String
     DOC(".doc", "DOC 97–2003", true),
 }
 
-/**
- * Converts public PDF, XLSX, DOCX, ZIP and legacy OLE/BIFF timetable files into table-oriented HTML
- * consumed by the existing university HTML parsers. All readers are implemented in commonMain.
- */
 class ScheduleDocumentHtmlAdapter {
     fun formatForUrl(url: String): ScheduleDocumentFormat? {
         val path = url.substringBefore('#').substringBefore('?').lowercase()

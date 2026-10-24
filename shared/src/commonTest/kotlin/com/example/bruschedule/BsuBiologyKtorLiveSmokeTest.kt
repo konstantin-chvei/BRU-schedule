@@ -12,7 +12,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** Confirms runtime updates never request a live university endpoint. */
 class BsuBiologyRuntimeSourcePolicyTest {
     @Test
     fun runtimeRejectsUniversityScheduleUrlBeforeMakingAnyRequest() = runTest {

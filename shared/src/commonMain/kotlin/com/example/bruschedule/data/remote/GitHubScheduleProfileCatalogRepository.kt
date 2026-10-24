@@ -9,10 +9,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 
-/**
- * Loads each university's compact profile index from the public GitHub Pages site and searches it
- * locally. The app never crawls faculty websites during profile search.
- */
 class GitHubScheduleProfileCatalogRepository(
     private val transport: HtmlTransport,
     private val clock: Clock = Clock.System,

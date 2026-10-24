@@ -27,11 +27,9 @@ CYRILLIC = {
     "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
 }
 
-
 def normalize(value: str) -> str:
     value = value.casefold().replace("ё", "е")
     return re.sub(r"[^a-zа-я0-9]+", "", value)
-
 
 def slugify(value: str) -> str:
     expanded = "".join(CYRILLIC.get(char, char) for char in value.casefold())
@@ -40,7 +38,6 @@ def slugify(value: str) -> str:
     if not slug:
         slug = "profile"
     return slug
-
 
 class LinkCollector(HTMLParser):
     def __init__(self) -> None:
@@ -100,7 +97,6 @@ class LinkCollector(HTMLParser):
         if self.current_heading is not None:
             self.heading.append(data)
 
-
 def read_local_page(path: Path) -> tuple[str, str, list[dict[str, str]], str]:
     content = path.read_text(encoding="utf-8", errors="replace")
     saved = re.search(r"saved from url=\(\d+\)(https?://[^\s<>]+)", content, re.I)
@@ -118,13 +114,11 @@ def read_local_page(path: Path) -> tuple[str, str, list[dict[str, str]], str]:
         links.append(record)
     return title, heading, links, base_url
 
-
 def current_records(path: Path) -> list[dict[str, str]]:
     if not path.is_file():
         return []
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return list(csv.DictReader(handle))
-
 
 def unique_id(name: str, source_url: str, used: set[str]) -> str:
     base = slugify(name)
@@ -139,14 +133,12 @@ def unique_id(name: str, source_url: str, used: set[str]) -> str:
     used.add(candidate)
     return candidate
 
-
 def write_registry(path: Path, records: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDNAMES, lineterminator="\n")
         writer.writeheader()
         writer.writerows(records)
-
 
 def merge_profile_type(
     *,
@@ -180,7 +172,7 @@ def merge_profile_type(
             continue
         existing_row = records_by_name.get(key)
         if existing_row is not None:
-            # Keep curated filenames, labels and local snapshots; refresh the directory link.
+
             if item["href"]:
                 existing_row["source_url"] = item["href"]
             if item.get("subtitle") and not existing_row.get("subtitle"):
@@ -201,7 +193,6 @@ def merge_profile_type(
     ordered = sorted(records_by_name.values(), key=lambda row: normalize(row.get("name", "")))
     write_registry(registry_file, ordered)
     return len(ordered)
-
 
 def discover(source_dir: Path, registry_dir: Path) -> tuple[int, int]:
     pages: list[tuple[Path, str, str, list[dict[str, str]], str]] = []
@@ -241,7 +232,6 @@ def discover(source_dir: Path, registry_dir: Path) -> tuple[int, int]:
     )
     return group_count, teacher_count
 
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, default=ROOT / "bru")
@@ -255,7 +245,6 @@ def main() -> int:
     print(f"BRU registry обновлён из локальных HTML-копий: групп {groups}, преподавателей {teachers}")
     print("Источники в интернет не запрашивались. Запустите build_schedule_tree.py для пересборки индексов.")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

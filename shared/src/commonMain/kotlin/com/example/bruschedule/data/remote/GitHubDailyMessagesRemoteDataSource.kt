@@ -2,7 +2,6 @@ package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.domain.repository.DailyMessagesRemoteDataSource
 
-/** Reads the public static daily-message list from GitHub Pages; no app release is needed to edit it. */
 class GitHubDailyMessagesRemoteDataSource(
     private val transport: HtmlTransport,
 ) : DailyMessagesRemoteDataSource {

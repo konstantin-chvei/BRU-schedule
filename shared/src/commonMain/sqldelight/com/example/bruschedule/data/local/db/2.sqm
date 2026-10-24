@@ -1,3 +1,2 @@
--- Version 3 stores optional per-lesson preparation notes. Existing rows start with an empty note.
 ALTER TABLE lesson ADD COLUMN notes TEXT NOT NULL DEFAULT '';
 ALTER TABLE lesson_snapshot ADD COLUMN notes TEXT NOT NULL DEFAULT '';

@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.datetime.LocalDate
 
-/** Persists university/track defaults, manual term dates and per-profile overrides on each platform. */
 class KmpSettingsSemesterScheduleRepository(
     private val settings: Settings,
 ) : SemesterSchedulePreferencesRepository {

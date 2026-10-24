@@ -6,7 +6,6 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Stores independent typography scales in KMP Settings and emits changes immediately. */
 class KmpSettingsTypographyPreferencesRepository(
     private val settings: Settings,
 ) : TypographyPreferencesRepository {

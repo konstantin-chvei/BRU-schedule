@@ -31,11 +31,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 
-/**
- * Searches each public BSU faculty source independently. Group candidates retain the faculty's
- * group-specific timetable URL; teacher candidates collect the timetable pages that contain the
- * selected teacher. Biology uses its own mode/course catalogue and group-page parser.
- */
 class BsuScheduleProfileCatalogRepository(
     private val transport: HtmlTransport,
     private val parser: BsuScheduleHtmlParser = BsuScheduleHtmlParser(),
@@ -438,11 +433,6 @@ class BsuScheduleProfileCatalogRepository(
         )
     }
 
-    /**
-     * Biology has no separate public teacher index. Search the faculty's own course catalogues,
-     * open their current group timetable pages, and collect the teacher links/labels from those
-     * pages. The selected teacher profile later keeps the full set of matching group sources.
-     */
     private suspend fun discoverBiologyTeachers(
         faculty: FacultySource,
         normalizedQuery: String,

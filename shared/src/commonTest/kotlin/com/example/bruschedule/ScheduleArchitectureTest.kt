@@ -29,6 +29,7 @@ import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
+import com.example.bruschedule.domain.model.LessonStickerCodec
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.ScheduleWindow
@@ -191,7 +192,7 @@ class ScheduleArchitectureTest {
 
         val laboratory = lessons.first { it.type == LessonType.LABORATORY }
         assertEquals(LessonTypePalette.LABORATORY, laboratory.colorHex)
-        // The sample site currently uses amber for .lesson-lab. Semantic class beats CSS hue.
+
         assertEquals("#E0A800", laboratory.sourceColorHex)
     }
 
@@ -706,18 +707,38 @@ class ScheduleArchitectureTest {
     }
 
     @Test
-    fun lessonNotesFollowTheSameWebsiteClassWhenItsSourceIdChanges() {
+    fun lessonFeedbackFollowsTheSameWebsiteClassWhenItsSourceIdChanges() {
         val previous = lesson(
             id = "web-old",
             sourceKey = "slot-old",
             subject = "Физика",
             isCustom = false,
-        ).copy(notes = "Взять линейку")
-        val refreshed = previous.copy(id = "web-new", sourceKey = "slot-new", version = 1, notes = "")
+        ).copy(notes = "Взять линейку", rating = 4, stickers = listOf("🔥", "😀"))
+        val refreshed = previous.copy(id = "web-new", sourceKey = "slot-new", version = 1, notes = "", rating = null, stickers = emptyList())
 
         val merged = ScheduleMergeStrategy.merge(listOf(previous), listOf(refreshed))
 
         assertEquals("Взять линейку", merged.single().notes)
+        assertEquals(4, merged.single().rating)
+        assertEquals(listOf("🔥", "😀"), merged.single().stickers)
+    }
+
+    @Test
+    fun lessonFeedbackFollowsWebsiteSourceKeyWhenTheSubjectChanges() {
+        val previous = lesson(id = "web-old", sourceKey = "slot-stable", subject = "Физика", isCustom = false)
+            .copy(rating = 3, stickers = listOf("💪"))
+        val refreshed = previous.copy(
+            id = "web-new",
+            subjectName = "Физика · новая тема",
+            version = 1,
+            rating = null,
+            stickers = emptyList(),
+        )
+
+        val merged = ScheduleMergeStrategy.merge(listOf(previous), listOf(refreshed))
+
+        assertEquals(3, merged.single().rating)
+        assertEquals(listOf("💪"), merged.single().stickers)
     }
 
     @Test
@@ -725,6 +746,13 @@ class ScheduleArchitectureTest {
         val oldOverriddenWeb = lesson(id = "web-1", sourceKey = "slot-1", subject = "Старая версия", isCustom = false, version = 7)
         val oldUntouchedWeb = lesson(id = "web-2", sourceKey = "slot-2", subject = "Физика", isCustom = false, version = 6)
         val currentOverride = oldOverriddenWeb.copy(subjectName = "Моя правка", isCustom = true, version = 8)
+        val currentUntouchedWeb = oldUntouchedWeb.copy(
+            id = "web-2-new",
+            subjectName = "Физика · новая тема",
+            notes = "Подготовить отчёт",
+            rating = 5,
+            stickers = listOf("🎯"),
+        )
         val customAddedAfterSnapshot = lesson(
             id = "after-snapshot",
             sourceKey = "manual:after-snapshot",
@@ -734,13 +762,26 @@ class ScheduleArchitectureTest {
 
         val restored = ScheduleMergeStrategy.restoreSnapshot(
             snapshot = listOf(oldOverriddenWeb, oldUntouchedWeb),
-            current = listOf(currentOverride, customAddedAfterSnapshot),
+            current = listOf(currentOverride, currentUntouchedWeb, customAddedAfterSnapshot),
         )
 
         assertEquals("Моя правка", restored.first { it.id == "web-1" }.subjectName)
         assertTrue(restored.first { it.id == "web-1" }.isCustom)
         assertEquals(6, restored.first { it.id == "web-2" }.version)
+        assertEquals("Подготовить отчёт", restored.first { it.id == "web-2" }.notes)
+        assertEquals(5, restored.first { it.id == "web-2" }.rating)
+        assertEquals(listOf("🎯"), restored.first { it.id == "web-2" }.stickers)
         assertEquals("Новая ручная пара", restored.first { it.id == "after-snapshot" }.subjectName)
+    }
+
+    @Test
+    fun lessonStickerCodecKeepsOnlyUniqueSupportedStickers() {
+        val stickers = listOf("🔥", "😀", "🔥", "unsupported")
+
+        val encoded = LessonStickerCodec.encode(stickers)
+
+        assertEquals(listOf("🔥", "😀"), LessonStickerCodec.decode(encoded))
+        assertEquals(emptyList<String>(), LessonStickerCodec.decode("unsupported"))
     }
 
     @Test

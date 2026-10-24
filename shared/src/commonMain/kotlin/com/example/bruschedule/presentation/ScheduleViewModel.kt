@@ -72,7 +72,6 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
-
 enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS }
 
 data class LessonUiItem(
@@ -145,7 +144,6 @@ data class DeadlineDraft(
     val lessonRecurrence: LessonRecurrence = LessonRecurrence.NONE,
 )
 
-/** UI-facing MVVM state holder; local SQLDelight flows drive the screen before any network call. */
 class ScheduleViewModel(
     private val schedules: ScheduleRepository,
     private val syncRepository: ScheduleSyncRepository,
@@ -548,7 +546,6 @@ class ScheduleViewModel(
         )
     }
 
-    /** Backwards-compatible entry point for older settings screens. */
     fun setIfzoSessionEndDate(sessionEndDateIso: String) {
         val normalizedDate = runCatching { LocalDate.parse(sessionEndDateIso).toString() }.getOrNull()
         if (normalizedDate == null) {
@@ -824,6 +821,31 @@ class ScheduleViewModel(
                 throw cancelled
             } catch (failure: Throwable) {
                 notice.value = errorNotice("Не удалось сохранить заметки к паре", failure, "DATABASE")
+            }
+        }
+    }
+
+    fun saveLessonRating(lessonId: String, rating: Int) {
+        if (rating !in 1..5) return
+        viewModelScope.launch {
+            try {
+                schedules.saveLessonRating(lessonId, rating)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось сохранить оценку пары", failure, "DATABASE")
+            }
+        }
+    }
+
+    fun toggleLessonSticker(lessonId: String, sticker: String) {
+        viewModelScope.launch {
+            try {
+                schedules.toggleLessonSticker(lessonId, sticker)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                notice.value = errorNotice("Не удалось сохранить стикер пары", failure, "DATABASE")
             }
         }
     }

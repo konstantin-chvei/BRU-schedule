@@ -9,7 +9,6 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
-/** GROUP uses a group (or faculty schedule page); TEACHER uses the teacher-occupancy section. */
 enum class ScheduleProfileType {
     GROUP,
     TEACHER,
@@ -18,13 +17,9 @@ enum class ScheduleProfileType {
 data class ScheduleProfile(
     val id: String,
     val type: ScheduleProfileType,
-    /** Student-facing label, e.g. "МПР-261" or "Агеева Т.Н.". */
     val name: String,
-    /** Stable university directory/details page or direct timetable URL. */
     val sourceUrl: String? = null,
-    /** Exact label/slug used by an adapter; static BSU teacher profiles store their faculty parser key here. */
     val sourceKey: String? = null,
-    /** University whose adapter/source owns this profile. Existing profiles migrate to BRU. */
     val universityId: String = UniversityIds.BRU,
 )
 
@@ -35,13 +30,33 @@ enum class LessonType {
     UNKNOWN,
 }
 
-/**
- * lessonDate is ISO-8601 local date (yyyy-MM-dd); dayOfWeek is ISO-8601 (Mon=1 ... Sun=7).
- * sourceKey is a stable identity for the website slot, deliberately independent of the subject,
- * teacher and room so a student can edit those fields without losing the override on refresh.
- */
 object LessonNotes {
     const val MAX_LENGTH = 500
+}
+
+object LessonStickerPalette {
+    val choices = listOf(
+        "😀", "😎", "🔥", "❤️", "👍",
+        "👎", "😴", "🐵", "💀", "😭",
+        "🤓", "💪", "🎯", "⭐", "❌",
+        "🙂", "😍", "🥰", "😐", "🤗",
+        "😔", "🤔", "😌", "😢", "😮",
+        "😵‍💫", "🤒", "🤫", "😏", "😶",
+    )
+}
+
+object LessonStickerCodec {
+    private const val SEPARATOR = "\u001F"
+
+    fun encode(stickers: List<String>): String = stickers
+        .filter { it in LessonStickerPalette.choices }
+        .distinct()
+        .joinToString(SEPARATOR)
+
+    fun decode(encoded: String): List<String> = encoded
+        .split(SEPARATOR)
+        .filter { it in LessonStickerPalette.choices }
+        .distinct()
 }
 
 data class Lesson(
@@ -53,7 +68,6 @@ data class Lesson(
     val startTime: String,
     val endTime: String,
     val type: LessonType,
-    /** Theme-mapped pastel accent used by the UI. */
     val colorHex: String,
     val isCustom: Boolean,
     val version: Int,
@@ -61,10 +75,10 @@ data class Lesson(
     val dayOfWeek: Int,
     val slotNumber: Int = 0,
     val sourceKey: String = id,
-    /** Original CSS color from the source page, when provided, for diagnostics/remapping. */
     val sourceColorHex: String? = null,
-    /** Optional user-authored reminder or preparation note for this specific lesson occurrence. */
     val notes: String = "",
+    val rating: Int? = null,
+    val stickers: List<String> = emptyList(),
 )
 
 enum class DeadlineLinkType {
@@ -74,11 +88,8 @@ enum class DeadlineLinkType {
 }
 
 enum class TaskReminderMode {
-    /** Follow the app-wide reminder settings. */
     INHERIT,
-    /** Use the selected reminder intervals for this task only. */
     CUSTOM,
-    /** Never send reminders for this task. */
     NONE,
 }
 
@@ -111,15 +122,12 @@ data class AcademicTask(
     val lessonId: String? = null,
     val taskTitle: String,
     val description: String,
-    /** Unix epoch milliseconds. */
     val dueDate: Long,
     val isCompleted: Boolean,
-    /** Kept as a display fallback if a lesson is later removed from the live schedule. */
     val profileId: String? = null,
     val subjectNameSnapshot: String = "",
     val linkType: DeadlineLinkType = if (lessonId == null) DeadlineLinkType.NONE else DeadlineLinkType.SUBJECT,
     val reminderMode: TaskReminderMode = TaskReminderMode.INHERIT,
-    /** Minute offsets before dueDate; used only when reminderMode is CUSTOM. */
     val reminderOffsetsMinutes: List<Int> = emptyList(),
 )
 
@@ -130,7 +138,6 @@ data class ProfileCandidate(
     val sourceKey: String,
     val subtitle: String = "",
     val universityId: String = UniversityIds.BRU,
-    /** False when the group/person is indexed but its current schedule file has not been published. */
     val scheduleAvailable: Boolean = true,
 )
 
@@ -146,11 +153,9 @@ data class ProfileSyncState(
 data class ScheduleWindow(
     val startDate: LocalDate,
     val endDate: LocalDate,
-    /** Optional semester horizon for sources that expose a separate dated page for every week. */
     val semesterCoverageEndDate: LocalDate? = null,
 ) {
     companion object {
-        /** Monday of this week through Sunday of next week (the site's rolling source view, later cycle-expanded). */
         fun currentAndNextWeek(clock: Clock = Clock.System): ScheduleWindow {
             val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
             val monday = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1))
@@ -169,9 +174,9 @@ data class RefreshCommit(
 )
 
 object LessonTypePalette {
-    const val LECTURE = "#A7B9FF" // cool pastel indigo
-    const val LABORATORY = "#FF8998" // soft coral
-    const val PRACTICE = "#FFC979" // muted amber
+    const val LECTURE = "#A7B9FF"
+    const val LABORATORY = "#FF8998"
+    const val PRACTICE = "#FFC979"
     const val UNKNOWN = "#A6B0C2"
 
     fun accent(type: LessonType): String = when (type) {

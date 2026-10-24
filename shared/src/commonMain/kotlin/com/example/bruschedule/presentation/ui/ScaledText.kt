@@ -21,7 +21,6 @@ import com.example.bruschedule.domain.model.TypographyRole
 
 val LocalTypographyPreferences = staticCompositionLocalOf { TypographyPreferences() }
 
-/** Text wrapper applies the independently-selected scale for the text's visual size class. */
 @Composable
 fun Text(
     text: String,

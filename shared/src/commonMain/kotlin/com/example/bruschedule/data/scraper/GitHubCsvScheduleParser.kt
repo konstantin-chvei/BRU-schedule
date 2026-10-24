@@ -9,7 +9,6 @@ import com.example.bruschedule.domain.repository.ScheduleHtmlParser
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
 
-/** Parses versioned, date-expanded CSV schedules published in the GitHub data tree. */
 class GitHubCsvScheduleParser : ScheduleHtmlParser {
     override val formatVersion: Int = FORMAT_VERSION
 

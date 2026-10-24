@@ -37,7 +37,6 @@ private data class BruColorPalette(
 
 private val LocalBruPalette = staticCompositionLocalOf { paletteFor(AppearancePreferences()) }
 
-/** Palette tokens are provided by the selected persisted theme and remain Compose-observable. */
 object BruColors {
     val background: Color
         @Composable get() = LocalBruPalette.current.background
@@ -120,7 +119,6 @@ fun BruScheduleTheme(
     }
 }
 
-/** Lesson accents respond immediately to the appearance preference, regardless of cached DB hex. */
 object LessonThemeMapper {
     @Composable
     fun accent(lesson: Lesson): Color = BruColors.lessonAccent(lesson.type)

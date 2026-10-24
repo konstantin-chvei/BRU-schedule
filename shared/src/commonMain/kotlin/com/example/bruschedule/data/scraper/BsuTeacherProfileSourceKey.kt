@@ -1,9 +1,5 @@
 package com.example.bruschedule.data.scraper
 
-/**
- * Encodes the faculty-specific schedule pages that contributed to a BSU teacher profile.
- * A profile can span several published group timetables because BSU has no shared teacher catalogue.
- */
 data class BsuTeacherScheduleSources(
     val teacherName: String,
     val urls: List<String>,
@@ -63,7 +59,6 @@ object BsuTeacherProfileSourceKey {
     fun teacherName(value: String?): String? = decode(value)?.teacherName
 }
 
-/** Matches the common BSU name variants "Иванова И.И." and "Иванова Ирина Ивановна". */
 object BsuTeacherNameMatcher {
     private val word = Regex("[A-Za-zА-Яа-яЁё-]+")
     private val titles = setOf(

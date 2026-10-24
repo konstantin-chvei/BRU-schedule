@@ -1,4 +1,3 @@
--- Version 4 introduces user-selectable university sources while preserving existing BRU profiles.
 CREATE TABLE university (
     id TEXT NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,

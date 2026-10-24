@@ -7,7 +7,6 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.plus
 
-/** Materializes a custom lesson's repetitions through the end of the selectable schedule period. */
 object CustomLessonRecurrenceExpander {
     private const val MAX_OCCURRENCES = 512
 

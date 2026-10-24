@@ -7,7 +7,6 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Persisted app-wide notification defaults shared by Android and iOS. */
 class KmpSettingsDeadlineReminderRepository(
     private val settings: Settings,
 ) : DeadlineReminderPreferencesRepository {

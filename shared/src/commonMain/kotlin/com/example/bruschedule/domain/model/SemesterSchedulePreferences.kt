@@ -1,10 +1,5 @@
 package com.example.bruschedule.domain.model
 
-/**
- * A term-calendar profile. BRU entries preserve the original persisted enum names; BSU entries
- * split the calendar by study mode, course range and term because those dates are not shared
- * across the university.
- */
 enum class AcademicTrack(
     val label: String,
     val hint: String,
@@ -85,17 +80,12 @@ enum class AcademicTrack(
 }
 
 data class SemesterSchedulePreferences(
-    /** Legacy/default BRU track. Kept so existing settings migrate without losing their value. */
+
     val track: AcademicTrack = AcademicTrack.BELARUSIAN,
-    /** Legacy/default BRU last session day, ISO-8601. */
     val sessionEndDateIso: String = DEFAULT_BELARUSIAN_SESSION_END,
-    /** Keeps the personal IFZO date when the user temporarily switches to another BRU track. */
     val ifzoSessionEndDateIso: String = DEFAULT_IFZO_SESSION_END,
-    /** Optional per-schedule last session dates; faculties can end at different times. */
     val profileSessionEndDatesIso: Map<String, String> = emptyMap(),
-    /** The selected study track for each university, keyed by university id. */
     val tracksByUniversityId: Map<String, AcademicTrack> = emptyMap(),
-    /** Manual date overrides keyed by university id and track; profile overrides take precedence. */
     val universitySessionEndDateOverridesIso: Map<String, String> = emptyMap(),
 ) {
     fun trackForUniversity(universityId: String): AcademicTrack =
@@ -122,7 +112,6 @@ data class SemesterSchedulePreferences(
         val tracks = tracksByUniversityId + (universityId to selectedTrack)
         if (universityId != UniversityIds.BRU) return copy(tracksByUniversityId = tracks)
 
-        // Preserve a legacy manually entered BRU date before switching away from its track.
         val oldTrack = track
         val oldLegacyDate = if (oldTrack == AcademicTrack.IFZO) ifzoSessionEndDateIso else sessionEndDateIso
         val oldDefault = if (oldTrack == AcademicTrack.IFZO) DEFAULT_IFZO_SESSION_END else defaultSessionEndDate(oldTrack)

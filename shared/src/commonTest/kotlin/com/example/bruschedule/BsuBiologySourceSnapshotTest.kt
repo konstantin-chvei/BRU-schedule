@@ -105,8 +105,6 @@ class BsuBiologySourceSnapshotTest {
     }
 
     private companion object {
-        // The compact fragment was extracted from the user's live 2026-10-23 page for group 41.
-        // It preserves the site's real legacy markup, including an inline room and building.
         val LEGACY_GROUP_41_HTML = """
             <div class="schedule-heading"><h2>Группа №41 — Экология 6-05-0521-01</h2><div class="week">19–25 октября 2026</div></div>
             <section class="day"><h2 class="day-title">Понедельник</h2>
@@ -153,8 +151,6 @@ class BsuBiologySourceSnapshotTest {
             </section>
         """.trimIndent()
 
-        // Real markup and server IDs from the user-provided 2026-10-19 Biology faculty snapshot.
-        // Unrelated cells are omitted; the group headers, ID order and selected lesson are original.
         val ATTACHED_SOURCE_FRAGMENT = """
         <html><body>
         <div id="week-info" style="color: rgb(16, 185, 129);">19.10.2026 — 25.10.2026</div>
@@ -185,8 +181,6 @@ class BsuBiologySourceSnapshotTest {
                                         <div class="lesson-content">
                                             <div class="lesson-title">Физическая культура (ПЗ)</div>
                                             <div class="lesson-teacher"><a href="https://bio.bsu.by/employees/261/?from=schedule&amp;study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&amp;course=3" class="teacher-link" onclick="event.stopPropagation()">Микитченко Надежда Владимировна</a></div>
-
-
 
                                         </div>
                                     </div>

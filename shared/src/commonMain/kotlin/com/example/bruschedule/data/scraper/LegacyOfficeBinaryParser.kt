@@ -5,7 +5,6 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import no.synth.kmpzip.io.ByteArrayOutputStream
 
-/** Reads the timetable subset of BIFF8 workbooks stored in OLE Compound File containers. */
 internal class LegacyXlsHtmlParser {
     fun toHtml(bytes: ByteArray): String {
         val compound = CompoundBinaryFileReader(bytes)
@@ -56,7 +55,7 @@ internal class LegacyXlsHtmlParser {
         }
         val reader = SstReader(sstRecords)
         if (reader.remainingBytes < 8) return emptyList()
-        reader.readU32() // total references
+        reader.readU32()
         val stringCount = reader.readU32().coerceAtMost(MAX_SHARED_STRINGS.toLong()).toInt()
         return buildList {
             repeat(stringCount) {
@@ -395,7 +394,6 @@ internal class LegacyXlsHtmlParser {
     }
 }
 
-/** Reads a bounded stream from a BIFF OLE container, including MiniFAT-backed streams. */
 private class CompoundBinaryFileReader(private val bytes: ByteArray) {
     private val sectorSize: Int
     private val miniSectorSize: Int
@@ -866,7 +864,6 @@ internal class LegacyDocHtmlParser {
     }
 }
 
-/** Uses PAPX FKP formatting to distinguish the TTP row mark from ordinary cell-end marks. */
 private class WordPapxRowTerminatorLookup(
     private val wordDocument: ByteArray,
     private val tableStream: ByteArray,
@@ -954,7 +951,7 @@ private class WordPapxRowTerminatorLookup(
                     grpprlLength = cb * 2 - 1
                     grpprlOffset = papxOffset + 1
                 }
-                val propertiesStart = grpprlOffset + 2 // skip the two-byte paragraph style index
+                val propertiesStart = grpprlOffset + 2
                 val propertiesEnd = minOf(grpprlOffset + grpprlLength, pageEnd)
                 val isTtp = propertiesStart <= propertiesEnd && hasTtpSprm(propertiesStart, propertiesEnd)
                 add(PapxRun(startFc, endFc, isTtp))

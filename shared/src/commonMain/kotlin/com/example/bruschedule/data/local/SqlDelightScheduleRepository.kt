@@ -8,6 +8,8 @@ import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.DeadlineLinkType
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonNotes
+import com.example.bruschedule.domain.model.LessonStickerCodec
+import com.example.bruschedule.domain.model.LessonStickerPalette
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ProfileSyncState
@@ -23,7 +25,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/** SQLDelight implementation; schedule refresh, snapshots and rollback are atomic transactions. */
 class SqlDelightScheduleRepository(
     private val database: ScheduleDatabase,
 ) : ScheduleRepository, ScheduleSyncRepository, AcademicTaskRepository {
@@ -48,7 +49,7 @@ class SqlDelightScheduleRepository(
             rows.map { row -> lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes, row.rating, row.stickers,
             ) }
         }
 
@@ -57,7 +58,7 @@ class SqlDelightScheduleRepository(
             rows.map { row -> lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes, row.rating, row.stickers,
             ) }
         }
 
@@ -110,7 +111,7 @@ class SqlDelightScheduleRepository(
             lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes, row.rating, row.stickers,
             )
         }
 
@@ -119,7 +120,7 @@ class SqlDelightScheduleRepository(
             lessonFromDb(
                 row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                 row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
+                row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes, row.rating, row.stickers,
             )
         }
 
@@ -170,8 +171,35 @@ class SqlDelightScheduleRepository(
             if (queries.getLesson(lessonId).executeAsOneOrNull() == null) return@transaction
             val safeNotes = notes.take(LessonNotes.MAX_LENGTH)
             queries.updateLessonNotes(safeNotes, lessonId)
-            // Notes belong to the user, not to a schedule version; rollback must preserve them.
+
             queries.updateLessonSnapshotNotes(safeNotes, lessonId)
+            saved = true
+        }
+        return saved
+    }
+
+    override suspend fun saveLessonRating(lessonId: String, rating: Int): Boolean {
+        if (rating !in 1..5) return false
+        var saved = false
+        database.transaction {
+            if (queries.getLesson(lessonId).executeAsOneOrNull() == null) return@transaction
+            queries.updateLessonRating(rating.toLong(), lessonId)
+            queries.updateLessonSnapshotRating(rating.toLong(), lessonId)
+            saved = true
+        }
+        return saved
+    }
+
+    override suspend fun toggleLessonSticker(lessonId: String, sticker: String): Boolean {
+        if (sticker !in LessonStickerPalette.choices) return false
+        var saved = false
+        database.transaction {
+            val current = queries.getLesson(lessonId).executeAsOneOrNull() ?: return@transaction
+            val stickers = LessonStickerCodec.decode(current.stickers).toMutableList()
+            if (sticker in stickers) stickers.remove(sticker) else stickers += sticker
+            val encoded = LessonStickerCodec.encode(stickers)
+            queries.updateLessonStickers(encoded, lessonId)
+            queries.updateLessonSnapshotStickers(encoded, lessonId)
             saved = true
         }
         return saved
@@ -234,7 +262,7 @@ class SqlDelightScheduleRepository(
                 lessonFromDb(
                     row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                     row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
+                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes, row.rating, row.stickers,
                 )
             }
 
@@ -301,14 +329,14 @@ class SqlDelightScheduleRepository(
                 lessonFromDb(
                     row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                     row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
+                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes, row.rating, row.stickers,
                 )
             }
             val current = queries.selectLessonsForProfile(profileId).executeAsList().map { row ->
                 lessonFromDb(
                     row.id, row.profileId, row.lessonDate, row.dayOfWeek, row.slotNumber,
                     row.subjectName, row.teacherName, row.classroom, row.startTime, row.endTime,
-                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes,
+                    row.lessonType, row.colorHex, row.isCustom, row.version, row.sourceKey, row.sourceColorHex, row.notes, row.rating, row.stickers,
                 )
             }
             val restored = ScheduleMergeStrategy.restoreSnapshot(
@@ -316,7 +344,6 @@ class SqlDelightScheduleRepository(
                 current = current,
             )
 
-            // Tasks deliberately have no ON DELETE CASCADE: they survive schedule refresh/rollback.
             queries.deleteLessonsForProfile(profileId)
             restored.forEach(::upsertLesson)
             rolledBack = true
@@ -373,6 +400,8 @@ class SqlDelightScheduleRepository(
             lesson.sourceKey,
             lesson.sourceColorHex,
             lesson.notes.take(LessonNotes.MAX_LENGTH),
+            lesson.rating?.toLong(),
+            LessonStickerCodec.encode(lesson.stickers),
         )
         queries.updateLesson(
             lesson.profileId,
@@ -391,6 +420,8 @@ class SqlDelightScheduleRepository(
             lesson.sourceKey,
             lesson.sourceColorHex,
             lesson.notes.take(LessonNotes.MAX_LENGTH),
+            lesson.rating?.toLong(),
+            LessonStickerCodec.encode(lesson.stickers),
             lesson.id,
         )
     }
@@ -415,6 +446,8 @@ class SqlDelightScheduleRepository(
             lesson.sourceKey,
             lesson.sourceColorHex,
             lesson.notes.take(LessonNotes.MAX_LENGTH),
+            lesson.rating?.toLong(),
+            LessonStickerCodec.encode(lesson.stickers),
         )
     }
 }
@@ -442,6 +475,8 @@ private fun lessonFromDb(
     sourceKey: String,
     sourceColorHex: String?,
     notes: String,
+    rating: Long?,
+    stickers: String,
 ) = Lesson(
     id = id,
     profileId = profileId,
@@ -460,6 +495,8 @@ private fun lessonFromDb(
     sourceKey = sourceKey,
     sourceColorHex = sourceColorHex,
     notes = notes,
+    rating = rating?.takeIf { it in 1L..5L }?.toInt(),
+    stickers = LessonStickerCodec.decode(stickers),
 )
 
 private fun taskFromDb(

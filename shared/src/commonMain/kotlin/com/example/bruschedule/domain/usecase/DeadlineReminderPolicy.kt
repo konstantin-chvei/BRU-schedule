@@ -4,7 +4,6 @@ import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.DeadlineReminderPreferences
 import com.example.bruschedule.domain.model.TaskReminderMode
 
-/** Pure policy shared by persistence/UI tests and both platform schedulers. */
 object DeadlineReminderPolicy {
     fun effectiveOffsets(
         task: AcademicTask,

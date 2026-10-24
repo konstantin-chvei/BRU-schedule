@@ -6,7 +6,6 @@ import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.fleeksoft.ksoup.Ksoup
 import kotlinx.datetime.LocalDate
 
-/** Faculty adapters differ at the source boundary while reusing the common KMP lesson models. */
 internal interface BsuFacultyTeacherScheduleParser {
     fun discoverTeacherNames(
         html: String,
@@ -22,7 +21,6 @@ internal interface BsuFacultyTeacherScheduleParser {
     ): List<Lesson>
 }
 
-/** Adapter for faculty Google Sheets which publish one matrix column per group/subgroup. */
 internal open class BsuGoogleSheetsTeacherScheduleParser : BsuFacultyTeacherScheduleParser {
     override fun parse(
         profile: ScheduleProfile,
@@ -40,16 +38,12 @@ internal open class BsuGoogleSheetsTeacherScheduleParser : BsuFacultyTeacherSche
     )
 }
 
-/** Economy-faculty adapter for odd/even Google Sheets with adjacent subject and room columns. */
 internal class BsuEconomyFacultyTeacherScheduleParser : BsuGoogleSheetsTeacherScheduleParser()
 
-/** FPMI adapter for large Google Sheets whose course groups are split across subgroup columns. */
 internal class BsuFpmiFacultyTeacherScheduleParser : BsuGoogleSheetsTeacherScheduleParser()
 
-/** RCT publishes direct Google Sheets links grouped by course and magistracy semester. */
 internal class BsuRctFacultyTeacherScheduleParser : BsuGoogleSheetsTeacherScheduleParser()
 
-/** MMF publishes a day/time/subject-teacher HTML table on each group's own page. */
 internal class BsuMmfFacultyTeacherScheduleParser : BsuFacultyTeacherScheduleParser {
     override fun parse(
         profile: ScheduleProfile,
@@ -67,7 +61,6 @@ internal class BsuMmfFacultyTeacherScheduleParser : BsuFacultyTeacherSchedulePar
     )
 }
 
-/** Shared KMP document-table strategy used by faculty-specific downloadable schedule adapters. */
 internal open class BsuDocumentFacultyTeacherScheduleParser : BsuFacultyTeacherScheduleParser {
     override fun parse(
         profile: ScheduleProfile,
@@ -85,43 +78,30 @@ internal open class BsuDocumentFacultyTeacherScheduleParser : BsuFacultyTeacherS
     )
 }
 
-/** Geography schedules are linked through the faculty's Dropbox/document directory. */
 internal class BsuGeographyFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** FIR publishes per-specialty timetable PDFs. */
 internal class BsuFirFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** FSC publishes weekly PDF tables with weekday and subgroup columns. */
 internal class BsuFscFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Business Institute schedules are served from its own faculty calendar pages. */
 internal class BsuBusinessInstituteTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** History-faculty course sheets are parsed through the shared document-table strategy. */
 internal class BsuHistoryFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Law-faculty weekly schedules are published as multi-sheet legacy XLS files. */
 internal class BsuLawFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Chemistry-faculty course schedules are linked as downloadable office documents. */
 internal class BsuChemistryFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Physics-faculty schedules link separate files for each course and speciality. */
 internal class BsuPhysicsFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Journalism schedules are published as course/speciality PDF and office files. */
 internal class BsuJournalismFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Philology schedules are published in separate PDF documents by speciality and year. */
 internal class BsuPhilologyFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** FFSN course schedules use the common KMP document reader behind a named faculty adapter. */
 internal class BsuFfsnFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Biology's live route uses BsuBiologyScheduleHtmlParser; this registration is a legacy fallback. */
 internal class BsuBiologyFacultyTeacherScheduleParser : BsuDocumentFacultyTeacherScheduleParser()
 
-/** Safe fallback for saved profiles whose faculty is unknown or no longer publishes a listed source. */
 internal class BsuGenericFacultyTeacherScheduleParser : BsuFacultyTeacherScheduleParser {
     override fun parse(
         profile: ScheduleProfile,

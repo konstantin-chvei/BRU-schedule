@@ -28,6 +28,7 @@
     ],
   };
   const DEFAULT_ACCENTS = { lecture: "#A7B9FF", laboratory: "#FF8998", practice: "#FFC979", unknown: "#A6B0C2" };
+  const LESSON_STICKERS = ["😀", "😎", "🔥", "❤️", "👍", "👎", "😴", "🐵", "💀", "😭", "🤓", "💪", "🎯", "⭐", "❌", "🙂", "😍", "🥰", "😐", "🤗", "😔", "🤔", "😌", "😢", "😮", "😵‍💫", "🤒", "🤫", "😏", "😶"];
   const THEME_OPTIONS = [
     { id: "BLUE", label: "Синяя" },
     { id: "BLACK", label: "Чёрная" },
@@ -86,7 +87,7 @@
     try {
       const legacy = localStorage.getItem("schedule.selected-university");
       if (UNIVERSITY_LIST.some((university) => university.id === legacy)) selectedUniversityId = legacy;
-    } catch { /* private browsing may disable storage */ }
+    } catch {}
     const today = todayISO();
     return {
       selectedUniversityId,
@@ -402,12 +403,15 @@
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const current = lesson.lessonDate === today && currentMinutes >= getTimeMinutes(lesson.startTime) && currentMinutes < getTimeMinutes(lesson.endTime);
     const pending = state.tasks.filter((task) => !task.isCompleted && task.lessonId === lesson.id).length;
-    return `<article class="lesson-card${current ? " is-current" : ""}" style="--lesson-color:${esc(getLessonAccent(lesson))}" data-action="edit-lesson" data-id="${esc(lesson.id)}" tabindex="0" role="button" aria-label="Изменить занятие: ${esc(lesson.subjectName)}">
+    const rating = Number.isInteger(lesson.rating) && lesson.rating >= 1 && lesson.rating <= 5 ? lesson.rating : 0;
+    const stickers = Array.isArray(lesson.stickers) ? lesson.stickers.filter((sticker) => LESSON_STICKERS.includes(sticker)) : [];
+    return `<article class="lesson-card${current ? " is-current" : ""}" style="--lesson-color:${esc(getLessonAccent(lesson))}" data-action="edit-lesson" data-id="${esc(lesson.id)}" tabindex="0" role="group" aria-label="Пара: ${esc(lesson.subjectName)}">
       <div class="lesson-time"><span class="lesson-start">${esc(lesson.startTime)}</span><span class="lesson-end">${esc(lesson.endTime)}</span><span class="lesson-slot">${lesson.slotNumber || "—"} ПАРА</span></div>
       <div class="lesson-main"><div class="lesson-topline"><div class="lesson-badges"><span class="lesson-type">${esc(typeLabel.toUpperCase())}</span>${current ? '<span class="lesson-current">СЕЙЧАС</span>' : ""}${lesson.isCustom ? '<span class="lesson-custom">МОЁ</span>' : ""}</div>${pending ? `<span class="lesson-task-count">${pending}</span>` : ""}</div>
         <h3 class="lesson-name">${esc(lesson.subjectName)}</h3>
         <div class="lesson-meta">${lesson.teacherName ? `<span class="lesson-meta-row">${esc(lesson.teacherName)}</span>` : ""}${lesson.classroom ? `<span class="lesson-meta-row">Ауд. ${esc(lesson.classroom)}</span>` : ""}${lesson.groupName ? `<span class="lesson-meta-row">${esc(lesson.groupName)}</span>` : ""}</div>
         ${lesson.notes ? `<div class="lesson-notes">Заметка · ${esc(lesson.notes)}</div>` : ""}
+        <div class="lesson-feedback"><div class="lesson-stickers"><button class="lesson-sticker-add" type="button" data-action="open-sticker-picker" data-id="${esc(lesson.id)}" aria-label="Добавить стикер">+</button>${stickers.map((sticker) => `<button class="lesson-sticker" type="button" data-action="toggle-lesson-sticker" data-id="${esc(lesson.id)}" data-sticker="${esc(sticker)}" aria-label="Убрать стикер ${esc(sticker)}">${esc(sticker)}</button>`).join("")}</div><div class="lesson-rating" role="group" aria-label="Оценка пары: ${rating} из 5">${[1, 2, 3, 4, 5].map((value) => `<button class="lesson-star${value <= rating ? " is-selected" : ""}" type="button" data-action="rate-lesson" data-id="${esc(lesson.id)}" data-rating="${value}" aria-label="${value} из 5">${value <= rating ? "★" : "☆"}</button>`).join("")}</div></div>
       </div>
     </article>`;
   }
@@ -772,8 +776,16 @@
     }
     return modalShell("ПОДТВЕРЖДЕНИЕ", title, `<p class="settings-copy">${esc(message)}</p>`, `<button class="secondary-button" type="button" data-action="close-modal">Отмена</button><button class="danger-button" type="button" data-action="confirm-delete-entity">Удалить</button>`, true);
   }
+  function renderStickerPicker() {
+    const lesson = lessonById(ui.modal?.lessonId);
+    if (!lesson) return modalShell("СТИКЕР", "Пара не найдена", "<p class=\"settings-copy\">Обновите расписание и попробуйте снова.</p>");
+    const selected = new Set(Array.isArray(lesson.stickers) ? lesson.stickers : []);
+    const choices = LESSON_STICKERS.map((sticker) => `<button class="sticker-picker-item${selected.has(sticker) ? " is-selected" : ""}" type="button" data-action="select-lesson-sticker" data-id="${esc(lesson.id)}" data-sticker="${esc(sticker)}" aria-label="Стикер ${esc(sticker)}">${esc(sticker)}</button>`).join("");
+    return modalShell(lesson.subjectName, "Выберите стикер", `<div class="sticker-picker-grid">${choices}</div>`, `<button class="secondary-button" type="button" data-action="close-modal">Закрыть</button>`);
+  }
   function renderModal() {
     if (!ui.modal) return "";
+    if (ui.modal.kind === "sticker-picker") return renderStickerPicker();
     if (ui.modal.kind === "add-profile") return renderAddProfileModal();
     if (ui.modal.kind === "university-picker") return renderUniversityModal();
     if (ui.modal.kind === "lesson-editor") return renderLessonModal();
@@ -942,7 +954,20 @@
   function mergeRemoteAndCustom(remoteLessons, existingLessons) {
     const custom = existingLessons.filter((lesson) => lesson.isCustom);
     const customById = new Map(custom.map((lesson) => [lesson.id, lesson]));
-    const remote = remoteLessons.map((lesson) => customById.get(lesson.id) ? { ...lesson, ...customById.get(lesson.id), isCustom: true } : lesson);
+    const customBySourceKey = new Map(custom.filter((lesson) => lesson.sourceKey).map((lesson) => [lesson.sourceKey, lesson]));
+    const previousById = new Map(existingLessons.filter((lesson) => !lesson.isCustom).map((lesson) => [lesson.id, lesson]));
+    const previousBySourceKey = new Map(existingLessons.filter((lesson) => !lesson.isCustom && lesson.sourceKey).map((lesson) => [lesson.sourceKey, lesson]));
+    const remote = remoteLessons.map((lesson) => {
+      const override = customById.get(lesson.id) || (lesson.sourceKey && customBySourceKey.get(lesson.sourceKey));
+      if (override) return { ...lesson, ...override, isCustom: true };
+      const previous = previousById.get(lesson.id) || (lesson.sourceKey && previousBySourceKey.get(lesson.sourceKey));
+      return {
+        ...lesson,
+        notes: previous ? previous.notes || "" : lesson.notes || "",
+        rating: previous ? previous.rating ?? null : null,
+        stickers: previous && Array.isArray(previous.stickers) ? [...previous.stickers] : [],
+      };
+    });
     const newIds = new Set(remote.map((lesson) => lesson.id));
     return [...remote, ...custom.filter((lesson) => !newIds.has(lesson.id))]
       .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate) || a.startTime.localeCompare(b.startTime) || Number(a.slotNumber) - Number(b.slotNumber));
@@ -984,7 +1009,6 @@
       const content = await fetchCatalogText(path);
       const parsed = Engine.parseSchedule(content, profile, coverageEndDate(profile.universityId, profile.id), todayISO());
       if (!parsed.length) throw new Error("В расписании нет пар в текущем учебном периоде.");
-      // Read the latest local state after the request so edits made during sync are preserved.
       const current = scheduleFor(profile.id);
       const previousLessons = current.lessons.filter((lesson) => !lesson.isCustom);
       const merged = mergeRemoteAndCustom(parsed, current.lessons);
@@ -1019,13 +1043,49 @@
     }
     const currentRemote = record.lessons.filter((lesson) => !lesson.isCustom);
     const custom = record.lessons.filter((lesson) => lesson.isCustom);
-    record.lessons = [...record.previousLessons, ...custom].sort((a, b) => a.lessonDate.localeCompare(b.lessonDate) || a.startTime.localeCompare(b.startTime));
+    const currentById = new Map(currentRemote.map((lesson) => [lesson.id, lesson]));
+    const currentBySourceKey = new Map(currentRemote.filter((lesson) => lesson.sourceKey).map((lesson) => [lesson.sourceKey, lesson]));
+    const restored = record.previousLessons.map((snapshotLesson) => {
+      const latest = currentById.get(snapshotLesson.id) || (snapshotLesson.sourceKey && currentBySourceKey.get(snapshotLesson.sourceKey));
+      return latest ? {
+        ...snapshotLesson,
+        notes: latest.notes || "",
+        rating: latest.rating ?? null,
+        stickers: Array.isArray(latest.stickers) ? [...latest.stickers] : [],
+      } : snapshotLesson;
+    });
+    record.lessons = [...restored, ...custom].sort((a, b) => a.lessonDate.localeCompare(b.lessonDate) || a.startTime.localeCompare(b.startTime));
     record.previousLessons = currentRemote;
     record.previousSnapshotAt = Date.now();
     record.lastError = "";
     state.schedules[profileId] = record;
     saveState(); render();
     showToast("Предыдущая версия расписания восстановлена.");
+  }
+  function updateLessonFeedback(lessonId, update) {
+    const lesson = lessonById(lessonId);
+    if (!lesson) return false;
+    const record = scheduleFor(lesson.profileId);
+    const matches = (item) => item.id === lesson.id || (item.profileId === lesson.profileId && item.lessonDate === lesson.lessonDate && Number(item.slotNumber) === Number(lesson.slotNumber) && (item.subjectName === lesson.subjectName || Boolean(lesson.sourceKey && item.sourceKey === lesson.sourceKey)));
+    const apply = (items) => items.map((item) => matches(item) ? { ...item, ...update } : item);
+    record.lessons = apply(record.lessons);
+    record.previousLessons = apply(record.previousLessons);
+    state.schedules[lesson.profileId] = record;
+    saveState();
+    render();
+    return true;
+  }
+  function saveLessonRating(lessonId, rating) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return;
+    updateLessonFeedback(lessonId, { rating });
+  }
+  function toggleLessonSticker(lessonId, sticker) {
+    if (!LESSON_STICKERS.includes(sticker)) return;
+    const lesson = lessonById(lessonId);
+    if (!lesson) return;
+    const current = Array.isArray(lesson.stickers) ? lesson.stickers.filter((item) => LESSON_STICKERS.includes(item)) : [];
+    const stickers = current.includes(sticker) ? current.filter((item) => item !== sticker) : [...current, sticker];
+    updateLessonFeedback(lessonId, { stickers });
   }
   async function refreshDailyMessages() {
     ui.loadingDailyMessage = true;
@@ -1083,6 +1143,8 @@
       lessonDate: date, dayOfWeek: Engine.dayNumber(date),
       slotNumber: Number(fields.slotNumber || 0) || 0,
       sourceKey, notes: String(fields.notes || "").trim().slice(0, 500),
+      rating: existing?.rating ?? null,
+      stickers: Array.isArray(existing?.stickers) ? [...existing.stickers] : [],
       groupName: existing?.groupName || "", seriesId: existing?.seriesId || seriesId || null,
     };
   }
@@ -1113,7 +1175,6 @@
 
     const dates = existing ? [date] : recurrenceDates(date, fields.recurrence || "NONE", maximumDate);
     const proposed = dates.map((lessonDate) => lessonFromFields(profile, fields, existing, lessonDate, existing ? null : uuid("series")));
-    // All occurrences of one repeated entry share a stable series identity.
     if (!existing && dates.length > 1) {
       const seriesId = uuid("series");
       proposed.forEach((lesson, index) => {
@@ -1467,6 +1528,15 @@
       openLessonEditor();
     } else if (action === "edit-lesson") {
       openLessonEditor(id);
+    } else if (action === "open-sticker-picker") {
+      if (lessonById(id)) { ui.modal = { kind: "sticker-picker", lessonId: id }; render(); }
+    } else if (action === "select-lesson-sticker") {
+      ui.modal = null;
+      toggleLessonSticker(id, button.dataset.sticker);
+    } else if (action === "toggle-lesson-sticker") {
+      toggleLessonSticker(id, button.dataset.sticker);
+    } else if (action === "rate-lesson") {
+      saveLessonRating(id, Number(button.dataset.rating));
     } else if (action === "add-deadline-from-lesson") {
       openDeadlineEditor(null, lessonById(id));
     } else if (action === "delete-lesson") {
@@ -1561,7 +1631,7 @@
   appRoot.addEventListener("click", (event) => { onClick(event).catch((error) => issue("Не удалось выполнить действие.", "APP001", error)); });
   appRoot.addEventListener("keydown", (event) => {
     const lessonCard = event.target.closest?.(".lesson-card[data-action='edit-lesson']");
-    if (lessonCard && (event.key === "Enter" || event.key === " ")) {
+    if (lessonCard && event.target === lessonCard && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault(); lessonCard.click();
     }
   });

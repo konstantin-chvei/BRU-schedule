@@ -6,7 +6,6 @@ import com.example.bruschedule.domain.model.ScheduleWindow
 import com.example.bruschedule.domain.repository.ScheduleRemoteDataSource
 import kotlinx.coroutines.CancellationException
 
-/** Loads the selected snapshot from GitHub only; university websites are never contacted by the app. */
 class GitHubScheduleRemoteDataSource(
     private val transport: HtmlTransport,
     private val documentAdapter: ScheduleDocumentHtmlAdapter = ScheduleDocumentHtmlAdapter(),

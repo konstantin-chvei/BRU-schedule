@@ -31,7 +31,9 @@ CREATE TABLE lesson (
     version INTEGER NOT NULL,
     source_key TEXT NOT NULL,
     source_color_hex TEXT,
-    notes TEXT NOT NULL DEFAULT ''
+    notes TEXT NOT NULL DEFAULT '',
+    rating INTEGER,
+    stickers TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX lesson_profile_date_time_idx ON lesson(profile_id, lesson_date, start_time);
@@ -79,6 +81,8 @@ CREATE TABLE lesson_snapshot (
     source_key TEXT NOT NULL,
     source_color_hex TEXT,
     notes TEXT NOT NULL DEFAULT '',
+    rating INTEGER,
+    stickers TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (snapshot_id, id)
 );
 
@@ -188,7 +192,9 @@ SELECT
     version AS version,
     source_key AS sourceKey,
     source_color_hex AS sourceColorHex,
-    notes AS notes
+    notes AS notes,
+    rating AS rating,
+    stickers AS stickers
 FROM lesson
 ORDER BY lesson_date, start_time, slot_number;
 
@@ -210,7 +216,9 @@ SELECT
     version AS version,
     source_key AS sourceKey,
     source_color_hex AS sourceColorHex,
-    notes AS notes
+    notes AS notes,
+    rating AS rating,
+    stickers AS stickers
 FROM lesson
 WHERE profile_id = ?
 ORDER BY lesson_date, start_time, slot_number;
@@ -233,7 +241,9 @@ SELECT
     version AS version,
     source_key AS sourceKey,
     source_color_hex AS sourceColorHex,
-    notes AS notes
+    notes AS notes,
+    rating AS rating,
+    stickers AS stickers
 FROM lesson
 WHERE id = ?;
 
@@ -241,15 +251,16 @@ insertLesson:
 INSERT OR IGNORE INTO lesson(
     id, profile_id, lesson_date, day_of_week, slot_number, subject_name, teacher_name,
     classroom, start_time, end_time, lesson_type, color_hex, is_custom, version, source_key,
-    source_color_hex, notes
+    source_color_hex, notes, rating, stickers
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateLesson:
 UPDATE lesson SET
     profile_id = ?, lesson_date = ?, day_of_week = ?, slot_number = ?, subject_name = ?,
     teacher_name = ?, classroom = ?, start_time = ?, end_time = ?, lesson_type = ?,
-    color_hex = ?, is_custom = ?, version = ?, source_key = ?, source_color_hex = ?, notes = ?
+    color_hex = ?, is_custom = ?, version = ?, source_key = ?, source_color_hex = ?, notes = ?,
+    rating = ?, stickers = ?
 WHERE id = ?;
 
 updateLessonNotes:
@@ -257,6 +268,18 @@ UPDATE lesson SET notes = ? WHERE id = ?;
 
 updateLessonSnapshotNotes:
 UPDATE lesson_snapshot SET notes = ? WHERE id = ?;
+
+updateLessonRating:
+UPDATE lesson SET rating = ? WHERE id = ?;
+
+updateLessonSnapshotRating:
+UPDATE lesson_snapshot SET rating = ? WHERE id = ?;
+
+updateLessonStickers:
+UPDATE lesson SET stickers = ? WHERE id = ?;
+
+updateLessonSnapshotStickers:
+UPDATE lesson_snapshot SET stickers = ? WHERE id = ?;
 
 deleteLesson:
 DELETE FROM lesson WHERE id = ?;
@@ -345,7 +368,9 @@ SELECT
     version AS version,
     source_key AS sourceKey,
     source_color_hex AS sourceColorHex,
-    notes AS notes
+    notes AS notes,
+    rating AS rating,
+    stickers AS stickers
 FROM lesson_snapshot
 WHERE snapshot_id = ?
 ORDER BY lesson_date, start_time, slot_number;
@@ -353,9 +378,9 @@ ORDER BY lesson_date, start_time, slot_number;
 insertSnapshotLesson:
 INSERT INTO lesson_snapshot(
     snapshot_id, id, profile_id, lesson_date, day_of_week, slot_number, subject_name, teacher_name,
-    classroom, start_time, end_time, lesson_type, color_hex, is_custom, version, source_key, source_color_hex, notes
+    classroom, start_time, end_time, lesson_type, color_hex, is_custom, version, source_key, source_color_hex, notes, rating, stickers
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 getSyncState:
 SELECT

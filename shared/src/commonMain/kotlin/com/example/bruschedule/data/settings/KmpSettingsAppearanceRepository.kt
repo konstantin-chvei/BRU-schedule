@@ -9,7 +9,6 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Appearance metadata lives in KMP Settings and is emitted immediately to Compose. */
 class KmpSettingsAppearanceRepository(
     private val settings: Settings,
 ) : AppearancePreferencesRepository {

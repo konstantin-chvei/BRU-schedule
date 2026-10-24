@@ -1,21 +1,14 @@
 package com.example.bruschedule.domain.model
 
-/** Identifies how a university's timetable is obtained and interpreted. */
 enum class UniversitySourceType {
-    /** The built-in directory and timetable adapter for rasp.bru.by. */
     BRU_CATALOG,
-
-    /** HTML timetable tables and public Google Sheets used by the first BSU adapters. */
     BSU_HTML_AND_SHEETS,
-
-    /** A user-supplied HTTPS timetable page parsed as a regular HTML table. */
     DIRECT_HTML,
 }
 
 data class University(
     val id: String,
     val name: String,
-    /** University website or schedule host entered when the institution is added. */
     val websiteUrl: String,
     val sourceType: UniversitySourceType,
     val isBuiltIn: Boolean = false,

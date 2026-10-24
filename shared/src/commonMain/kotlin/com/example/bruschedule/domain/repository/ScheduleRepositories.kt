@@ -14,7 +14,6 @@ import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import kotlinx.coroutines.flow.Flow
 
-/** Local, observable source of truth. Screens read this repository before attempting the network. */
 interface ScheduleRepository {
     fun observeProfiles(): Flow<List<ScheduleProfile>>
     fun observeAllLessons(): Flow<List<Lesson>>
@@ -26,17 +25,16 @@ interface ScheduleRepository {
     suspend fun saveProfile(profile: ScheduleProfile)
     suspend fun deleteProfile(profileId: String)
 
-    /** All user-authored edits, including a newly-added pair, are persisted as custom overrides. */
     suspend fun saveCustomLesson(lesson: Lesson)
     suspend fun saveCustomLessons(lessons: List<Lesson>)
-    /** Updates a lesson note without turning a website lesson into a custom schedule override. */
-    suspend fun saveLessonNotes(lessonId: String, notes: String): Boolean
 
-    /** Deletes a custom lesson atomically, detaching but preserving its linked deadlines. */
+    suspend fun saveLessonNotes(lessonId: String, notes: String): Boolean
+    suspend fun saveLessonRating(lessonId: String, rating: Int): Boolean
+    suspend fun toggleLessonSticker(lessonId: String, sticker: String): Boolean
+
     suspend fun deleteCustomLessonAndPreserveTasks(lessonId: String): Boolean
 }
 
-/** Transactional website refresh, V-1 snapshots, error journal, and rollback. */
 interface ScheduleSyncRepository {
     fun observeSyncState(profileId: String): Flow<ProfileSyncState?>
     suspend fun applyWebsiteSchedule(
@@ -52,21 +50,18 @@ interface AcademicTaskRepository {
     fun observeTasks(): Flow<List<AcademicTask>>
     fun observeTasksForLesson(lessonId: String): Flow<List<AcademicTask>>
     suspend fun saveTask(task: AcademicTask)
-    /** Applies a related set of deadline changes atomically. */
+
     suspend fun saveTasks(tasks: List<AcademicTask>)
     suspend fun setTaskCompleted(taskId: String, completed: Boolean)
     suspend fun deleteTask(taskId: String)
 }
 
-/** University-specific searchable catalogue of group and, where available, teacher profiles. */
 interface ScheduleProfileCatalogRepository {
     suspend fun search(type: ScheduleProfileType, query: String): List<ProfileCandidate>
 
-    /** University-aware extension keeps the original BRU call source-compatible. */
     suspend fun search(universityId: String, type: ScheduleProfileType, query: String): List<ProfileCandidate> =
         search(type, query)
 
-    /** Catalogs may publish results as sources finish, while still returning the complete final list. */
     suspend fun search(
         universityId: String,
         type: ScheduleProfileType,
@@ -75,7 +70,6 @@ interface ScheduleProfileCatalogRepository {
     ): List<ProfileCandidate> = search(universityId, type, query).also(onPartialResults)
 }
 
-/** Persisted appearance settings for the Compose shell and lesson-type accents. */
 interface AppearancePreferencesRepository {
     fun observe(): Flow<AppearancePreferences>
     suspend fun setTheme(theme: ScheduleAppTheme)
@@ -83,13 +77,11 @@ interface AppearancePreferencesRepository {
     suspend fun resetLessonColors()
 }
 
-/** Persisted session track and global/per-profile final dates used by the semester calendar. */
 interface SemesterSchedulePreferencesRepository {
     fun observe(): Flow<SemesterSchedulePreferences>
     suspend fun update(preferences: SemesterSchedulePreferences)
 }
 
-/** Persisted per-role font-size multipliers used by Compose text. */
 interface TypographyPreferencesRepository {
     fun observe(): Flow<TypographyPreferences>
     suspend fun update(preferences: TypographyPreferences)

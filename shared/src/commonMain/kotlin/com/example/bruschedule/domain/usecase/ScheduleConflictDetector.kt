@@ -4,14 +4,12 @@ import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.domain.model.Lesson
 import kotlinx.datetime.LocalTime
 
-/** A user-created lesson and one or more website lessons that compete for the same time. */
 data class ScheduleLessonConflict(
     val personalLesson: Lesson,
     val websiteLessons: List<Lesson>,
     val linkedDeadlines: List<AcademicTask>,
 )
 
-/** Finds persistent schedule overlaps; resolving them changes the underlying lessons, not a banner. */
 object ScheduleConflictDetector {
     fun find(lessons: List<Lesson>, tasks: List<AcademicTask>): List<ScheduleLessonConflict> {
         val websiteLessons = lessons.filterNot(Lesson::isCustom)

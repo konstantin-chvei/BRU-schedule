@@ -2,11 +2,6 @@ package com.example.bruschedule.domain.usecase
 
 import com.example.bruschedule.domain.model.Lesson
 
-/**
- * User-authored lessons win over the server version by stable lesson id first, then sourceKey.
- * The sourceKey is based on profile + date + pair/time + parallel-card index, never on editable
- * text. Non-custom website rows get a monotonically increasing per-row version.
- */
 object ScheduleMergeStrategy {
     fun merge(existing: List<Lesson>, incoming: List<Lesson>): List<Lesson> {
         val customById = existing.asSequence()
@@ -18,6 +13,9 @@ object ScheduleMergeStrategy {
             .associateBy(Lesson::sourceKey)
         val existingWebsiteLessons = existing.filterNot(Lesson::isCustom)
         val previousWebById = existingWebsiteLessons.associateBy(Lesson::id)
+        val previousWebBySourceKey = existingWebsiteLessons
+            .filter { it.sourceKey.isNotBlank() }
+            .associateBy(Lesson::sourceKey)
         val previousWebByLessonIdentity = existingWebsiteLessons.groupBy(Lesson::noteIdentity)
 
         val distinctIncoming = incoming.distinctBy { lesson ->
@@ -30,16 +28,18 @@ object ScheduleMergeStrategy {
                 customOverride
             } else {
                 val previousWebsiteLesson = previousWebById[webLesson.id]
+                    ?: webLesson.sourceKey.takeIf(String::isNotBlank)?.let(previousWebBySourceKey::get)
                     ?: previousWebByLessonIdentity[webLesson.noteIdentity()]?.singleOrNull()
                 webLesson.copy(
                     isCustom = false,
                     version = (previousWebById[webLesson.id]?.version ?: 0) + 1,
                     notes = previousWebsiteLesson?.notes.orEmpty(),
+                    rating = previousWebsiteLesson?.rating,
+                    stickers = previousWebsiteLesson?.stickers.orEmpty(),
                 )
             }
         }
 
-        // Custom-only lessons (manual additions in otherwise empty slots) must not disappear.
         val representedCustomIds = mergedWebsiteRows.asSequence()
             .filter(Lesson::isCustom)
             .map(Lesson::id)
@@ -50,17 +50,35 @@ object ScheduleMergeStrategy {
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
     }
 
-    /** Restore an exact snapshot without incrementing website versions; current manual edits win. */
     fun restoreSnapshot(snapshot: List<Lesson>, current: List<Lesson>): List<Lesson> {
         val currentCustom = current.filter(Lesson::isCustom)
         val customById = currentCustom.associateBy(Lesson::id)
         val customBySourceKey = currentCustom
             .filter { it.sourceKey.isNotBlank() }
             .associateBy(Lesson::sourceKey)
+        val currentWebsite = current.filterNot(Lesson::isCustom)
+        val currentWebsiteById = currentWebsite.associateBy(Lesson::id)
+        val currentWebsiteBySourceKey = currentWebsite
+            .filter { it.sourceKey.isNotBlank() }
+            .associateBy(Lesson::sourceKey)
+        val currentWebsiteByIdentity = currentWebsite.groupBy(Lesson::noteIdentity)
         val restoredSnapshotRows = snapshot.map { snapshotLesson ->
-            customById[snapshotLesson.id]
+            val customOverride = customById[snapshotLesson.id]
                 ?: snapshotLesson.sourceKey.takeIf(String::isNotBlank)?.let(customBySourceKey::get)
-                ?: snapshotLesson
+            if (customOverride != null) {
+                customOverride
+            } else {
+                val latest = currentWebsiteById[snapshotLesson.id]
+                    ?: snapshotLesson.sourceKey.takeIf(String::isNotBlank)?.let(currentWebsiteBySourceKey::get)
+                    ?: currentWebsiteByIdentity[snapshotLesson.noteIdentity()]?.singleOrNull()
+                latest?.let {
+                    snapshotLesson.copy(
+                        notes = it.notes,
+                        rating = it.rating,
+                        stickers = it.stickers,
+                    )
+                } ?: snapshotLesson
+            }
         }
         val representedCustomIds = restoredSnapshotRows.asSequence()
             .filter(Lesson::isCustom)

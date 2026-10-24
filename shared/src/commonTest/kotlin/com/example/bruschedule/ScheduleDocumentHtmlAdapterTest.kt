@@ -462,14 +462,14 @@ class ScheduleDocumentHtmlAdapterTest {
         val pieceTable = ByteArrayOutputStream().apply {
             writeU32(this, 0)
             writeU32(this, text.length.toLong())
-            writeU16(this, 0) // PCD flags
+            writeU16(this, 0)
             val storedTextOffset = if (compressed) {
                 0x40000000L or (textOffset.toLong() * 2)
             } else {
                 textOffset.toLong()
             }
             writeU32(this, storedTextOffset)
-            writeU16(this, 0) // PCD property modifier
+            writeU16(this, 0)
         }.toByteArray()
         val clx = byteArrayOf(0x02) + pieceTable
         clx.copyInto(tableStream, 0x200)
@@ -483,7 +483,7 @@ class ScheduleDocumentHtmlAdapterTest {
         val papxRunCount = fcBoundaries.size - 1
         putU32(tableStream, 0x300, textOffset.toLong())
         putU32(tableStream, 0x304, textFcEnd)
-        putU32(tableStream, 0x308, 4) // PapxFkp page number
+        putU32(tableStream, 0x308, 4)
 
         val pageOffset = 4 * 512
         fcBoundaries.forEachIndexed { index, fc -> putU32(wordDocument, pageOffset + index * 4, fc) }
@@ -493,14 +493,14 @@ class ScheduleDocumentHtmlAdapterTest {
         }
         wordDocument[pageOffset + 511] = papxRunCount.toByte()
         val normalPapxOffset = pageOffset + 490
-        wordDocument[normalPapxOffset] = 0 // cb == 0: use cb'
-        wordDocument[normalPapxOffset + 1] = 1 // two-byte style index and no sprms
+        wordDocument[normalPapxOffset] = 0
+        wordDocument[normalPapxOffset + 1] = 1
         putU16(wordDocument, normalPapxOffset + 2, 0)
         val rowEndPapxOffset = pageOffset + 496
-        wordDocument[rowEndPapxOffset] = 0 // cb == 0: use cb'
-        wordDocument[rowEndPapxOffset + 1] = 3 // 2 * cb' bytes of GrpPrlAndIstd
-        putU16(wordDocument, rowEndPapxOffset + 2, 0) // style index
-        putU16(wordDocument, rowEndPapxOffset + 4, 0x2417) // sprmPFTtp
+        wordDocument[rowEndPapxOffset] = 0
+        wordDocument[rowEndPapxOffset + 1] = 3
+        putU16(wordDocument, rowEndPapxOffset + 2, 0)
+        putU16(wordDocument, rowEndPapxOffset + 4, 0x2417)
         wordDocument[rowEndPapxOffset + 6] = 1
         return wordDocument to tableStream
     }
@@ -517,7 +517,7 @@ class ScheduleDocumentHtmlAdapterTest {
             writeU32(this, strings.size.toLong())
             strings.forEach { value ->
                 writeU16(this, value.length)
-                writeU8(this, 0x01) // UTF-16LE characters
+                writeU8(this, 0x01)
                 value.forEach { character -> writeU16(this, character.code) }
             }
         }.toByteArray()
@@ -534,7 +534,7 @@ class ScheduleDocumentHtmlAdapterTest {
                         val cell = ByteArrayOutputStream().apply {
                             writeU16(this, rowIndex)
                             writeU16(this, columnIndex)
-                            writeU16(this, 0) // XF index
+                            writeU16(this, 0)
                             writeU32(this, strings.indexOf(value).toLong())
                         }.toByteArray()
                         writeBytes(this, biffRecord(0x00fd, cell))
@@ -545,7 +545,7 @@ class ScheduleDocumentHtmlAdapterTest {
                 val cell = ByteArrayOutputStream().apply {
                     writeU16(this, coordinate.first)
                     writeU16(this, coordinate.second)
-                    writeU16(this, 0) // date XF index
+                    writeU16(this, 0)
                     writeU64(this, value.toBits())
                 }.toByteArray()
                 writeBytes(this, biffRecord(0x0203, cell))
@@ -565,10 +565,10 @@ class ScheduleDocumentHtmlAdapterTest {
     private fun boundSheetData(sheetOffset: Int, sheetName: String): ByteArray =
         ByteArrayOutputStream().apply {
             writeU32(this, sheetOffset.toLong())
-            writeU8(this, 0) // visible
-            writeU8(this, 0) // worksheet
+            writeU8(this, 0)
+            writeU8(this, 0)
             writeU8(this, sheetName.length)
-            writeU8(this, 0x01) // UTF-16LE characters
+            writeU8(this, 0x01)
             sheetName.forEach { character -> writeU16(this, character.code) }
         }.toByteArray()
 

@@ -14,7 +14,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
-/** Adapter for the Biology faculty's public group pages at bsu.bio/schedule.php, with legacy-grid support. */
 class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
     override val formatVersion: Int = 5
 
@@ -52,13 +51,11 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
 
     override fun hasAlternatingTwoWeekCycle(profile: ScheduleProfile, html: String): Boolean = false
 
-    /** A single saved week is a repeatable template; a fetched week envelope already has exact dates. */
     override fun hasWeeklyScheduleTemplate(profile: ScheduleProfile, html: String): Boolean =
         isBiologyProfile(profile) &&
             !(profile.type == ScheduleProfileType.TEACHER && BsuTeacherProfileSourceKey.decode(profile.sourceKey) != null) &&
             !hasWeeklyEnvelope(html)
 
-    /** True only for an actual group timetable, not a filter page or the site's error shell. */
     fun hasScheduleGrid(html: String): Boolean {
         val document = Ksoup.parse(html)
         val hasLegacyGrid = document.selectFirst("table.grid-table") != null &&
@@ -111,10 +108,6 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         }.distinctBy(BsuBiologyGroup::id)
     }
 
-    /**
-     * Extracts teacher names from one faculty-specific Biology group timetable. This deliberately
-     * uses the Biology page's teacher links/labels instead of assuming the generic faculty table.
-     */
     fun discoverTeacherNames(html: String): List<String> {
         val document = Ksoup.parse(html)
         val names = linkedSetOf<String>()
@@ -133,7 +126,6 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         return names.toList()
     }
 
-    /** Wraps week pages with group identity so teacher parsing can safely merge several groups. */
     fun combineTeacherPages(pages: List<BsuBiologyTeacherPage>): String = pages.joinToString("\n") { page ->
         "$TEACHER_PAGE_MARKER_PREFIX${page.groupId}:${page.weekDate}-->\n${page.html}"
     }
@@ -224,8 +216,7 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         val lines = htmlLines(html)
         val weekStart = weekStartFromLines(lines)
             ?: requestedWeek.minus(DatePeriod(days = requestedWeek.dayOfWeek.isoDayNumber - 1))
-        // The public bsu.bio page keeps subject and type in one inline .discipline-line;
-        // splitting that page into text lines loses the separator used by the legacy fallback below.
+
         if (document.selectFirst("section.day .lesson-entry .discipline") != null) {
             return parseStructuredGroupPage(profile, groupId, document, weekStart)
         }

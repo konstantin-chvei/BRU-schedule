@@ -1,6 +1,3 @@
--- Version 1 stored every deadline against a mandatory lesson_id. Version 2 permits a deadline to
--- be linked only to a subject, to a user-authored pair, or to nothing at all, and persists reminder
--- preferences per task. Keep existing task links as subject links so no data is discarded.
 DROP INDEX academic_task_due_date_idx;
 DROP INDEX academic_task_lesson_idx;
 

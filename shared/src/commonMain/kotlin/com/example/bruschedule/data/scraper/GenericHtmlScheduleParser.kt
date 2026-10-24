@@ -14,10 +14,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
-/**
- * Best-effort parser for static HTML timetable files published in the GitHub schedule tree.
- * This intentionally does not claim to support every site-specific layout; those require a dedicated adapter.
- */
 class GenericHtmlScheduleParser : ScheduleHtmlParser {
     override val formatVersion: Int = 2
 
@@ -76,10 +72,6 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         return parsed
     }
 
-    /**
-     * Extracts teacher labels from timetable tables and explicit teacher links/classes.
-     * This is discovery only; each faculty adapter still decides which timetable pages to inspect.
-     */
     fun discoverTeacherNames(html: String): List<String> {
         if (html.isBlank()) return emptyList()
         val document = Ksoup.parse(html)
@@ -192,7 +184,6 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         }
     }
 
-    /** Supports vertical tables with merged day/date cells and separate subject metadata columns. */
     private fun parseDayRows(
         profile: ScheduleProfile,
         rows: List<Element>,

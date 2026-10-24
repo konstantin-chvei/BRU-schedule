@@ -5,7 +5,6 @@ import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 
-/** Routes group search to the live catalogue for the selected university. */
 class UniversityScheduleProfileCatalogRepository(
     private val catalogues: Map<String, ScheduleProfileCatalogRepository>,
 ) : ScheduleProfileCatalogRepository {

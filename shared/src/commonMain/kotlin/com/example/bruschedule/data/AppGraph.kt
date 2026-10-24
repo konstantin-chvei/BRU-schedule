@@ -32,7 +32,6 @@ import com.example.bruschedule.domain.repository.ScheduleSyncRepository
 import com.example.bruschedule.domain.usecase.RefreshScheduleUseCase
 import com.russhwolf.settings.Settings
 
-/** Dependency boundary for Compose. Platform entry points provide a persistent SQLite driver. */
 data class AppGraph(
     val scheduleRepository: ScheduleRepository,
     val syncRepository: ScheduleSyncRepository,
@@ -68,8 +67,6 @@ fun createAppGraph(
     )
     val typographyPreferences = KmpSettingsTypographyPreferencesRepository(settings)
 
-    // SQLDelight owns real migrations. This KMP Settings marker is useful for diagnostics/upgrade
-    // gates and is intentionally not used as a replacement for database schema migrations.
     if (versionFlags.databaseMarker() < CURRENT_DATABASE_MARKER) {
         versionFlags.setDatabaseMarker(CURRENT_DATABASE_MARKER)
     }

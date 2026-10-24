@@ -1,6 +1,5 @@
 package com.example.bruschedule.data.remote
 
-/** Small RFC 4180 reader kept in commonMain so Android, iOS, and tests use identical CSV rules. */
 internal object ScheduleCsvTable {
     fun parse(content: String): List<List<String>> {
         if (content.isBlank()) return emptyList()

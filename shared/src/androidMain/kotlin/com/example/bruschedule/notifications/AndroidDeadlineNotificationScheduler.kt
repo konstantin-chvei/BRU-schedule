@@ -22,7 +22,6 @@ import java.util.Date
 import java.util.Locale
 import kotlin.coroutines.resume
 
-/** Uses inexact, idle-compatible alarms: no exact-alarm special access is needed. */
 class AndroidDeadlineNotificationScheduler(
     private val activity: ComponentActivity,
 ) : DeadlineNotificationScheduler {
@@ -178,7 +177,6 @@ class DeadlineAlarmReceiver : BroadcastReceiver() {
     }
 }
 
-/** AlarmManager clears alarms after reboot; restore future reminders from the lightweight local index. */
 class DeadlineBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return

@@ -18,7 +18,6 @@ import platform.UserNotifications.UNTimeIntervalNotificationTrigger
 import platform.UserNotifications.UNUserNotificationCenter
 import kotlin.coroutines.resume
 
-/** Local notifications are scheduled natively and remain available while the app is closed. */
 class IosDeadlineNotificationScheduler : DeadlineNotificationScheduler {
     private val center = UNUserNotificationCenter.currentNotificationCenter()
 

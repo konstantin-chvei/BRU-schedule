@@ -2,7 +2,6 @@ package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.domain.model.ScheduleProfileType
 
-/** Paths shared by the app, static web client, and schedule-data generator. */
 object GitHubScheduleDataPaths {
     const val OWNER = "konstantin-chvei"
     const val REPOSITORY = "BRU-schedule"

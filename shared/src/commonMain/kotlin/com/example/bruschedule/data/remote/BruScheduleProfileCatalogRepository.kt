@@ -7,7 +7,6 @@ import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.repository.ScheduleProfileCatalogRepository
 import kotlinx.coroutines.CancellationException
 
-/** Live profile search for multiple groups and for the University's teacher list. */
 class BruScheduleProfileCatalogRepository(
     private val transport: HtmlTransport,
     private val parser: BruScheduleDirectoryParser = BruScheduleDirectoryParser(),
@@ -58,7 +57,7 @@ class BruScheduleProfileCatalogRepository(
         )
         for (root in roots) {
             val rootHtml = fetchOrNull(root) ?: continue
-            // Some site editions list every group directly on the root; others expose faculties.
+
             val rootMatches = parser.groupCandidates(rootHtml, root).filter { parser.matchesQuery(it, query) }
             val exactRootMatches = rootMatches.filter { parser.isExactMatch(it, query) }
             if (exactRootMatches.isNotEmpty()) return exactRootMatches
@@ -71,8 +70,6 @@ class BruScheduleProfileCatalogRepository(
                 }
                 val exactMatches = facultyMatches.filter { parser.isExactMatch(it, query) }
                 if (exactMatches.isNotEmpty()) {
-                    // Group codes are the lookup key. Stop at the first exact directory match so a
-                    // broken, unrelated faculty page later in the tree cannot fail this search.
                     return exactMatches
                 }
                 results += facultyMatches

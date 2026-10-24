@@ -7,11 +7,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
-/**
- * Projects weekly or alternating two-week templates into the requested offline-first date range.
- * Occurrence identity is derived from the original stable slot key plus the occurrence date, so
- * edits remain attached to the same date/slot after every refresh.
- */
 object ScheduleCycleExpander {
     private val ONE_WEEK = DatePeriod(days = 7)
     private val TWO_WEEKS = DatePeriod(days = 14)
@@ -132,5 +127,4 @@ object ScheduleCycleExpander {
             "${lesson.sourceKey}|cycle:$occurrenceDate"
         }
     }
-
 }

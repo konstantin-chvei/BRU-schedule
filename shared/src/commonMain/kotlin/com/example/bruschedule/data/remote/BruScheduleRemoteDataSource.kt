@@ -22,11 +22,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
-/**
- * Uses the configured direct HTML page for user-added universities. BRU profiles are resolved
- * through the live directory hierarchy; group profiles store a faculty page as a hint, but the group
- * code is authoritative if the hint is stale or points at an unrelated faculty.
- */
 class BruScheduleRemoteDataSource(
     private val transport: HtmlTransport,
     private val directoryParser: BruScheduleDirectoryParser = BruScheduleDirectoryParser(),

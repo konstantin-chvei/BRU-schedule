@@ -51,6 +51,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.Lesson
 import com.example.bruschedule.domain.model.LessonRecurrence
+import com.example.bruschedule.domain.model.LessonStickerPalette
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleErrorInfo
 import com.example.bruschedule.domain.model.ScheduleProfileType
@@ -92,6 +95,7 @@ fun ScheduleHomeScreen(
     var deadlineLessonRecurrence by remember { mutableStateOf(LessonRecurrence.NONE) }
     var conflictToDelete by remember { mutableStateOf<Lesson?>(null) }
     var showUniversityPicker by remember { mutableStateOf(false) }
+    var stickerPickerLesson by remember { mutableStateOf<Lesson?>(null) }
 
     Column(
         modifier = Modifier
@@ -201,6 +205,9 @@ fun ScheduleHomeScreen(
                                 isNewLesson = false
                                 lessonInEditor = item.lesson
                             },
+                            onRate = { rating -> viewModel.saveLessonRating(item.lesson.id, rating) },
+                            onAddSticker = { stickerPickerLesson = item.lesson },
+                            onToggleSticker = { sticker -> viewModel.toggleLessonSticker(item.lesson.id, sticker) },
                         )
                     }
                     TextButton(
@@ -262,6 +269,48 @@ fun ScheduleHomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showUniversityPicker = false }) { Text("Готово", color = BruColors.cyan) }
+            },
+            containerColor = BruColors.surface,
+            titleContentColor = BruColors.foreground,
+            textContentColor = BruColors.muted,
+        )
+    }
+
+    stickerPickerLesson?.let { lesson ->
+        AlertDialog(
+            onDismissRequest = { stickerPickerLesson = null },
+            title = { Text("Выберите стикер") },
+            text = {
+                Column(
+                    modifier = Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    LessonStickerPalette.choices.chunked(5).forEach { row ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            row.forEach { sticker ->
+                                val selected = sticker in lesson.stickers
+                                Surface(
+                                    onClick = {
+                                        viewModel.toggleLessonSticker(lesson.id, sticker)
+                                        stickerPickerLesson = null
+                                    },
+                                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (selected) BruColors.indigo.copy(alpha = 0.16f) else BruColors.elevatedSurface,
+                                    border = BorderStroke(1.dp, if (selected) BruColors.cyan else BruColors.outline),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(sticker, color = BruColors.foreground, fontSize = 21.sp)
+                                    }
+                                }
+                            }
+                            repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { stickerPickerLesson = null }) { Text("Закрыть", color = BruColors.muted) }
             },
             containerColor = BruColors.surface,
             titleContentColor = BruColors.foreground,
@@ -906,7 +955,13 @@ private fun SummaryTile(
 }
 
 @Composable
-private fun LessonCard(item: LessonUiItem, onClick: () -> Unit) {
+private fun LessonCard(
+    item: LessonUiItem,
+    onClick: () -> Unit,
+    onRate: (Int) -> Unit,
+    onAddSticker: () -> Unit,
+    onToggleSticker: (String) -> Unit,
+) {
     val lesson = item.lesson
     val accent = LessonThemeMapper.accent(lesson)
     val stroke by animateColorAsState(
@@ -973,6 +1028,60 @@ private fun LessonCard(item: LessonUiItem, onClick: () -> Unit) {
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Surface(
+                                onClick = onAddSticker,
+                                modifier = Modifier.size(30.dp).semantics { contentDescription = "Добавить стикер" },
+                                shape = RoundedCornerShape(9.dp),
+                                color = BruColors.elevatedSurface,
+                                border = BorderStroke(1.dp, BruColors.outline),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("+", color = BruColors.muted, fontSize = 19.sp, lineHeight = 20.sp)
+                                }
+                            }
+                            lesson.stickers.filter { it in LessonStickerPalette.choices }.forEach { sticker ->
+                                Surface(
+                                    onClick = { onToggleSticker(sticker) },
+                                    modifier = Modifier.size(30.dp),
+                                    shape = RoundedCornerShape(9.dp),
+                                    color = accent.copy(alpha = 0.12f),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(sticker, color = BruColors.foreground, fontSize = 17.sp)
+                                    }
+                                }
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            (1..5).forEach { rating ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clip(CircleShape)
+                                        .clickable { onRate(rating) }
+                                        .semantics { contentDescription = "Оценка $rating из 5" },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        if (rating <= (lesson.rating ?: 0)) "★" else "☆",
+                                        color = if (rating <= (lesson.rating ?: 0)) BruColors.amber else BruColors.dim,
+                                        fontSize = 18.sp,
+                                        lineHeight = 20.sp,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 if (item.pendingTaskCount > 0) {

@@ -7,13 +7,11 @@ import com.example.bruschedule.domain.model.ScheduleWindow
 import com.fleeksoft.ksoup.Ksoup
 import kotlinx.datetime.LocalDate
 
-/** Human-readable node in the site's two-level group directory. */
 data class FacultyDirectory(
     val name: String,
     val url: String,
 )
 
-/** Parsers for /full_time, /part_time and /index1.html; selection results retain stable URLs. */
 class BruScheduleDirectoryParser {
     fun hasScheduleTable(html: String): Boolean =
         Ksoup.parse(html).select("table.schedule-table").isNotEmpty()
@@ -106,7 +104,6 @@ class BruScheduleDirectoryParser {
             .distinctBy { it.sourceUrl }
     }
 
-    /** Finds the rolling schedule link for a profile in a stable group/teacher index page. */
     fun scheduleUrlFromIndex(
         html: String,
         pageUrl: String,
@@ -143,7 +140,6 @@ class BruScheduleDirectoryParser {
             }
             val labelNameKey = normalizeForMatch(profile.name.trim().substringBefore(' '))
             val matches = when (profile.type) {
-                // A partial code (e.g. МПР-261 matching МПР-261-1) must never select a different group.
                 ScheduleProfileType.GROUP -> exactGroupMatch
                 ScheduleProfileType.TEACHER ->
                     label.contains(key) || key.contains(label) || path.contains(key) ||
@@ -185,7 +181,7 @@ class BruScheduleDirectoryParser {
         val normalizedName = normalizeForMatch(candidate.name)
         if (candidate.type == ScheduleProfileType.GROUP) return normalizedName.contains(normalizedQuery)
         if (normalizedName.contains(normalizedQuery) || normalizedQuery.contains(normalizedName)) return true
-        // Teacher indexes commonly display surname + initials while the detail page has the full name.
+
         val surname = normalizeForMatch(query.trim().substringBefore(' '))
         return surname.length >= 2 && normalizedName.contains(surname)
     }
@@ -206,7 +202,6 @@ class BruScheduleDirectoryParser {
         return normalizeSiteUrl(absolute)
     }
 
-    /** Canonical HTTPS origin and RFC 3986 path encoding for raw Cyrillic/space links. */
     private fun normalizeSiteUrl(url: String): String {
         val schemeEnd = url.indexOf("://")
         if (schemeEnd < 0) return url
