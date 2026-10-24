@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  // Keep this legacy key so existing PWA profiles and settings survive the rebrand.
   const STORAGE_KEY = "bru.schedule.ios-pwa.v2";
   const DATA_ROOT = new URL("./schedule-data/", window.location.href);
   const INDEX_TTL_MS = 12 * 60 * 60 * 1000;
@@ -293,7 +294,7 @@
     return `<svg class="${esc(className)}" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.calendar}</svg>`;
   }
   function brandRow(route = "schedule") {
-    const title = route === "schedule" ? "РАСПИСАНИЕ" : route === "deadlines" ? "ДЕДЛАЙНЫ" : "НАСТРОЙКИ";
+    const title = route === "schedule" ? "universityschedule" : route === "deadlines" ? "ДЕДЛАЙНЫ" : "НАСТРОЙКИ";
     const subtitle = route === "schedule" ? dailyQuote() : route === "deadlines" ? "Задачи и даты, которые важно не пропустить." : "Настрой приложение под себя.";
     return `<header class="brand-row">
       <svg class="brand-glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

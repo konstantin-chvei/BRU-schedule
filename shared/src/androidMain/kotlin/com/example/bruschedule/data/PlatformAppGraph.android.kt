@@ -11,7 +11,7 @@ fun createAndroidAppGraph(context: Context): AppGraph = createAppGraph(
     driver = AndroidSqliteDriver(
         schema = ScheduleDatabase.Schema,
         context = context.applicationContext,
-        name = "bru-schedule.db",
+        name = "bru-schedule.db", // Keep the legacy filename to preserve existing on-device schedules.
     ),
     deadlineNotificationScheduler = (context as? ComponentActivity)
         ?.let(::AndroidDeadlineNotificationScheduler)

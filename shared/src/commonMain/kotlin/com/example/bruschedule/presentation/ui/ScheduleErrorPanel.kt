@@ -16,7 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.model.ScheduleErrorInfo
-import com.example.bruschedule.ui.theme.BruColors
+import com.example.bruschedule.ui.theme.UniversityScheduleColors
 
 private const val ERROR_REPORT_BOT_URL = "https://t.me/bru_schedule_suggestion_bot"
 
@@ -31,19 +31,19 @@ fun ScheduleErrorPanel(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(15.dp),
-        color = BruColors.danger.copy(alpha = 0.07f),
-        border = BorderStroke(1.dp, BruColors.danger.copy(alpha = 0.24f)),
+        color = UniversityScheduleColors.danger.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, UniversityScheduleColors.danger.copy(alpha = 0.24f)),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(error.message, color = BruColors.foreground, fontSize = 10.sp, lineHeight = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            context?.let { Text(it, color = BruColors.muted, fontSize = 9.sp, lineHeight = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-            Text("Код ошибки: ${error.code}", color = BruColors.cyan, fontSize = 9.sp, lineHeight = 12.sp)
+            Text(error.message, color = UniversityScheduleColors.foreground, fontSize = 10.sp, lineHeight = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            context?.let { Text(it, color = UniversityScheduleColors.muted, fontSize = 9.sp, lineHeight = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            Text("Код ошибки: ${error.code}", color = UniversityScheduleColors.cyan, fontSize = 9.sp, lineHeight = 12.sp)
             Text(
                 "Чтобы помочь, отправьте скриншот ошибки и коротко опишите, что вы делали перед её появлением.",
-                color = BruColors.dim,
+                color = UniversityScheduleColors.dim,
                 fontSize = 9.sp,
                 lineHeight = 13.sp,
                 maxLines = 3,
@@ -51,10 +51,10 @@ fun ScheduleErrorPanel(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 onRetry?.let {
-                    TextButton(onClick = it) { Text("Повторить", color = BruColors.danger, fontSize = 10.sp) }
+                    TextButton(onClick = it) { Text("Повторить", color = UniversityScheduleColors.danger, fontSize = 10.sp) }
                 }
                 TextButton(onClick = { runCatching { uriHandler.openUri(ERROR_REPORT_BOT_URL) } }) {
-                    Text("Сообщить об ошибке ↗", color = BruColors.cyan, fontSize = 10.sp)
+                    Text("Сообщить об ошибке ↗", color = UniversityScheduleColors.cyan, fontSize = 10.sp)
                 }
             }
         }

@@ -43,7 +43,7 @@ import com.example.bruschedule.domain.model.TaskReminderMode
 import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.presentation.DeadlineDraft
 import com.example.bruschedule.presentation.ScheduleUiState
-import com.example.bruschedule.ui.theme.BruColors
+import com.example.bruschedule.ui.theme.UniversityScheduleColors
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
@@ -130,8 +130,8 @@ fun DeadlineEditorBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = BruColors.surface,
-        contentColor = BruColors.foreground,
+        containerColor = UniversityScheduleColors.surface,
+        contentColor = UniversityScheduleColors.foreground,
         dragHandle = { BottomSheetHandle() },
     ) {
         Column(
@@ -141,8 +141,8 @@ fun DeadlineEditorBottomSheet(
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("ПЛАНИРОВАНИЕ · ДЕДЛАЙН", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
-            Text(if (initialTask == null) "Новая задача" else "Изменить дедлайн", color = BruColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+            Text("ПЛАНИРОВАНИЕ · ДЕДЛАЙН", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
+            Text(if (initialTask == null) "Новая задача" else "Изменить дедлайн", color = UniversityScheduleColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -162,7 +162,7 @@ fun DeadlineEditorBottomSheet(
                 shape = RoundedCornerShape(13.dp),
             )
 
-            Text("СРОК ВЫПОЛНЕНИЯ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text("СРОК ВЫПОЛНЕНИЯ", color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
             OutlinedTextField(
                 value = dueDate,
                 onValueChange = {
@@ -178,7 +178,7 @@ fun DeadlineEditorBottomSheet(
                 isError = dateError != null,
                 shape = RoundedCornerShape(13.dp),
             )
-            dateError?.let { Text(it, color = BruColors.danger, fontSize = 10.sp) }
+            dateError?.let { Text(it, color = UniversityScheduleColors.danger, fontSize = 10.sp) }
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -190,9 +190,9 @@ fun DeadlineEditorBottomSheet(
                     }
                 }
             }
-            Text("Время срока по умолчанию — 09:00.", color = BruColors.dim, fontSize = 9.sp)
+            Text("Время срока по умолчанию — 09:00.", color = UniversityScheduleColors.dim, fontSize = 9.sp)
 
-            Text("ПРИВЯЗКА",  color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text("ПРИВЯЗКА",  color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ChoicePill("Предмет", selectedLink == DeadlineLinkType.SUBJECT, Modifier.weight(1f)) {
                     changeAssociation(DeadlineLinkType.SUBJECT)
@@ -208,7 +208,7 @@ fun DeadlineEditorBottomSheet(
             when (selectedLink) {
                 DeadlineLinkType.NONE -> Text(
                     "Общий дедлайн — без связи с профилем, предметом или парой.",
-                    color = BruColors.muted,
+                    color = UniversityScheduleColors.muted,
                     fontSize = 10.sp,
                     lineHeight = 15.sp,
                 )
@@ -241,16 +241,16 @@ fun DeadlineEditorBottomSheet(
                                 onSelect = { selectedSubject = it },
                             )
                         } else {
-                            Text("В этом профиле пока нет предметов расписания.", color = BruColors.muted, fontSize = 10.sp)
+                            Text("В этом профиле пока нет предметов расписания.", color = UniversityScheduleColors.muted, fontSize = 10.sp)
                         }
-                        Text("Дедлайн будет связан с предметом, но не с одной конкретной датой занятий.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
+                        Text("Дедлайн будет связан с предметом, но не с одной конкретной датой занятий.", color = UniversityScheduleColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
                     } else if (availableProfileLessons.isNotEmpty()) {
                         if (initialTask?.linkType == DeadlineLinkType.LESSON &&
                             availableProfileLessons.none { it.id == initialTask.lessonId }
                         ) {
                             Text(
                                 "Исходная пара удалена или перенесена. Выберите новую пару и при необходимости измените срок.",
-                                color = BruColors.danger,
+                                color = UniversityScheduleColors.danger,
                                 fontSize = 10.sp,
                                 lineHeight = 15.sp,
                             )
@@ -261,7 +261,7 @@ fun DeadlineEditorBottomSheet(
                             options = availableProfileLessons.map { it.id to lessonLabel(it) },
                             onSelect = { selectedLessonId = it },
                         )
-                        Text("Дедлайн будет связан с выбранным занятием, датой и временем.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
+                        Text("Дедлайн будет связан с выбранным занятием, датой и временем.", color = UniversityScheduleColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
                         selectedLinkedLesson?.let { lesson ->
                             TextButton(
                                 onClick = {
@@ -269,16 +269,16 @@ fun DeadlineEditorBottomSheet(
                                     dateError = null
                                 },
                             ) {
-                                Text("Поставить срок на дату пары", color = BruColors.cyan, fontSize = 10.sp)
+                                Text("Поставить срок на дату пары", color = UniversityScheduleColors.cyan, fontSize = 10.sp)
                             }
                         }
                     } else {
-                        Text("В этом профиле пока нет занятий. Выберите другой профиль или тип привязки.", color = BruColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+                        Text("В этом профиле пока нет занятий. Выберите другой профиль или тип привязки.", color = UniversityScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
                     }
                 }
             }
 
-            Text("НАПОМИНАНИЯ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text("НАПОМИНАНИЯ", color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ChoicePill("По умолчанию", reminderMode == TaskReminderMode.INHERIT, Modifier.weight(1f)) { reminderMode = TaskReminderMode.INHERIT }
                 ChoicePill("Индивидуально", reminderMode == TaskReminderMode.CUSTOM, Modifier.weight(1f)) { reminderMode = TaskReminderMode.CUSTOM }
@@ -291,12 +291,12 @@ fun DeadlineEditorBottomSheet(
                     } else {
                         "Общие напоминания выключены в настройках приложения."
                     },
-                    color = BruColors.muted,
+                    color = UniversityScheduleColors.muted,
                     fontSize = 10.sp,
                     lineHeight = 15.sp,
                 )
                 TaskReminderMode.CUSTOM -> {
-                    Text("Выберите одно или несколько напоминаний до срока.", color = BruColors.muted, fontSize = 10.sp)
+                    Text("Выберите одно или несколько напоминаний до срока.", color = UniversityScheduleColors.muted, fontSize = 10.sp)
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -315,15 +315,15 @@ fun DeadlineEditorBottomSheet(
                         }
                     }
                     if (!state.deadlineReminderPreferences.enabled) {
-                        Text("Сначала включите напоминания в настройках приложения.", color = BruColors.amber, fontSize = 10.sp)
+                        Text("Сначала включите напоминания в настройках приложения.", color = UniversityScheduleColors.amber, fontSize = 10.sp)
                     }
                 }
-                TaskReminderMode.NONE -> Text("Для этой задачи уведомления отправляться не будут.", color = BruColors.muted, fontSize = 10.sp)
+                TaskReminderMode.NONE -> Text("Для этой задачи уведомления отправляться не будут.", color = UniversityScheduleColors.muted, fontSize = 10.sp)
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text("Отмена", color = BruColors.muted)
+                    Text("Отмена", color = UniversityScheduleColors.muted)
                 }
                 Button(
                     onClick = {
@@ -358,7 +358,7 @@ fun DeadlineEditorBottomSheet(
                     modifier = Modifier.weight(1.4f),
                     enabled = canSave && (reminderMode != TaskReminderMode.CUSTOM || reminderOffsets.isNotEmpty()),
                     shape = RoundedCornerShape(13.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),
+                    colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.indigo, contentColor = UniversityScheduleColors.background),
                 ) { Text(if (initialTask == null) "Сохранить дедлайн" else "Сохранить изменения", fontWeight = FontWeight.SemiBold) }
             }
             Spacer(Modifier.height(3.dp))
@@ -377,13 +377,13 @@ private fun ChoicePill(
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) BruColors.indigo.copy(alpha = 0.18f) else BruColors.elevatedSurface,
-        border = BorderStroke(1.dp, if (selected) BruColors.indigo else BruColors.outline),
+        color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.18f) else UniversityScheduleColors.elevatedSurface,
+        border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo else UniversityScheduleColors.outline),
     ) {
         Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
             Text(
                 label,
-                color = if (selected) BruColors.cyan else BruColors.muted,
+                color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.muted,
                 fontSize = 10.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
@@ -402,22 +402,22 @@ private fun SelectionField(
 ) {
     var expanded by remember(label, options) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(label, color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
+        Text(label, color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
         Box {
             Surface(
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(13.dp),
-                color = BruColors.elevatedSurface,
-                border = BorderStroke(1.dp, BruColors.outline),
+                color = UniversityScheduleColors.elevatedSurface,
+                border = BorderStroke(1.dp, UniversityScheduleColors.outline),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 13.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(value, color = BruColors.foreground, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text("⌄", color = BruColors.muted, modifier = Modifier.padding(start = 8.dp))
+                    Text(value, color = UniversityScheduleColors.foreground, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text("⌄", color = UniversityScheduleColors.muted, modifier = Modifier.padding(start = 8.dp))
                 }
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

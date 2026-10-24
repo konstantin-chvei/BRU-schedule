@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.example.bruschedule.ui.theme.BruColors
+import com.example.bruschedule.ui.theme.UniversityScheduleColors
 
 @Composable
 internal fun BottomSheetHandle() {
@@ -20,6 +20,6 @@ internal fun BottomSheetHandle() {
             .width(38.dp)
             .height(4.dp)
             .clip(CircleShape)
-            .background(BruColors.dim),
+            .background(UniversityScheduleColors.dim),
     )
 }

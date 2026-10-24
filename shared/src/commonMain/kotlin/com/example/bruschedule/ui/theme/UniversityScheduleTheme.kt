@@ -14,7 +14,7 @@ import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ScheduleAppTheme
 
-private data class BruColorPalette(
+private data class UniversityScheduleColorPalette(
     val background: Color,
     val surface: Color,
     val elevatedSurface: Color,
@@ -35,47 +35,47 @@ private data class BruColorPalette(
     val unknown: Color,
 )
 
-private val LocalBruPalette = staticCompositionLocalOf { paletteFor(AppearancePreferences()) }
+private val LocalUniversitySchedulePalette = staticCompositionLocalOf { paletteFor(AppearancePreferences()) }
 
-object BruColors {
+object UniversityScheduleColors {
     val background: Color
-        @Composable get() = LocalBruPalette.current.background
+        @Composable get() = LocalUniversitySchedulePalette.current.background
     val surface: Color
-        @Composable get() = LocalBruPalette.current.surface
+        @Composable get() = LocalUniversitySchedulePalette.current.surface
     val elevatedSurface: Color
-        @Composable get() = LocalBruPalette.current.elevatedSurface
+        @Composable get() = LocalUniversitySchedulePalette.current.elevatedSurface
     val outline: Color
-        @Composable get() = LocalBruPalette.current.outline
+        @Composable get() = LocalUniversitySchedulePalette.current.outline
     val foreground: Color
-        @Composable get() = LocalBruPalette.current.foreground
+        @Composable get() = LocalUniversitySchedulePalette.current.foreground
     val muted: Color
-        @Composable get() = LocalBruPalette.current.muted
+        @Composable get() = LocalUniversitySchedulePalette.current.muted
     val dim: Color
-        @Composable get() = LocalBruPalette.current.dim
+        @Composable get() = LocalUniversitySchedulePalette.current.dim
     val indigo: Color
-        @Composable get() = LocalBruPalette.current.indigo
+        @Composable get() = LocalUniversitySchedulePalette.current.indigo
     val cyan: Color
-        @Composable get() = LocalBruPalette.current.cyan
+        @Composable get() = LocalUniversitySchedulePalette.current.cyan
     val mint: Color
-        @Composable get() = LocalBruPalette.current.mint
+        @Composable get() = LocalUniversitySchedulePalette.current.mint
     val coral: Color
-        @Composable get() = LocalBruPalette.current.coral
+        @Composable get() = LocalUniversitySchedulePalette.current.coral
     val amber: Color
-        @Composable get() = LocalBruPalette.current.amber
+        @Composable get() = LocalUniversitySchedulePalette.current.amber
     val danger: Color
-        @Composable get() = LocalBruPalette.current.danger
+        @Composable get() = LocalUniversitySchedulePalette.current.danger
 
     @Composable
     fun lessonAccent(type: LessonType): Color = when (type) {
-        LessonType.LECTURE -> LocalBruPalette.current.lecture
-        LessonType.LABORATORY -> LocalBruPalette.current.laboratory
-        LessonType.PRACTICE -> LocalBruPalette.current.practice
-        LessonType.UNKNOWN -> LocalBruPalette.current.unknown
+        LessonType.LECTURE -> LocalUniversitySchedulePalette.current.lecture
+        LessonType.LABORATORY -> LocalUniversitySchedulePalette.current.laboratory
+        LessonType.PRACTICE -> LocalUniversitySchedulePalette.current.practice
+        LessonType.UNKNOWN -> LocalUniversitySchedulePalette.current.unknown
     }
 }
 
 @Composable
-fun BruScheduleTheme(
+fun UniversityScheduleTheme(
     appearance: AppearancePreferences = AppearancePreferences(),
     content: @Composable () -> Unit,
 ) {
@@ -114,26 +114,26 @@ fun BruScheduleTheme(
             onError = palette.onAccent,
         )
     }
-    CompositionLocalProvider(LocalBruPalette provides palette) {
+    CompositionLocalProvider(LocalUniversitySchedulePalette provides palette) {
         MaterialTheme(colorScheme = colorScheme, content = content)
     }
 }
 
 object LessonThemeMapper {
     @Composable
-    fun accent(lesson: Lesson): Color = BruColors.lessonAccent(lesson.type)
+    fun accent(lesson: Lesson): Color = UniversityScheduleColors.lessonAccent(lesson.type)
 
     @Composable
-    fun typeAccent(type: LessonType): Color = BruColors.lessonAccent(type)
+    fun typeAccent(type: LessonType): Color = UniversityScheduleColors.lessonAccent(type)
 
     fun parseHex(value: String): Color? = parseColor(value)
 
     fun normalizedHex(type: LessonType): String = LessonTypePalette.accent(type)
 }
 
-private fun paletteFor(appearance: AppearancePreferences): BruColorPalette {
+private fun paletteFor(appearance: AppearancePreferences): UniversityScheduleColorPalette {
     val base = when (appearance.theme) {
-        ScheduleAppTheme.BLUE -> BruColorPalette(
+        ScheduleAppTheme.BLUE -> UniversityScheduleColorPalette(
             background = Color(0xFF0A0D12),
             surface = Color(0xFF111720),
             elevatedSurface = Color(0xFF17212D),
@@ -153,7 +153,7 @@ private fun paletteFor(appearance: AppearancePreferences): BruColorPalette {
             practice = Color(0xFFFFC979),
             unknown = Color(0xFFA6B0C2),
         )
-        ScheduleAppTheme.BLACK -> BruColorPalette(
+        ScheduleAppTheme.BLACK -> UniversityScheduleColorPalette(
             background = Color(0xFF000000),
             surface = Color(0xFF090A0D),
             elevatedSurface = Color(0xFF14171D),
@@ -173,7 +173,7 @@ private fun paletteFor(appearance: AppearancePreferences): BruColorPalette {
             practice = Color(0xFFF8C36D),
             unknown = Color(0xFFAAB2C0),
         )
-        ScheduleAppTheme.WHITE -> BruColorPalette(
+        ScheduleAppTheme.WHITE -> UniversityScheduleColorPalette(
             background = Color(0xFFF4F6FA),
             surface = Color(0xFFFFFFFF),
             elevatedSurface = Color(0xFFEEF2F8),

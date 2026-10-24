@@ -38,7 +38,7 @@ import com.example.bruschedule.domain.model.LessonRecurrence
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.TypographyRole
-import com.example.bruschedule.ui.theme.BruColors
+import com.example.bruschedule.ui.theme.UniversityScheduleColors
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.isoDayNumber
@@ -87,8 +87,8 @@ fun LessonActionBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = BruColors.surface,
-        contentColor = BruColors.foreground,
+        containerColor = UniversityScheduleColors.surface,
+        contentColor = UniversityScheduleColors.foreground,
         dragHandle = { BottomSheetHandle() },
     ) {
         Column(
@@ -98,8 +98,8 @@ fun LessonActionBottomSheet(
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("${if (isNew) "НОВАЯ" else "РУЧНАЯ ПРАВКА"} · ПАРА", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.2.sp)
-            Text(if (isNew) "Добавить пару" else "Изменить расписание", color = BruColors.foreground, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text("${if (isNew) "НОВАЯ" else "РУЧНАЯ ПРАВКА"} · ПАРА", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.2.sp)
+            Text(if (isNew) "Добавить пару" else "Изменить расписание", color = UniversityScheduleColors.foreground, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             OutlinedTextField(
                 value = subject,
                 onValueChange = { subject = it },
@@ -183,15 +183,15 @@ fun LessonActionBottomSheet(
                 LessonRecurrenceDropdown(recurrence, onRecurrenceChange = { recurrence = it })
                 Text(
                     "Повторы создаются до конца периода расписания. Каждый экземпляр можно изменить отдельно.",
-                    color = BruColors.dim,
+                    color = UniversityScheduleColors.dim,
                     fontSize = 9.sp,
                     lineHeight = 13.sp,
                 )
             }
-            validationError?.let { Text(it, color = BruColors.danger, fontSize = 11.sp) }
-            Text("Ручные пары не перезаписываются при синхронизации с сайтом.", color = BruColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
+            validationError?.let { Text(it, color = UniversityScheduleColors.danger, fontSize = 11.sp) }
+            Text("Ручные пары не перезаписываются при синхронизации с сайтом.", color = UniversityScheduleColors.dim, fontSize = 10.sp, lineHeight = 15.sp)
             if (linkedDeadlineCount > 0) {
-                Surface(shape = RoundedCornerShape(12.dp), color = BruColors.elevatedSurface) {
+                Surface(shape = RoundedCornerShape(12.dp), color = UniversityScheduleColors.elevatedSurface) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(end = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -200,14 +200,14 @@ fun LessonActionBottomSheet(
                             checked = moveLinkedDeadlines,
                             onCheckedChange = { moveLinkedDeadlines = it },
                             colors = CheckboxDefaults.colors(
-                                checkedColor = BruColors.cyan,
-                                uncheckedColor = BruColors.dim,
-                                checkmarkColor = BruColors.background,
+                                checkedColor = UniversityScheduleColors.cyan,
+                                uncheckedColor = UniversityScheduleColors.dim,
+                                checkmarkColor = UniversityScheduleColors.background,
                             ),
                         )
                         Text(
                             "Перенести $linkedDeadlineCount связанных дедлайнов на дату этой пары",
-                            color = BruColors.muted,
+                            color = UniversityScheduleColors.muted,
                             fontSize = 10.sp,
                             lineHeight = 14.sp,
                         )
@@ -215,7 +215,7 @@ fun LessonActionBottomSheet(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Закрыть", color = BruColors.muted) }
+                TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Закрыть", color = UniversityScheduleColors.muted) }
                 Button(
                     onClick = {
                         validationError = validateLesson(editedLesson, minimumLessonDate, maximumLessonDate)
@@ -223,7 +223,7 @@ fun LessonActionBottomSheet(
                     },
                     modifier = Modifier.weight(1.2f),
                     shape = RoundedCornerShape(13.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BruColors.indigo, contentColor = BruColors.background),
+                    colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.indigo, contentColor = UniversityScheduleColors.background),
                 ) { Text("Сохранить правку", fontWeight = FontWeight.SemiBold) }
             }
             Button(
@@ -233,7 +233,7 @@ fun LessonActionBottomSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(13.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BruColors.elevatedSurface, contentColor = BruColors.cyan),
+                colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.elevatedSurface, contentColor = UniversityScheduleColors.cyan),
             ) { Text("＋ Добавить дедлайн к этой паре") }
         }
     }
@@ -243,18 +243,18 @@ fun LessonActionBottomSheet(
 private fun LessonTypeDropdown(type: LessonType, onTypeChange: (LessonType) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("ТИП ЗАНЯТИЯ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
+        Text("ТИП ЗАНЯТИЯ", color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
         Box {
             Surface(
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(13.dp),
-                color = BruColors.elevatedSurface,
-                border = BorderStroke(1.dp, BruColors.outline),
+                color = UniversityScheduleColors.elevatedSurface,
+                border = BorderStroke(1.dp, UniversityScheduleColors.outline),
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(type.label(), color = BruColors.foreground, fontSize = 12.sp)
-                    Text("⌄", color = BruColors.muted)
+                    Text(type.label(), color = UniversityScheduleColors.foreground, fontSize = 12.sp)
+                    Text("⌄", color = UniversityScheduleColors.muted)
                 }
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -276,22 +276,22 @@ private fun LessonRecurrenceDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("ПОВТОРЕНИЕ", color = BruColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
+        Text("ПОВТОРЕНИЕ", color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.sp)
         Box {
             Surface(
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(13.dp),
-                color = BruColors.elevatedSurface,
-                border = BorderStroke(1.dp, BruColors.outline),
+                color = UniversityScheduleColors.elevatedSurface,
+                border = BorderStroke(1.dp, UniversityScheduleColors.outline),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(recurrence.label(), color = BruColors.foreground, fontSize = 12.sp)
-                    Text("⌄", color = BruColors.muted)
+                    Text(recurrence.label(), color = UniversityScheduleColors.foreground, fontSize = 12.sp)
+                    Text("⌄", color = UniversityScheduleColors.muted)
                 }
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

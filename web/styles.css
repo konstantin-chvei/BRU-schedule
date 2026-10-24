@@ -68,7 +68,7 @@ svg { display: block; }
 .brand-row { display: flex; align-items: center; gap: 13px; min-height: 51px; margin: 1px 2px 20px; }
 .brand-glyph { flex: 0 0 43px; width: 43px; height: 43px; color: var(--text); }
 .brand-copy { min-width: 0; }
-.brand-title { margin: 0; font-size: calc(12px * var(--scale-caption)); line-height: 1.2; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.brand-title { margin: 0; font-size: calc(12px * var(--scale-caption)); line-height: 1.2; font-weight: 800; letter-spacing: .18em; text-transform: none; }
 .brand-quote { overflow: hidden; margin: 5px 0 0; color: var(--muted); font-size: calc(10px * var(--scale-caption)); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .page-heading { margin: 0 1px 18px; }
 .page-heading h1 { margin: 0; color: var(--text); font-size: calc(24px * var(--scale-display)); line-height: 1.1; font-weight: 730; letter-spacing: -.035em; }
