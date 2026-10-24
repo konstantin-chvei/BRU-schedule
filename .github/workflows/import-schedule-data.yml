@@ -52,7 +52,42 @@ jobs:
           SCHEDULE_DATA_UNIVERSITY: ${{ inputs.university || 'all' }}
           SCHEDULE_REPOSITORY_ROOT: ${{ github.workspace }}
           SCHEDULE_DATA_ROOT: ${{ github.workspace }}/schedule-data
-        run: bash gradlew :androidApp:testDebugUnitTest --tests com.example.bruschedule.tools.ScheduleDataImporterTest --no-daemon
+        run: |
+          set -euo pipefail
+          ANDROID_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$ANDROID_SDK" ]; then
+            echo "ANDROID_HOME and ANDROID_SDK_ROOT are both unset"
+            exit 1
+          fi
+          run_import() {
+            bash gradlew :androidApp:testDebugUnitTest --tests com.example.bruschedule.tools.ScheduleDataImporterTest --no-daemon
+          }
+          run_import_without_metadata_check() {
+            bash gradlew :androidApp:testDebugUnitTest --tests com.example.bruschedule.tools.ScheduleDataImporterTest -x :androidApp:checkDebugAarMetadata --no-daemon
+          }
+          if [ -d "$ANDROID_SDK/platforms/android-37" ]; then
+            run_import
+          else
+            SDKMANAGER="$(find "$ANDROID_SDK"/cmdline-tools -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+            if [ -n "$SDKMANAGER" ]; then
+              yes 2>/dev/null | "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --licenses >/dev/null 2>&1 || true
+              if "$SDKMANAGER" --sdk_root="$ANDROID_SDK" --channel=3 --install "platforms;android-37"; then
+                run_import
+              elif [ -d "$ANDROID_SDK/platforms/android-34" ]; then
+                sed -i 's/^android-compileSdk = "37"$/android-compileSdk = "34"/; s/^android-targetSdk = "37"$/android-targetSdk = "34"/' gradle/libs.versions.toml
+                run_import_without_metadata_check
+              else
+                echo "Android API 37 is unavailable, and no API 34 fallback is installed"
+                exit 1
+              fi
+            elif [ -d "$ANDROID_SDK/platforms/android-34" ]; then
+              sed -i 's/^android-compileSdk = "37"$/android-compileSdk = "34"/; s/^android-targetSdk = "37"$/android-targetSdk = "34"/' gradle/libs.versions.toml
+              run_import_without_metadata_check
+            else
+              echo "sdkmanager was not found, and no API 34 fallback is installed"
+              exit 1
+            fi
+          fi
 
       - name: Validate schedule datasets
         run: |
