@@ -1,6 +1,6 @@
 TEAM_ID=
 
-PRODUCT_NAME=universityschedule
+PRODUCT_NAME=Schedule
 PRODUCT_BUNDLE_IDENTIFIER=com.konstantinchvei.universalschedule
 
 CURRENT_PROJECT_VERSION=1

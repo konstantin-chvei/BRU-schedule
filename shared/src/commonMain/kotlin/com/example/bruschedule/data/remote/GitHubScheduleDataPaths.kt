@@ -4,7 +4,7 @@ import com.example.bruschedule.domain.model.ScheduleProfileType
 
 object GitHubScheduleDataPaths {
     const val OWNER = "konstantin-chvei"
-    const val REPOSITORY = "BRU-schedule"
+    const val REPOSITORY = "schedule"
     const val DATA_DIRECTORY = "schedule-data"
 
     const val PAGES_URL = "https://$OWNER.github.io/$REPOSITORY/"

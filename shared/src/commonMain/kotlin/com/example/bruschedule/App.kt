@@ -49,8 +49,8 @@ import com.example.bruschedule.presentation.ui.LocalTypographyPreferences
 import com.example.bruschedule.presentation.ui.ScheduleHomeScreen
 import com.example.bruschedule.presentation.ui.ScheduleSettingsScreen
 import com.example.bruschedule.presentation.ui.Text
-import com.example.bruschedule.ui.theme.UniversityScheduleColors
-import com.example.bruschedule.ui.theme.UniversityScheduleTheme
+import com.example.bruschedule.ui.theme.ScheduleColors
+import com.example.bruschedule.ui.theme.ScheduleTheme
 
 @Composable
 fun App(graph: AppGraph) {
@@ -84,15 +84,15 @@ fun App(graph: AppGraph) {
         }
     }
 
-    UniversityScheduleTheme(appearance = state.appearance) {
+    ScheduleTheme(appearance = state.appearance) {
         CompositionLocalProvider(LocalTypographyPreferences provides state.typography) {
             Scaffold(
-                containerColor = UniversityScheduleColors.background,
+                containerColor = ScheduleColors.background,
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 bottomBar = {
                     NavigationBar(
                         modifier = Modifier.height(88.dp),
-                        containerColor = UniversityScheduleColors.surface,
+                        containerColor = ScheduleColors.surface,
                         tonalElevation = 4.dp,
                     ) {
                         NavigationDestination(
@@ -156,13 +156,13 @@ private fun RowScope.NavigationDestination(
             Surface(
                 modifier = Modifier.size(42.dp),
                 shape = RoundedCornerShape(13.dp),
-                color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.16f) else Color.Transparent,
+                color = if (selected) ScheduleColors.indigo.copy(alpha = 0.16f) else Color.Transparent,
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     NavigationGlyph(
                         destination = destination,
-                        color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.muted,
-                        accent = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.muted,
+                        color = if (selected) ScheduleColors.cyan else ScheduleColors.muted,
+                        accent = if (selected) ScheduleColors.cyan else ScheduleColors.muted,
                         modifier = Modifier.size(30.dp),
                     )
                 }
@@ -173,15 +173,15 @@ private fun RowScope.NavigationDestination(
                 label,
                 fontSize = 11.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (selected) UniversityScheduleColors.foreground else UniversityScheduleColors.muted,
+                color = if (selected) ScheduleColors.foreground else ScheduleColors.muted,
             )
         },
         alwaysShowLabel = true,
         colors = NavigationBarItemDefaults.colors(
-            selectedIconColor = UniversityScheduleColors.cyan,
-            unselectedIconColor = UniversityScheduleColors.muted,
-            selectedTextColor = UniversityScheduleColors.foreground,
-            unselectedTextColor = UniversityScheduleColors.muted,
+            selectedIconColor = ScheduleColors.cyan,
+            unselectedIconColor = ScheduleColors.muted,
+            selectedTextColor = ScheduleColors.foreground,
+            unselectedTextColor = ScheduleColors.muted,
             indicatorColor = Color.Transparent,
         ),
     )

@@ -294,7 +294,7 @@
     return `<svg class="${esc(className)}" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.calendar}</svg>`;
   }
   function brandRow(route = "schedule") {
-    const title = route === "schedule" ? "universityschedule" : route === "deadlines" ? "ДЕДЛАЙНЫ" : "НАСТРОЙКИ";
+    const title = route === "schedule" ? "Schedule" : route === "deadlines" ? "ДЕДЛАЙНЫ" : "НАСТРОЙКИ";
     const subtitle = route === "schedule" ? dailyQuote() : route === "deadlines" ? "Задачи и даты, которые важно не пропустить." : "Настрой приложение под себя.";
     return `<header class="brand-row">
       <svg class="brand-glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -648,7 +648,7 @@
   }
   function renderInfoSettings() {
     return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/bru_schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a></div></section>
-      <section class="settings-section install-guide-settings"><div class="settings-card"><a class="secondary-button install-guide-link" href="https://konstantin-chvei.github.io/BRU-schedule/ios-install.html">Установка на iPhone / iPad</a></div></section>`;
+      <section class="settings-section install-guide-settings"><div class="settings-card"><a class="secondary-button install-guide-link" href="./ios-install.html">Установка на iPhone / iPad</a></div></section>`;
   }
   function renderSettingsPage() {
     const profile = selectedProfile();

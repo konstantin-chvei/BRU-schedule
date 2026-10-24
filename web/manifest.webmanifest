@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "universityschedule",
-  "short_name": "universityschedule",
+  "name": "Schedule",
+  "short_name": "Schedule",
   "description": "Расписание занятий, дедлайны и напоминания.",
   "lang": "ru",
   "start_url": "./",

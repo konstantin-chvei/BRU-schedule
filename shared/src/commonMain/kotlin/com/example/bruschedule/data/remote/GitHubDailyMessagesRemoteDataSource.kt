@@ -14,6 +14,6 @@ class GitHubDailyMessagesRemoteDataSource(
 
     companion object {
         const val DAILY_MESSAGES_URL =
-            "https://konstantin-chvei.github.io/BRU-schedule/content/daily-messages.txt"
+            "${GitHubScheduleDataPaths.PAGES_URL}content/daily-messages.txt"
     }
 }

@@ -38,7 +38,7 @@ import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.TypographyRole
 import com.example.bruschedule.domain.model.University
 import com.example.bruschedule.presentation.ProfileSearchUiState
-import com.example.bruschedule.ui.theme.UniversityScheduleColors
+import com.example.bruschedule.ui.theme.ScheduleColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,8 +56,8 @@ fun AddProfileBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = sheetState,
-        containerColor = UniversityScheduleColors.surface,
-        contentColor = UniversityScheduleColors.foreground,
+        containerColor = ScheduleColors.surface,
+        contentColor = ScheduleColors.foreground,
         dragHandle = { BottomSheetHandle() },
     ) {
         Column(
@@ -68,11 +68,11 @@ fun AddProfileBottomSheet(
                 .padding(bottom = 26.dp),
             verticalArrangement = Arrangement.spacedBy(13.dp),
         ) {
-            Text("НОВОЕ РАСПИСАНИЕ", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
-            Text("Найти профиль", color = UniversityScheduleColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+            Text("НОВОЕ РАСПИСАНИЕ", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
+            Text("Найти профиль", color = ScheduleColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "${university.name}. Введите код группы или имя преподавателя.",
-                color = UniversityScheduleColors.muted,
+                color = ScheduleColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
             )
@@ -103,13 +103,13 @@ fun AddProfileBottomSheet(
                 enabled = !searchState.loading && query.trim().isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.indigo, contentColor = UniversityScheduleColors.background),
+                colors = ButtonDefaults.buttonColors(containerColor = ScheduleColors.indigo, contentColor = ScheduleColors.background),
             ) {
                 if (searchState.loading) {
                     CircularProgressIndicator(
                         modifier = Modifier.width(18.dp).height(18.dp),
                         strokeWidth = 2.dp,
-                        color = UniversityScheduleColors.background,
+                        color = ScheduleColors.background,
                     )
                     Spacer(Modifier.width(9.dp))
                 }
@@ -125,13 +125,13 @@ fun AddProfileBottomSheet(
             if (!searchState.loading && searchState.candidates.isEmpty() && query.isNotBlank() && searchState.error == null) {
                 Text(
                     "Ничего не найдено. Проверьте запрос или попробуйте позже.",
-                    color = UniversityScheduleColors.muted,
+                    color = ScheduleColors.muted,
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
                 )
             }
             TextButton(onClick = onClose, modifier = Modifier.align(Alignment.End)) {
-                Text("Закрыть", color = UniversityScheduleColors.muted)
+                Text("Закрыть", color = ScheduleColors.muted)
             }
         }
     }
@@ -142,13 +142,13 @@ private fun ProfileTypeChip(label: String, selected: Boolean, onClick: () -> Uni
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.14f) else UniversityScheduleColors.elevatedSurface,
-        border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo else UniversityScheduleColors.outline),
+        color = if (selected) ScheduleColors.indigo.copy(alpha = 0.14f) else ScheduleColors.elevatedSurface,
+        border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo else ScheduleColors.outline),
     ) {
         Text(
             label,
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
-            color = if (selected) UniversityScheduleColors.foreground else UniversityScheduleColors.muted,
+            color = if (selected) ScheduleColors.foreground else ScheduleColors.muted,
             fontSize = 11.sp,
         )
     }
@@ -160,8 +160,8 @@ private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit
         onClick = onClick,
         enabled = candidate.scheduleAvailable,
         shape = RoundedCornerShape(14.dp),
-        color = UniversityScheduleColors.elevatedSurface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        color = ScheduleColors.elevatedSurface,
+        border = BorderStroke(1.dp, ScheduleColors.outline),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
@@ -171,7 +171,7 @@ private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     candidate.name,
-                    color = if (candidate.scheduleAvailable) UniversityScheduleColors.foreground else UniversityScheduleColors.muted,
+                    color = if (candidate.scheduleAvailable) ScheduleColors.foreground else ScheduleColors.muted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -179,7 +179,7 @@ private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit
                 )
                 Text(
                     candidate.subtitle.ifBlank { if (candidate.type == ScheduleProfileType.GROUP) "Группа" else "Преподаватель" },
-                    color = UniversityScheduleColors.muted,
+                    color = ScheduleColors.muted,
                     fontSize = 10.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -188,7 +188,7 @@ private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit
             Text(
                 if (candidate.scheduleAvailable) "＋" else "…",
                 modifier = Modifier.padding(start = 10.dp),
-                color = if (candidate.scheduleAvailable) UniversityScheduleColors.cyan else UniversityScheduleColors.dim,
+                color = if (candidate.scheduleAvailable) ScheduleColors.cyan else ScheduleColors.dim,
                 fontSize = 18.sp,
             )
         }

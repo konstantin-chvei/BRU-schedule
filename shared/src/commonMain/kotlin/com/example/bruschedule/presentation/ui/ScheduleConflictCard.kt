@@ -16,7 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bruschedule.domain.usecase.ScheduleLessonConflict
-import com.example.bruschedule.ui.theme.UniversityScheduleColors
+import com.example.bruschedule.ui.theme.ScheduleColors
 
 @Composable
 fun ScheduleConflictCard(
@@ -31,17 +31,17 @@ fun ScheduleConflictCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = UniversityScheduleColors.amber.copy(alpha = 0.07f),
-        border = BorderStroke(1.dp, UniversityScheduleColors.amber.copy(alpha = 0.28f)),
+        color = ScheduleColors.amber.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, ScheduleColors.amber.copy(alpha = 0.28f)),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("Личная пара пересекается с расписанием сайта", color = UniversityScheduleColors.amber, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Text("Личная пара пересекается с расписанием сайта", color = ScheduleColors.amber, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "Ваша: ${personal.subjectName} · ${personal.lessonDate} ${personal.startTime}–${personal.endTime}",
-                color = UniversityScheduleColors.foreground,
+                color = ScheduleColors.foreground,
                 fontSize = 9.sp,
                 lineHeight = 13.sp,
                 maxLines = 2,
@@ -49,7 +49,7 @@ fun ScheduleConflictCard(
             )
             Text(
                 "С сайта: $websiteSummary${if (conflict.websiteLessons.size > 2) " · ещё ${conflict.websiteLessons.size - 2}" else ""}",
-                color = UniversityScheduleColors.muted,
+                color = ScheduleColors.muted,
                 fontSize = 9.sp,
                 lineHeight = 13.sp,
                 maxLines = 2,
@@ -58,7 +58,7 @@ fun ScheduleConflictCard(
             if (conflict.linkedDeadlines.isNotEmpty()) {
                 Text(
                     "Связанных дедлайнов: ${conflict.linkedDeadlines.size}. При переносе пары можно перенести и их даты.",
-                    color = UniversityScheduleColors.dim,
+                    color = ScheduleColors.dim,
                     fontSize = 9.sp,
                     lineHeight = 13.sp,
                 )
@@ -67,7 +67,7 @@ fun ScheduleConflictCard(
                 TextButton(onClick = onMovePersonalLesson, modifier = Modifier.weight(1f)) {
                     Text(
                         "Изменить день / время",
-                        color = UniversityScheduleColors.cyan,
+                        color = ScheduleColors.cyan,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
@@ -77,7 +77,7 @@ fun ScheduleConflictCard(
                 TextButton(onClick = onDeletePersonalLesson, modifier = Modifier.weight(1f)) {
                     Text(
                         "Удалить мою пару",
-                        color = UniversityScheduleColors.danger,
+                        color = ScheduleColors.danger,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,

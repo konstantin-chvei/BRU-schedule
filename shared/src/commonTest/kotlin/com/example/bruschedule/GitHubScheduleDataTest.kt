@@ -1,5 +1,6 @@
 package com.example.bruschedule
 
+import com.example.bruschedule.data.remote.GitHubDailyMessagesRemoteDataSource
 import com.example.bruschedule.data.remote.GitHubScheduleDataPaths
 import com.example.bruschedule.data.remote.GitHubScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.GitHubScheduleRemoteDataSource
@@ -97,7 +98,18 @@ ivanova-ii,Иванова И.И.,ФПМИ,ФПМИ,schedules/teachers/ivanova-ii
 
     @Test
     fun onlyPublicGitHubPagesIndexesAndScheduleFilesAreAccepted() {
+        assertEquals("schedule", GitHubScheduleDataPaths.REPOSITORY)
+        assertEquals("https://konstantin-chvei.github.io/schedule/", GitHubScheduleDataPaths.PAGES_URL)
+        assertEquals(
+            "${GitHubScheduleDataPaths.PAGES_URL}content/daily-messages.txt",
+            GitHubDailyMessagesRemoteDataSource.DAILY_MESSAGES_URL,
+        )
         assertTrue(GitHubScheduleDataPaths.isPublishedDataUrl(GitHubScheduleDataPaths.indexUrl(UniversityIds.BSU, ScheduleProfileType.GROUP)))
+        assertFalse(
+            GitHubScheduleDataPaths.isPublishedDataUrl(
+                "https://konstantin-chvei.github.io/BRU-schedule/schedule-data/universities/bsu/groups/index.csv",
+            ),
+        )
         assertTrue(
             GitHubScheduleDataPaths.isScheduleFileUrl(
                 "${GitHubScheduleDataPaths.UNIVERSITIES_ROOT}/bsu/schedules/groups/biology-group-41.html",

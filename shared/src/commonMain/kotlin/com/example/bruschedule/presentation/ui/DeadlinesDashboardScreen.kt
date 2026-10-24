@@ -37,7 +37,7 @@ import com.example.bruschedule.domain.model.AcademicTask
 import com.example.bruschedule.presentation.DeadlineUiItem
 import com.example.bruschedule.presentation.ScheduleUiState
 import com.example.bruschedule.presentation.ScheduleViewModel
-import com.example.bruschedule.ui.theme.UniversityScheduleColors
+import com.example.bruschedule.ui.theme.ScheduleColors
 import com.example.bruschedule.ui.theme.LessonThemeMapper
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -67,26 +67,26 @@ fun DeadlinesDashboardScreen(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(UniversityScheduleColors.background).padding(contentPadding),
+        modifier = Modifier.fillMaxSize().background(ScheduleColors.background).padding(contentPadding),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 21.dp, bottom = 26.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("Дедлайны", color = UniversityScheduleColors.foreground, fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
-                Text("Задачи и важные даты.", color = UniversityScheduleColors.muted, fontSize = 12.sp, lineHeight = 17.sp)
+                Text("Дедлайны", color = ScheduleColors.foreground, fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                Text("Задачи и важные даты.", color = ScheduleColors.muted, fontSize = 12.sp, lineHeight = 17.sp)
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                DeadlineSummaryTile("АКТИВНЫЕ", openTasks.toString().padStart(2, '0'), UniversityScheduleColors.amber, Modifier.weight(1f))
-                DeadlineSummaryTile("ВСЕГО", state.deadlines.size.toString().padStart(2, '0'), UniversityScheduleColors.indigo, Modifier.weight(1f))
+                DeadlineSummaryTile("АКТИВНЫЕ", openTasks.toString().padStart(2, '0'), ScheduleColors.amber, Modifier.weight(1f))
+                DeadlineSummaryTile("ВСЕГО", state.deadlines.size.toString().padStart(2, '0'), ScheduleColors.indigo, Modifier.weight(1f))
             }
             Spacer(Modifier.height(10.dp))
             Button(
                 onClick = { editingTask = null; showEditor = true },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(15.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.indigo, contentColor = UniversityScheduleColors.background),
+                colors = ButtonDefaults.buttonColors(containerColor = ScheduleColors.indigo, contentColor = ScheduleColors.background),
             ) {
                 Text("＋  Добавить дедлайн", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
@@ -107,25 +107,25 @@ fun DeadlinesDashboardScreen(
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
-                    color = UniversityScheduleColors.surface,
-                    border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+                    color = ScheduleColors.surface,
+                    border = BorderStroke(1.dp, ScheduleColors.outline),
                 ) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Text(if (state.deadlines.isEmpty()) "◈" else "✓", color = UniversityScheduleColors.indigo, fontSize = 24.sp)
+                        Text(if (state.deadlines.isEmpty()) "◈" else "✓", color = ScheduleColors.indigo, fontSize = 24.sp)
                         Text(
                             when {
                                 state.deadlines.isEmpty() -> "Список чист"
                                 filter == DeadlineFilter.ACTIVE -> "Все задачи закрыты"
                                 else -> "Пока пусто"
                             },
-                            color = UniversityScheduleColors.foreground,
+                            color = ScheduleColors.foreground,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
                             if (state.deadlines.isEmpty()) "Добавьте дедлайн здесь или из карточки пары. Его можно связать с предметом, своей парой или оставить без привязки."
                             else "Здесь появятся задания из выбранного раздела.",
-                            color = UniversityScheduleColors.muted,
+                            color = ScheduleColors.muted,
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                         )
@@ -164,13 +164,13 @@ private fun FilterPill(label: String, selected: Boolean, modifier: Modifier, onC
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.16f) else UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.8f) else UniversityScheduleColors.outline),
+        color = if (selected) ScheduleColors.indigo.copy(alpha = 0.16f) else ScheduleColors.surface,
+        border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo.copy(alpha = 0.8f) else ScheduleColors.outline),
     ) {
         Text(
             label,
             modifier = Modifier.padding(vertical = 10.dp),
-            color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.muted,
+            color = if (selected) ScheduleColors.cyan else ScheduleColors.muted,
             fontSize = 10.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -180,9 +180,9 @@ private fun FilterPill(label: String, selected: Boolean, modifier: Modifier, onC
 
 @Composable
 private fun DeadlineSummaryTile(label: String, value: String, accent: androidx.compose.ui.graphics.Color, modifier: Modifier) {
-    Surface(modifier = modifier, shape = RoundedCornerShape(17.dp), color = UniversityScheduleColors.surface, border = BorderStroke(1.dp, UniversityScheduleColors.outline)) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(17.dp), color = ScheduleColors.surface, border = BorderStroke(1.dp, ScheduleColors.outline)) {
         Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = UniversityScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.9.sp)
+            Text(label, color = ScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.9.sp)
             Text(value, color = accent, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         }
     }
@@ -202,15 +202,15 @@ private fun DeadlineCard(
     val remainingDays = today.daysUntil(dueDate)
     val urgent = !task.isCompleted && remainingDays <= 1
     val accent = when {
-        task.isCompleted -> UniversityScheduleColors.mint
-        remainingDays < 0 -> UniversityScheduleColors.danger
-        remainingDays <= 1 -> UniversityScheduleColors.amber
-        else -> UniversityScheduleColors.cyan
+        task.isCompleted -> ScheduleColors.mint
+        remainingDays < 0 -> ScheduleColors.danger
+        remainingDays <= 1 -> ScheduleColors.amber
+        else -> ScheduleColors.cyan
     }
     Surface(
         shape = RoundedCornerShape(19.dp),
-        color = UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, if (urgent) accent.copy(alpha = 0.42f) else UniversityScheduleColors.outline),
+        color = ScheduleColors.surface,
+        border = BorderStroke(1.dp, if (urgent) accent.copy(alpha = 0.42f) else ScheduleColors.outline),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
@@ -222,12 +222,12 @@ private fun DeadlineCard(
                     checked = task.isCompleted,
                     onCheckedChange = onCompletedChange,
                     colors = CheckboxDefaults.colors(
-                        checkedColor = UniversityScheduleColors.mint,
-                        uncheckedColor = UniversityScheduleColors.dim,
-                        checkmarkColor = UniversityScheduleColors.background,
+                        checkedColor = ScheduleColors.mint,
+                        uncheckedColor = ScheduleColors.dim,
+                        checkmarkColor = ScheduleColors.background,
                     ),
                 )
-                Text(if (task.isCompleted) "ЗАКРЫТ" else "ЗАКРЫТЬ", color = if (task.isCompleted) UniversityScheduleColors.mint else UniversityScheduleColors.dim, fontSize = 7.sp, letterSpacing = 0.3.sp)
+                Text(if (task.isCompleted) "ЗАКРЫТ" else "ЗАКРЫТЬ", color = if (task.isCompleted) ScheduleColors.mint else ScheduleColors.dim, fontSize = 7.sp, letterSpacing = 0.3.sp)
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -238,20 +238,20 @@ private fun DeadlineCard(
                     }
                     Text(
                         item.linkLabel,
-                        color = if (item.linkedLessonMissing) UniversityScheduleColors.danger else UniversityScheduleColors.cyan,
+                        color = if (item.linkedLessonMissing) ScheduleColors.danger else ScheduleColors.cyan,
                         fontSize = 8.sp,
                         letterSpacing = 0.6.sp,
                         fontWeight = if (item.linkedLessonMissing) FontWeight.SemiBold else FontWeight.Normal,
                     )
-                    Text(item.subjectName, color = UniversityScheduleColors.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(item.subjectName, color = ScheduleColors.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     item.profileName?.let {
-                        Text("· $it", color = UniversityScheduleColors.dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("· $it", color = ScheduleColors.dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 item.linkDetail?.let {
                     Text(
                         it,
-                        color = if (item.linkedLessonMissing) UniversityScheduleColors.danger else UniversityScheduleColors.dim,
+                        color = if (item.linkedLessonMissing) ScheduleColors.danger else ScheduleColors.dim,
                         fontSize = 9.sp,
                         maxLines = if (item.linkedLessonMissing) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
@@ -259,18 +259,18 @@ private fun DeadlineCard(
                 }
                 Text(
                     task.taskTitle,
-                    color = if (task.isCompleted) UniversityScheduleColors.muted else UniversityScheduleColors.foreground,
+                    color = if (task.isCompleted) ScheduleColors.muted else ScheduleColors.foreground,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (task.description.isNotBlank()) {
-                    Text(task.description, color = UniversityScheduleColors.dim, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(task.description, color = ScheduleColors.dim, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(formatDeadlineDate(task.dueDate), color = UniversityScheduleColors.foreground, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                Text(formatDeadlineDate(task.dueDate), color = ScheduleColors.foreground, fontSize = 10.sp, fontWeight = FontWeight.Medium)
                 Text(
                     when {
                         task.isCompleted -> "ГОТОВО"
@@ -288,7 +288,7 @@ private fun DeadlineCard(
                     onClick = onEdit,
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Text("Изменить", color = UniversityScheduleColors.cyan, fontSize = 8.sp)
+                    Text("Изменить", color = ScheduleColors.cyan, fontSize = 8.sp)
                 }
             }
         }

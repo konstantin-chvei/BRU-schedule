@@ -107,7 +107,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: universityschedule-android-debug-apk
+          name: schedule-android-debug-apk
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -205,13 +205,13 @@ jobs:
       - name: Package Simulator app
         run: >-
           ditto -c -k --sequesterRsrc --keepParent
-          "$RUNNER_TEMP/ScheduleDerivedData/Build/Products/Debug-iphonesimulator/universityschedule.app"
-          "$RUNNER_TEMP/universityschedule-ios-simulator.zip"
+          "$RUNNER_TEMP/ScheduleDerivedData/Build/Products/Debug-iphonesimulator/Schedule.app"
+          "$RUNNER_TEMP/schedule-ios-simulator.zip"
 
       - name: Upload Simulator app
         uses: actions/upload-artifact@v7
         with:
-          name: universityschedule-ios-simulator-app
-          path: ${{ runner.temp }}/universityschedule-ios-simulator.zip
+          name: schedule-ios-simulator-app
+          path: ${{ runner.temp }}/schedule-ios-simulator.zip
           if-no-files-found: error
           retention-days: 30

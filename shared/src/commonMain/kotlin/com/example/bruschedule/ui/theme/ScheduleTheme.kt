@@ -14,7 +14,7 @@ import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.LessonTypePalette
 import com.example.bruschedule.domain.model.ScheduleAppTheme
 
-private data class UniversityScheduleColorPalette(
+private data class ScheduleColorPalette(
     val background: Color,
     val surface: Color,
     val elevatedSurface: Color,
@@ -35,47 +35,47 @@ private data class UniversityScheduleColorPalette(
     val unknown: Color,
 )
 
-private val LocalUniversitySchedulePalette = staticCompositionLocalOf { paletteFor(AppearancePreferences()) }
+private val LocalSchedulePalette = staticCompositionLocalOf { paletteFor(AppearancePreferences()) }
 
-object UniversityScheduleColors {
+object ScheduleColors {
     val background: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.background
+        @Composable get() = LocalSchedulePalette.current.background
     val surface: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.surface
+        @Composable get() = LocalSchedulePalette.current.surface
     val elevatedSurface: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.elevatedSurface
+        @Composable get() = LocalSchedulePalette.current.elevatedSurface
     val outline: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.outline
+        @Composable get() = LocalSchedulePalette.current.outline
     val foreground: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.foreground
+        @Composable get() = LocalSchedulePalette.current.foreground
     val muted: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.muted
+        @Composable get() = LocalSchedulePalette.current.muted
     val dim: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.dim
+        @Composable get() = LocalSchedulePalette.current.dim
     val indigo: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.indigo
+        @Composable get() = LocalSchedulePalette.current.indigo
     val cyan: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.cyan
+        @Composable get() = LocalSchedulePalette.current.cyan
     val mint: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.mint
+        @Composable get() = LocalSchedulePalette.current.mint
     val coral: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.coral
+        @Composable get() = LocalSchedulePalette.current.coral
     val amber: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.amber
+        @Composable get() = LocalSchedulePalette.current.amber
     val danger: Color
-        @Composable get() = LocalUniversitySchedulePalette.current.danger
+        @Composable get() = LocalSchedulePalette.current.danger
 
     @Composable
     fun lessonAccent(type: LessonType): Color = when (type) {
-        LessonType.LECTURE -> LocalUniversitySchedulePalette.current.lecture
-        LessonType.LABORATORY -> LocalUniversitySchedulePalette.current.laboratory
-        LessonType.PRACTICE -> LocalUniversitySchedulePalette.current.practice
-        LessonType.UNKNOWN -> LocalUniversitySchedulePalette.current.unknown
+        LessonType.LECTURE -> LocalSchedulePalette.current.lecture
+        LessonType.LABORATORY -> LocalSchedulePalette.current.laboratory
+        LessonType.PRACTICE -> LocalSchedulePalette.current.practice
+        LessonType.UNKNOWN -> LocalSchedulePalette.current.unknown
     }
 }
 
 @Composable
-fun UniversityScheduleTheme(
+fun ScheduleTheme(
     appearance: AppearancePreferences = AppearancePreferences(),
     content: @Composable () -> Unit,
 ) {
@@ -114,26 +114,26 @@ fun UniversityScheduleTheme(
             onError = palette.onAccent,
         )
     }
-    CompositionLocalProvider(LocalUniversitySchedulePalette provides palette) {
+    CompositionLocalProvider(LocalSchedulePalette provides palette) {
         MaterialTheme(colorScheme = colorScheme, content = content)
     }
 }
 
 object LessonThemeMapper {
     @Composable
-    fun accent(lesson: Lesson): Color = UniversityScheduleColors.lessonAccent(lesson.type)
+    fun accent(lesson: Lesson): Color = ScheduleColors.lessonAccent(lesson.type)
 
     @Composable
-    fun typeAccent(type: LessonType): Color = UniversityScheduleColors.lessonAccent(type)
+    fun typeAccent(type: LessonType): Color = ScheduleColors.lessonAccent(type)
 
     fun parseHex(value: String): Color? = parseColor(value)
 
     fun normalizedHex(type: LessonType): String = LessonTypePalette.accent(type)
 }
 
-private fun paletteFor(appearance: AppearancePreferences): UniversityScheduleColorPalette {
+private fun paletteFor(appearance: AppearancePreferences): ScheduleColorPalette {
     val base = when (appearance.theme) {
-        ScheduleAppTheme.BLUE -> UniversityScheduleColorPalette(
+        ScheduleAppTheme.BLUE -> ScheduleColorPalette(
             background = Color(0xFF0A0D12),
             surface = Color(0xFF111720),
             elevatedSurface = Color(0xFF17212D),
@@ -153,7 +153,7 @@ private fun paletteFor(appearance: AppearancePreferences): UniversityScheduleCol
             practice = Color(0xFFFFC979),
             unknown = Color(0xFFA6B0C2),
         )
-        ScheduleAppTheme.BLACK -> UniversityScheduleColorPalette(
+        ScheduleAppTheme.BLACK -> ScheduleColorPalette(
             background = Color(0xFF000000),
             surface = Color(0xFF090A0D),
             elevatedSurface = Color(0xFF14171D),
@@ -173,7 +173,7 @@ private fun paletteFor(appearance: AppearancePreferences): UniversityScheduleCol
             practice = Color(0xFFF8C36D),
             unknown = Color(0xFFAAB2C0),
         )
-        ScheduleAppTheme.WHITE -> UniversityScheduleColorPalette(
+        ScheduleAppTheme.WHITE -> ScheduleColorPalette(
             background = Color(0xFFF4F6FA),
             surface = Color(0xFFFFFFFF),
             elevatedSurface = Color(0xFFEEF2F8),

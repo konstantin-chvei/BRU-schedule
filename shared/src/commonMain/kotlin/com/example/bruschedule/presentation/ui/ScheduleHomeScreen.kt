@@ -71,7 +71,7 @@ import com.example.bruschedule.presentation.LessonUiItem
 import com.example.bruschedule.presentation.MainDestination
 import com.example.bruschedule.presentation.ScheduleUiState
 import com.example.bruschedule.presentation.ScheduleViewModel
-import com.example.bruschedule.ui.theme.UniversityScheduleColors
+import com.example.bruschedule.ui.theme.ScheduleColors
 import com.example.bruschedule.ui.theme.LessonThemeMapper
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -100,7 +100,7 @@ fun ScheduleHomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(UniversityScheduleColors.background)
+            .background(ScheduleColors.background)
             .padding(contentPadding)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
@@ -172,7 +172,7 @@ fun ScheduleHomeScreen(
             Spacer(Modifier.height(12.dp))
 
             if (state.scheduleConflicts.isNotEmpty()) {
-                Text("НАКЛАДКИ ПАР", color = UniversityScheduleColors.amber, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+                Text("НАКЛАДКИ ПАР", color = ScheduleColors.amber, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
                 state.scheduleConflicts.forEach { conflict ->
                     ScheduleConflictCard(
                         conflict = conflict,
@@ -219,7 +219,7 @@ fun ScheduleHomeScreen(
                         },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                     ) {
-                        Text("＋ Добавить свою пару", color = UniversityScheduleColors.muted)
+                        Text("＋ Добавить свою пару", color = ScheduleColors.muted)
                     }
                 }
             }
@@ -262,11 +262,11 @@ fun ScheduleHomeScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showUniversityPicker = false }) { Text("Готово", color = UniversityScheduleColors.cyan) }
+                TextButton(onClick = { showUniversityPicker = false }) { Text("Готово", color = ScheduleColors.cyan) }
             },
-            containerColor = UniversityScheduleColors.surface,
-            titleContentColor = UniversityScheduleColors.foreground,
-            textContentColor = UniversityScheduleColors.muted,
+            containerColor = ScheduleColors.surface,
+            titleContentColor = ScheduleColors.foreground,
+            textContentColor = ScheduleColors.muted,
         )
     }
 
@@ -290,11 +290,11 @@ fun ScheduleHomeScreen(
                                     },
                                     modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                                     shape = RoundedCornerShape(10.dp),
-                                    color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.16f) else UniversityScheduleColors.elevatedSurface,
-                                    border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.outline),
+                                    color = if (selected) ScheduleColors.indigo.copy(alpha = 0.16f) else ScheduleColors.elevatedSurface,
+                                    border = BorderStroke(1.dp, if (selected) ScheduleColors.cyan else ScheduleColors.outline),
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Text(sticker, color = UniversityScheduleColors.foreground, fontSize = 21.sp)
+                                        Text(sticker, color = ScheduleColors.foreground, fontSize = 21.sp)
                                     }
                                 }
                             }
@@ -304,11 +304,11 @@ fun ScheduleHomeScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { stickerPickerLesson = null }) { Text("Закрыть", color = UniversityScheduleColors.muted) }
+                TextButton(onClick = { stickerPickerLesson = null }) { Text("Закрыть", color = ScheduleColors.muted) }
             },
-            containerColor = UniversityScheduleColors.surface,
-            titleContentColor = UniversityScheduleColors.foreground,
-            textContentColor = UniversityScheduleColors.muted,
+            containerColor = ScheduleColors.surface,
+            titleContentColor = ScheduleColors.foreground,
+            textContentColor = ScheduleColors.muted,
         )
     }
 
@@ -399,14 +399,14 @@ fun ScheduleHomeScreen(
                         viewModel.deleteCustomLesson(lesson.id)
                         conflictToDelete = null
                     },
-                ) { Text("Удалить пару", color = UniversityScheduleColors.danger) }
+                ) { Text("Удалить пару", color = ScheduleColors.danger) }
             },
             dismissButton = {
-                TextButton(onClick = { conflictToDelete = null }) { Text("Отмена", color = UniversityScheduleColors.muted) }
+                TextButton(onClick = { conflictToDelete = null }) { Text("Отмена", color = ScheduleColors.muted) }
             },
-            containerColor = UniversityScheduleColors.surface,
-            titleContentColor = UniversityScheduleColors.foreground,
-            textContentColor = UniversityScheduleColors.muted,
+            containerColor = ScheduleColors.surface,
+            titleContentColor = ScheduleColors.foreground,
+            textContentColor = ScheduleColors.muted,
         )
     }
 }
@@ -420,10 +420,10 @@ private fun ScheduleTopBar(dailyMessage: String) {
         BrandCalendarGlyph()
         Spacer(Modifier.width(11.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("universityschedule", color = UniversityScheduleColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Text("Schedule", color = ScheduleColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
             Text(
                 dailyMessage,
-                color = UniversityScheduleColors.muted,
+                color = ScheduleColors.muted,
                 fontSize = 11.sp,
                 lineHeight = 15.sp,
                 maxLines = 2,
@@ -442,21 +442,21 @@ private fun UniversitySelectionPanel(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(17.dp),
-        color = UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        color = ScheduleColors.surface,
+        border = BorderStroke(1.dp, ScheduleColors.outline),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Surface(shape = RoundedCornerShape(11.dp), color = UniversityScheduleColors.indigo.copy(alpha = 0.13f)) {
-                Text("ВУЗ", modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp), color = UniversityScheduleColors.cyan, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+            Surface(shape = RoundedCornerShape(11.dp), color = ScheduleColors.indigo.copy(alpha = 0.13f)) {
+                Text("ВУЗ", modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp), color = ScheduleColors.cyan, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     university.name,
-                    color = UniversityScheduleColors.foreground,
+                    color = ScheduleColors.foreground,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
@@ -468,12 +468,12 @@ private fun UniversitySelectionPanel(
                         UniversitySourceType.BSU_HTML_AND_SHEETS -> "РАСПИСАНИЯ ДОСТУПНЫ"
                         UniversitySourceType.DIRECT_HTML -> "ПОКА НЕДОСТУПНО"
                     },
-                    color = UniversityScheduleColors.dim,
+                    color = ScheduleColors.dim,
                     fontSize = 8.sp,
                     letterSpacing = 0.8.sp,
                 )
             }
-            Text("СМЕНИТЬ  ⌄", color = UniversityScheduleColors.cyan, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+            Text("СМЕНИТЬ  ⌄", color = ScheduleColors.cyan, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -488,8 +488,8 @@ private fun UniversityChoiceRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(13.dp),
-        color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.13f) else UniversityScheduleColors.elevatedSurface,
-        border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo else UniversityScheduleColors.outline),
+        color = if (selected) ScheduleColors.indigo.copy(alpha = 0.13f) else ScheduleColors.elevatedSurface,
+        border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo else ScheduleColors.outline),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
@@ -497,26 +497,26 @@ private fun UniversityChoiceRow(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(university.name, color = UniversityScheduleColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(university.name, color = ScheduleColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     when (university.sourceType) {
                         UniversitySourceType.BRU_CATALOG,
                         UniversitySourceType.BSU_HTML_AND_SHEETS -> "Расписания доступны"
                         UniversitySourceType.DIRECT_HTML -> "Пока недоступно"
                     },
-                    color = UniversityScheduleColors.muted,
+                    color = ScheduleColors.muted,
                     fontSize = 9.sp,
                 )
             }
-            if (selected) Text("✓", color = UniversityScheduleColors.cyan, fontSize = 16.sp)
+            if (selected) Text("✓", color = ScheduleColors.cyan, fontSize = 16.sp)
         }
     }
 }
 
 @Composable
 private fun BrandCalendarGlyph() {
-    val ink = UniversityScheduleColors.foreground
-    val accent = UniversityScheduleColors.cyan
+    val ink = ScheduleColors.foreground
+    val accent = ScheduleColors.cyan
     Canvas(Modifier.size(45.dp)) {
         drawBrandCalendarGlyph(ink, accent)
     }
@@ -578,19 +578,19 @@ private fun ProfileRail(
                 Surface(
                     onClick = { onSelect(profile.id) },
                     shape = RoundedCornerShape(15.dp),
-                    color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.14f) else UniversityScheduleColors.surface,
-                    border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.7f) else UniversityScheduleColors.outline),
+                    color = if (selected) ScheduleColors.indigo.copy(alpha = 0.14f) else ScheduleColors.surface,
+                    border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo.copy(alpha = 0.7f) else ScheduleColors.outline),
                 ) {
                     Column(Modifier.padding(horizontal = 13.dp, vertical = 9.dp)) {
                         Text(
                             profile.name,
-                            color = if (selected) UniversityScheduleColors.foreground else UniversityScheduleColors.muted,
+                            color = if (selected) ScheduleColors.foreground else ScheduleColors.muted,
                             fontSize = 12.sp,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                         )
                         Text(
                             if (profile.type == ScheduleProfileType.TEACHER) "ПРЕПОДАВАТЕЛЬ" else "ГРУППА",
-                            color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.dim,
+                            color = if (selected) ScheduleColors.cyan else ScheduleColors.dim,
                             fontSize = 8.sp,
                             letterSpacing = 1.sp,
                         )
@@ -600,10 +600,10 @@ private fun ProfileRail(
             Surface(
                 onClick = onAdd,
                 shape = RoundedCornerShape(15.dp),
-                color = UniversityScheduleColors.surface,
-                border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+                color = ScheduleColors.surface,
+                border = BorderStroke(1.dp, ScheduleColors.outline),
             ) {
-                Text("＋", modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), color = UniversityScheduleColors.cyan, fontSize = 17.sp)
+                Text("＋", modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), color = ScheduleColors.cyan, fontSize = 17.sp)
             }
         }
     }
@@ -645,7 +645,7 @@ private fun WeekCalendarRail(
                     } else {
                         "${monday.toRuDate()} — ${monday.plus(DatePeriod(days = 6)).toRuDate()}"
                     },
-                    color = UniversityScheduleColors.muted,
+                    color = ScheduleColors.muted,
                     fontSize = 12.sp,
                 )
             }
@@ -704,13 +704,13 @@ private fun CalendarModePill(label: String, selected: Boolean, modifier: Modifie
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(13.dp),
-        color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.17f) else UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo else UniversityScheduleColors.outline),
+        color = if (selected) ScheduleColors.indigo.copy(alpha = 0.17f) else ScheduleColors.surface,
+        border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo else ScheduleColors.outline),
     ) {
         Text(
             label,
             modifier = Modifier.padding(vertical = 10.dp),
-            color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.muted,
+            color = if (selected) ScheduleColors.cyan else ScheduleColors.muted,
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -728,7 +728,7 @@ private fun SemesterMonthGrid(
     onSelect: (LocalDate) -> Unit,
 ) {
     if (coverageStartDate == null || coverageEndDate == null) {
-        Text("Нет данных о периоде расписания.", color = UniversityScheduleColors.muted, fontSize = 11.sp)
+        Text("Нет данных о периоде расписания.", color = ScheduleColors.muted, fontSize = 11.sp)
         return
     }
     val months = mutableListOf<LocalDate>()
@@ -747,19 +747,19 @@ private fun SemesterMonthGrid(
             val paddedCells = cells + List((7 - cells.size % 7) % 7) { null }
             Surface(
                 shape = RoundedCornerShape(17.dp),
-                color = UniversityScheduleColors.surface,
-                border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+                color = ScheduleColors.surface,
+                border = BorderStroke(1.dp, ScheduleColors.outline),
             ) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(
                         "${monthLabel(firstOfMonth.monthNumber)} ${firstOfMonth.year}",
-                        color = UniversityScheduleColors.foreground,
+                        color = ScheduleColors.foreground,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Row(Modifier.fillMaxWidth()) {
                         listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").forEach { day ->
-                            Text(day, modifier = Modifier.weight(1f), color = UniversityScheduleColors.dim, fontSize = 8.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            Text(day, modifier = Modifier.weight(1f), color = ScheduleColors.dim, fontSize = 8.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
                     }
                     paddedCells.chunked(7).forEach { week ->
@@ -802,20 +802,20 @@ private fun SemesterDayCell(
             .height(35.dp)
             .clip(RoundedCornerShape(9.dp))
             .background(when {
-                selected -> UniversityScheduleColors.indigo.copy(alpha = 0.24f)
+                selected -> ScheduleColors.indigo.copy(alpha = 0.24f)
                 else -> Color.Transparent
             })
             .border(
                 width = if (selected || isToday) 1.dp else 0.dp,
-                color = when { selected -> UniversityScheduleColors.indigo; isToday -> UniversityScheduleColors.cyan.copy(alpha = 0.6f); else -> Color.Transparent },
+                color = when { selected -> ScheduleColors.indigo; isToday -> ScheduleColors.cyan.copy(alpha = 0.6f); else -> Color.Transparent },
                 shape = RoundedCornerShape(9.dp),
             )
             .clickable(enabled = enabled, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(date.dayOfMonth.toString(), color = if (enabled) UniversityScheduleColors.foreground else UniversityScheduleColors.dim.copy(alpha = 0.45f), fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-        Box(Modifier.padding(top = 2.dp).size(3.dp).clip(CircleShape).background(if (hasLessons) UniversityScheduleColors.cyan else Color.Transparent))
+        Text(date.dayOfMonth.toString(), color = if (enabled) ScheduleColors.foreground else ScheduleColors.dim.copy(alpha = 0.45f), fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+        Box(Modifier.padding(top = 2.dp).size(3.dp).clip(CircleShape).background(if (hasLessons) ScheduleColors.cyan else Color.Transparent))
     }
 }
 
@@ -840,11 +840,11 @@ private fun WeekArrow(symbol: String, onClick: () -> Unit, enabled: Boolean) {
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(13.dp),
-        color = if (enabled) UniversityScheduleColors.surface else UniversityScheduleColors.background,
-        border = BorderStroke(1.dp, if (enabled) UniversityScheduleColors.outline else UniversityScheduleColors.outline.copy(alpha = 0.45f)),
+        color = if (enabled) ScheduleColors.surface else ScheduleColors.background,
+        border = BorderStroke(1.dp, if (enabled) ScheduleColors.outline else ScheduleColors.outline.copy(alpha = 0.45f)),
     ) {
         Box(Modifier.size(width = 44.dp, height = 42.dp), contentAlignment = Alignment.Center) {
-            Text(symbol, color = if (enabled) UniversityScheduleColors.foreground else UniversityScheduleColors.dim.copy(alpha = 0.55f), fontSize = 25.sp)
+            Text(symbol, color = if (enabled) ScheduleColors.foreground else ScheduleColors.dim.copy(alpha = 0.55f), fontSize = 25.sp)
         }
     }
 }
@@ -861,7 +861,7 @@ private fun DayPill(
 ) {
     val scale by animateFloatAsState(if (selected) 1.04f else 1f, animationSpec = tween(180), label = "day-select-scale")
     val borderColor by animateColorAsState(
-        if (selected) UniversityScheduleColors.indigo else if (isToday) UniversityScheduleColors.cyan.copy(alpha = 0.6f) else UniversityScheduleColors.outline,
+        if (selected) ScheduleColors.indigo else if (isToday) ScheduleColors.cyan.copy(alpha = 0.6f) else ScheduleColors.outline,
         animationSpec = tween(180),
         label = "day-select-border",
     )
@@ -870,7 +870,7 @@ private fun DayPill(
             .width(pillWidth)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(17.dp))
-            .background(if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.16f) else UniversityScheduleColors.surface)
+            .background(if (selected) ScheduleColors.indigo.copy(alpha = 0.16f) else ScheduleColors.surface)
             .border(1.dp, borderColor, RoundedCornerShape(17.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 10.dp),
@@ -878,13 +878,13 @@ private fun DayPill(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(weekdayShort(date), color = when {
-            selected -> UniversityScheduleColors.cyan
-            enabled -> UniversityScheduleColors.muted
-            else -> UniversityScheduleColors.dim.copy(alpha = 0.45f)
+            selected -> ScheduleColors.cyan
+            enabled -> ScheduleColors.muted
+            else -> ScheduleColors.dim.copy(alpha = 0.45f)
         }, fontSize = 9.sp, letterSpacing = 0.5.sp)
         Text(
             date.dayOfMonth.toString().padStart(2, '0'),
-            color = if (enabled) UniversityScheduleColors.foreground else UniversityScheduleColors.dim.copy(alpha = 0.45f),
+            color = if (enabled) ScheduleColors.foreground else ScheduleColors.dim.copy(alpha = 0.45f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 15.sp,
         )
@@ -894,9 +894,9 @@ private fun DayPill(
                 .clip(CircleShape)
                 .background(
                     when {
-                        selected -> UniversityScheduleColors.indigo
-                        hasLessons -> UniversityScheduleColors.mint
-                        isToday -> UniversityScheduleColors.cyan
+                        selected -> ScheduleColors.indigo
+                        hasLessons -> ScheduleColors.mint
+                        isToday -> ScheduleColors.cyan
                         else -> Color.Transparent
                     },
                 ),
@@ -912,14 +912,14 @@ private fun DaySummary(date: LocalDate, lessonCount: Int, pendingTaskCount: Int)
             eyebrow = "${weekdayLong(date).uppercase()} · ${date.toRuDate()}",
             value = lessonCount.toString().padStart(2, '0'),
             caption = "пар в расписании",
-            accent = UniversityScheduleColors.cyan,
+            accent = ScheduleColors.cyan,
         )
         SummaryTile(
             modifier = Modifier.weight(1f),
             eyebrow = "АКАДЕМИЧЕСКИЕ ЗАДАЧИ",
             value = pendingTaskCount.toString().padStart(2, '0'),
             caption = "открытых задач",
-            accent = if (pendingTaskCount > 0) UniversityScheduleColors.amber else UniversityScheduleColors.mint,
+            accent = if (pendingTaskCount > 0) ScheduleColors.amber else ScheduleColors.mint,
         )
     }
 }
@@ -935,14 +935,14 @@ private fun SummaryTile(
     Surface(
         modifier = modifier.heightIn(min = 98.dp),
         shape = RoundedCornerShape(19.dp),
-        color = UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        color = ScheduleColors.surface,
+        border = BorderStroke(1.dp, ScheduleColors.outline),
     ) {
         Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(eyebrow, color = UniversityScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.75.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(eyebrow, color = ScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.75.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(value, color = accent, fontSize = 26.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
-                Text(caption, color = UniversityScheduleColors.muted, fontSize = 10.sp, modifier = Modifier.padding(bottom = 3.dp))
+                Text(caption, color = ScheduleColors.muted, fontSize = 10.sp, modifier = Modifier.padding(bottom = 3.dp))
             }
         }
     }
@@ -959,7 +959,7 @@ private fun LessonCard(
     val lesson = item.lesson
     val accent = LessonThemeMapper.accent(lesson)
     val stroke by animateColorAsState(
-        if (item.isCurrent) accent.copy(alpha = 0.85f) else UniversityScheduleColors.outline,
+        if (item.isCurrent) accent.copy(alpha = 0.85f) else ScheduleColors.outline,
         animationSpec = tween(250),
         label = "lesson-current-stroke",
     )
@@ -970,7 +970,7 @@ private fun LessonCard(
             .animateContentSize()
             .shadow(if (item.isCurrent) 14.dp else 0.dp, RoundedCornerShape(21.dp), ambientColor = accent.copy(alpha = 0.18f), spotColor = accent.copy(alpha = 0.16f)),
         shape = RoundedCornerShape(21.dp),
-        color = if (item.isCurrent) UniversityScheduleColors.elevatedSurface else UniversityScheduleColors.surface,
+        color = if (item.isCurrent) ScheduleColors.elevatedSurface else ScheduleColors.surface,
         border = BorderStroke(if (item.isCurrent) 1.2.dp else 0.7.dp, stroke),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -987,20 +987,20 @@ private fun LessonCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(Modifier.width(61.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(lesson.startTime, color = UniversityScheduleColors.foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text(lesson.endTime, color = UniversityScheduleColors.muted, fontSize = 11.sp)
+                    Text(lesson.startTime, color = ScheduleColors.foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(lesson.endTime, color = ScheduleColors.muted, fontSize = 11.sp)
                     Spacer(Modifier.height(1.dp))
-                    Text("${lesson.slotNumber.takeIf { it > 0 } ?: "—"} ПАРА", color = UniversityScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.4.sp)
+                    Text("${lesson.slotNumber.takeIf { it > 0 } ?: "—"} ПАРА", color = ScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.4.sp)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TypeTag(lesson.type, accent)
-                        if (item.isCurrent) TypeTagLabel("СЕЙЧАС", UniversityScheduleColors.mint)
-                        if (lesson.isCustom) TypeTagLabel("МОЁ", UniversityScheduleColors.cyan)
+                        if (item.isCurrent) TypeTagLabel("СЕЙЧАС", ScheduleColors.mint)
+                        if (lesson.isCustom) TypeTagLabel("МОЁ", ScheduleColors.cyan)
                     }
                     Text(
                         lesson.subjectName.ifBlank { "Новая пара" },
-                        color = UniversityScheduleColors.foreground,
+                        color = ScheduleColors.foreground,
                         fontSize = 15.sp,
                         lineHeight = 19.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1008,15 +1008,15 @@ private fun LessonCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (lesson.teacherName.isNotBlank()) {
-                        Text(lesson.teacherName, color = UniversityScheduleColors.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(lesson.teacherName, color = ScheduleColors.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (lesson.classroom.isNotBlank()) {
-                        Text("⌖  ${lesson.classroom}", color = UniversityScheduleColors.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("⌖  ${lesson.classroom}", color = ScheduleColors.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (lesson.notes.isNotBlank()) {
                         Text(
                             "Заметка · ${lesson.notes}",
-                            color = UniversityScheduleColors.cyan,
+                            color = ScheduleColors.cyan,
                             fontSize = 9.sp,
                             lineHeight = 12.sp,
                             maxLines = 2,
@@ -1037,11 +1037,11 @@ private fun LessonCard(
                                 onClick = onAddSticker,
                                 modifier = Modifier.size(30.dp).semantics { contentDescription = "Добавить стикер" },
                                 shape = RoundedCornerShape(9.dp),
-                                color = UniversityScheduleColors.elevatedSurface,
-                                border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+                                color = ScheduleColors.elevatedSurface,
+                                border = BorderStroke(1.dp, ScheduleColors.outline),
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text("+", color = UniversityScheduleColors.muted, fontSize = 19.sp, lineHeight = 20.sp)
+                                    Text("+", color = ScheduleColors.muted, fontSize = 19.sp, lineHeight = 20.sp)
                                 }
                             }
                             lesson.stickers.filter { it in LessonStickerPalette.choices }.forEach { sticker ->
@@ -1052,7 +1052,7 @@ private fun LessonCard(
                                     color = accent.copy(alpha = 0.12f),
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Text(sticker, color = UniversityScheduleColors.foreground, fontSize = 17.sp)
+                                        Text(sticker, color = ScheduleColors.foreground, fontSize = 17.sp)
                                     }
                                 }
                             }
@@ -1069,7 +1069,7 @@ private fun LessonCard(
                                 ) {
                                     Text(
                                         if (rating <= (lesson.rating ?: 0)) "★" else "☆",
-                                        color = if (rating <= (lesson.rating ?: 0)) UniversityScheduleColors.amber else UniversityScheduleColors.dim,
+                                        color = if (rating <= (lesson.rating ?: 0)) ScheduleColors.amber else ScheduleColors.dim,
                                         fontSize = 18.sp,
                                         lineHeight = 20.sp,
                                     )
@@ -1117,18 +1117,18 @@ private fun ScheduleLoadingStatusCard(title: String, detail: String) {
     Surface(
         modifier = Modifier.fillMaxWidth().animateContentSize(),
         shape = RoundedCornerShape(20.dp),
-        color = UniversityScheduleColors.elevatedSurface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.cyan.copy(alpha = 0.28f)),
+        color = ScheduleColors.elevatedSurface,
+        border = BorderStroke(1.dp, ScheduleColors.cyan.copy(alpha = 0.28f)),
     ) {
         Row(
             modifier = Modifier.padding(17.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp),
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(21.dp), color = UniversityScheduleColors.cyan, strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.size(21.dp), color = ScheduleColors.cyan, strokeWidth = 2.dp)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, color = UniversityScheduleColors.foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(detail, color = UniversityScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text(title, color = ScheduleColors.foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(detail, color = ScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
         }
     }
@@ -1139,13 +1139,13 @@ private fun ScheduleNotLoadedCard(onOpenSettings: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        color = UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        color = ScheduleColors.surface,
+        border = BorderStroke(1.dp, ScheduleColors.outline),
     ) {
         Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("РАСПИСАНИЕ ЕЩЁ НЕ ЗАГРУЖЕНО", color = UniversityScheduleColors.cyan, fontSize = 8.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
-            Text("Чтобы загрузить расписание и сохранить его офлайн, откройте настройки и нажмите «Обновить расписание».", color = UniversityScheduleColors.muted, fontSize = 11.sp, lineHeight = 16.sp)
-            TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = UniversityScheduleColors.cyan, fontSize = 11.sp) }
+            Text("РАСПИСАНИЕ ЕЩЁ НЕ ЗАГРУЖЕНО", color = ScheduleColors.cyan, fontSize = 8.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+            Text("Чтобы загрузить расписание и сохранить его офлайн, откройте настройки и нажмите «Обновить расписание».", color = ScheduleColors.muted, fontSize = 11.sp, lineHeight = 16.sp)
+            TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = ScheduleColors.cyan, fontSize = 11.sp) }
         }
     }
 }
@@ -1157,7 +1157,7 @@ private fun ScheduleErrorStatusCard(error: ScheduleErrorInfo, onOpenSettings: ()
             error = error,
             context = "Локальная копия пока отсутствует. Сохранённые данные не изменены.",
         )
-        TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = UniversityScheduleColors.cyan, fontSize = 11.sp) }
+        TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = ScheduleColors.cyan, fontSize = 11.sp) }
     }
 }
 
@@ -1166,16 +1166,16 @@ private fun ScheduleRefreshingBanner() {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = UniversityScheduleColors.cyan.copy(alpha = 0.07f),
-        border = BorderStroke(1.dp, UniversityScheduleColors.cyan.copy(alpha = 0.2f)),
+        color = ScheduleColors.cyan.copy(alpha = 0.07f),
+        border = BorderStroke(1.dp, ScheduleColors.cyan.copy(alpha = 0.2f)),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(15.dp), color = UniversityScheduleColors.cyan, strokeWidth = 1.7.dp)
-            Text("Обновляем семестровый цикл · сохранённое расписание доступно", color = UniversityScheduleColors.muted, fontSize = 9.sp, lineHeight = 13.sp)
+            CircularProgressIndicator(modifier = Modifier.size(15.dp), color = ScheduleColors.cyan, strokeWidth = 1.7.dp)
+            Text("Обновляем семестровый цикл · сохранённое расписание доступно", color = ScheduleColors.muted, fontSize = 9.sp, lineHeight = 13.sp)
         }
     }
 }
@@ -1187,7 +1187,7 @@ private fun CachedScheduleWarning(error: ScheduleErrorInfo, onOpenSettings: () -
             error = error,
             context = "Показана сохранённая локальная копия расписания.",
         )
-        TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = UniversityScheduleColors.cyan, fontSize = 11.sp) }
+        TextButton(onClick = onOpenSettings) { Text("Открыть настройки  →", color = ScheduleColors.cyan, fontSize = 11.sp) }
     }
 }
 
@@ -1195,19 +1195,19 @@ private fun CachedScheduleWarning(error: ScheduleErrorInfo, onOpenSettings: () -
 private fun EmptyDayCard(date: LocalDate, onAddLesson: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(22.dp),
-        color = UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        color = ScheduleColors.surface,
+        border = BorderStroke(1.dp, ScheduleColors.outline),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(21.dp),
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            Text("◌", color = UniversityScheduleColors.indigo, fontSize = 24.sp)
-            Text("Окно для своих дел", color = UniversityScheduleColors.foreground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-            Text("На ${weekdayLong(date).lowercase()} занятий нет. Можно добавить личную пару или оставить день свободным.", color = UniversityScheduleColors.muted, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("◌", color = ScheduleColors.indigo, fontSize = 24.sp)
+            Text("Окно для своих дел", color = ScheduleColors.foreground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("На ${weekdayLong(date).lowercase()} занятий нет. Можно добавить личную пару или оставить день свободным.", color = ScheduleColors.muted, fontSize = 12.sp, lineHeight = 18.sp)
             Button(
                 onClick = onAddLesson,
-                colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.indigo, contentColor = UniversityScheduleColors.background),
+                colors = ButtonDefaults.buttonColors(containerColor = ScheduleColors.indigo, contentColor = ScheduleColors.background),
                 shape = RoundedCornerShape(13.dp),
             ) { Text("＋ Своя пара", fontWeight = FontWeight.SemiBold) }
         }
@@ -1218,23 +1218,23 @@ private fun EmptyDayCard(date: LocalDate, onAddLesson: () -> Unit) {
 private fun FirstProfileCard(onAdd: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(26.dp),
-        color = UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        color = ScheduleColors.surface,
+        border = BorderStroke(1.dp, ScheduleColors.outline),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Добавьте расписание", color = UniversityScheduleColors.foreground, fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.SemiBold)
+            Text("Добавьте расписание", color = ScheduleColors.foreground, fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "Найдите свою группу или преподавателя.",
-                color = UniversityScheduleColors.muted,
+                color = ScheduleColors.muted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
             )
             Button(
                 onClick = onAdd,
-                colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.indigo, contentColor = UniversityScheduleColors.background),
+                colors = ButtonDefaults.buttonColors(containerColor = ScheduleColors.indigo, contentColor = ScheduleColors.background),
                 shape = RoundedCornerShape(14.dp),
             ) { Text("Найти расписание  →", fontWeight = FontWeight.SemiBold) }
         }
@@ -1244,8 +1244,8 @@ private fun FirstProfileCard(onAdd: () -> Unit) {
 @Composable
 private fun SectionEyebrow(text: String, trailing: String? = null) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(text, color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
-        trailing?.let { Text(it, color = UniversityScheduleColors.dim, fontSize = 9.sp) }
+        Text(text, color = ScheduleColors.dim, fontSize = 9.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
+        trailing?.let { Text(it, color = ScheduleColors.dim, fontSize = 9.sp) }
     }
 }
 

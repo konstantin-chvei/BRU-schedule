@@ -311,7 +311,7 @@ class BsuScheduleHtmlParserTest {
             id = "bsu-teacher-fpmi-subgroup",
             type = ScheduleProfileType.TEACHER,
             name = "Иванова И.И.",
-            sourceUrl = "https://konstantin-chvei.github.io/BRU-schedule/schedule-data/universities/bsu/schedules/teachers/ivanova-ii.html",
+            sourceUrl = "https://konstantin-chvei.github.io/schedule/schedule-data/universities/bsu/schedules/teachers/ivanova-ii.html",
             sourceKey = "ФПМИ",
             universityId = "bsu",
         )

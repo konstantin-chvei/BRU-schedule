@@ -68,7 +68,7 @@ import com.example.bruschedule.domain.model.ScheduleAppTheme
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.presentation.ScheduleUiState
 import com.example.bruschedule.presentation.ScheduleViewModel
-import com.example.bruschedule.ui.theme.UniversityScheduleColors
+import com.example.bruschedule.ui.theme.ScheduleColors
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -95,14 +95,14 @@ fun ScheduleSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(UniversityScheduleColors.background)
+            .background(ScheduleColors.background)
             .padding(contentPadding)
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 21.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Настройки", color = UniversityScheduleColors.foreground, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-        Text("Оформление и напоминания.", color = UniversityScheduleColors.muted, fontSize = 12.sp, lineHeight = 18.sp)
+        Text("Настройки", color = ScheduleColors.foreground, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+        Text("Оформление и напоминания.", color = ScheduleColors.muted, fontSize = 12.sp, lineHeight = 18.sp)
 
         AppearanceSettingsCard(
             state = state,
@@ -136,18 +136,18 @@ fun ScheduleSettingsScreen(
         Surface(
             modifier = Modifier.bringIntoViewRequester(scheduleManagementRequester),
             shape = RoundedCornerShape(21.dp),
-            color = UniversityScheduleColors.surface,
-            border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+            color = ScheduleColors.surface,
+            border = BorderStroke(1.dp, ScheduleColors.outline),
         ) {
             Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Text("УПРАВЛЕНИЕ РАСПИСАНИЕМ", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
+                Text("УПРАВЛЕНИЕ РАСПИСАНИЕМ", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
                 Box {
                     Surface(
                         onClick = { profileSelectorExpanded = state.profiles.isNotEmpty() },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(13.dp),
-                        color = UniversityScheduleColors.elevatedSurface,
-                        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+                        color = ScheduleColors.elevatedSurface,
+                        border = BorderStroke(1.dp, ScheduleColors.outline),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
@@ -155,10 +155,10 @@ fun ScheduleSettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text("Выбранное расписание", color = UniversityScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.6.sp)
+                                Text("Выбранное расписание", color = ScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.6.sp)
                                 Text(
                                     state.selectedProfile?.name ?: "Добавьте расписание",
-                                    color = UniversityScheduleColors.foreground,
+                                    color = ScheduleColors.foreground,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
@@ -173,14 +173,14 @@ fun ScheduleSettingsScreen(
                                         else -> "Не загружено"
                                     },
                                     color = when {
-                                        state.isRefreshing -> UniversityScheduleColors.amber
-                                        sync?.lastError != null -> UniversityScheduleColors.danger
-                                        sync?.lastSuccessfulAtEpochMillis != null -> UniversityScheduleColors.mint
-                                        else -> UniversityScheduleColors.dim
+                                        state.isRefreshing -> ScheduleColors.amber
+                                        sync?.lastError != null -> ScheduleColors.danger
+                                        sync?.lastSuccessfulAtEpochMillis != null -> ScheduleColors.mint
+                                        else -> ScheduleColors.dim
                                     },
                                     fontSize = 8.sp,
                                 )
-                                Text("⌄", color = UniversityScheduleColors.cyan, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                Text("⌄", color = ScheduleColors.cyan, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -192,16 +192,16 @@ fun ScheduleSettingsScreen(
                             DropdownMenuItem(
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(profile.name, color = UniversityScheduleColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(profile.name, color = ScheduleColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                         Text(
                                             if (profile.type == ScheduleProfileType.GROUP) "Группа" else "Преподаватель",
-                                            color = UniversityScheduleColors.muted,
+                                            color = ScheduleColors.muted,
                                             fontSize = 9.sp,
                                         )
                                     }
                                 },
                                 trailingIcon = {
-                                    if (profile.id == state.selectedProfile?.id) Text("✓", color = UniversityScheduleColors.cyan, fontSize = 13.sp)
+                                    if (profile.id == state.selectedProfile?.id) Text("✓", color = ScheduleColors.cyan, fontSize = 13.sp)
                                 },
                                 onClick = {
                                     profileSelectorExpanded = false
@@ -212,7 +212,7 @@ fun ScheduleSettingsScreen(
                     }
                 }
                 if (state.profiles.isEmpty()) {
-                    Text("Сначала добавьте расписание на главном экране.", color = UniversityScheduleColors.dim, fontSize = 9.sp)
+                    Text("Сначала добавьте расписание на главном экране.", color = ScheduleColors.dim, fontSize = 9.sp)
                 }
                 HorizontalDividerLine()
                 JournalLine("Последнее успешное обновление", sync?.lastSuccessfulAtEpochMillis?.let(::formatSyncTimestamp) ?: "Пока нет")
@@ -220,7 +220,7 @@ fun ScheduleSettingsScreen(
                 JournalLine("Локальный сейв", sync?.previousSnapshotAtEpochMillis?.let(::formatSyncTimestamp) ?: "Пока не создан")
                 Text(
                     "Профиль не загружается автоматически. Для обновления нажмите кнопку ниже.",
-                    color = UniversityScheduleColors.dim,
+                    color = ScheduleColors.dim,
                     fontSize = 9.sp,
                     lineHeight = 13.sp,
                 )
@@ -236,7 +236,7 @@ fun ScheduleSettingsScreen(
                     enabled = state.selectedProfile != null && !state.isRefreshing,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(13.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = UniversityScheduleColors.indigo, contentColor = UniversityScheduleColors.background),
+                    colors = ButtonDefaults.buttonColors(containerColor = ScheduleColors.indigo, contentColor = ScheduleColors.background),
                 ) {
                     Text(if (state.isRefreshing) "Обновляем расписание…" else "Обновить расписание", fontWeight = FontWeight.SemiBold)
                 }
@@ -245,8 +245,8 @@ fun ScheduleSettingsScreen(
                     enabled = sync?.canRollback == true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(13.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = UniversityScheduleColors.cyan),
-                    border = BorderStroke(1.dp, if (sync?.canRollback == true) UniversityScheduleColors.cyan.copy(alpha = 0.5f) else UniversityScheduleColors.outline),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ScheduleColors.cyan),
+                    border = BorderStroke(1.dp, if (sync?.canRollback == true) ScheduleColors.cyan.copy(alpha = 0.5f) else ScheduleColors.outline),
                 ) {
                     Text("↶  Восстановить локальный сейв", fontWeight = FontWeight.Medium)
                 }
@@ -255,8 +255,8 @@ fun ScheduleSettingsScreen(
                     enabled = state.selectedProfile != null && !state.isRefreshing,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(13.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = UniversityScheduleColors.danger),
-                    border = BorderStroke(1.dp, UniversityScheduleColors.danger.copy(alpha = 0.45f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ScheduleColors.danger),
+                    border = BorderStroke(1.dp, ScheduleColors.danger.copy(alpha = 0.45f)),
                 ) {
                     Text("Удалить это расписание", fontWeight = FontWeight.Medium)
                 }
@@ -284,17 +284,17 @@ fun ScheduleSettingsScreen(
                         viewModel.deleteSelectedProfile()
                     },
                 ) {
-                    Text("Удалить", color = UniversityScheduleColors.danger)
+                    Text("Удалить", color = ScheduleColors.danger)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmation = false }) {
-                    Text("Отмена", color = UniversityScheduleColors.muted)
+                    Text("Отмена", color = ScheduleColors.muted)
                 }
             },
-            containerColor = UniversityScheduleColors.surface,
-            titleContentColor = UniversityScheduleColors.foreground,
-            textContentColor = UniversityScheduleColors.muted,
+            containerColor = ScheduleColors.surface,
+            titleContentColor = ScheduleColors.foreground,
+            textContentColor = ScheduleColors.muted,
         )
     }
 }
@@ -305,19 +305,19 @@ private fun TypographySettingsCard(
     onScaleChanged: (TypographyRole, Float) -> Unit,
     onResetAll: () -> Unit,
 ) {
-    Surface(shape = RoundedCornerShape(21.dp), color = UniversityScheduleColors.surface, border = BorderStroke(1.dp, UniversityScheduleColors.outline)) {
+    Surface(shape = RoundedCornerShape(21.dp), color = ScheduleColors.surface, border = BorderStroke(1.dp, ScheduleColors.outline)) {
         Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("ТИПОГРАФИКА", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
-                Text("Размеры текста", color = UniversityScheduleColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Отдельные ползунки 100–150%; предпросмотр обновляется сразу.", color = UniversityScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("ТИПОГРАФИКА", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                Text("Размеры текста", color = ScheduleColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Отдельные ползунки 100–150%; предпросмотр обновляется сразу.", color = ScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
-            Surface(shape = RoundedCornerShape(14.dp), color = UniversityScheduleColors.elevatedSurface) {
+            Surface(shape = RoundedCornerShape(14.dp), color = ScheduleColors.elevatedSurface) {
                 Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("РАСПИСАНИЕ", color = UniversityScheduleColors.foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                    Text("Заголовок карточки", color = UniversityScheduleColors.foreground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Обычный текст расписания на день", color = UniversityScheduleColors.muted, fontSize = 13.sp)
-                    Text("Мелкая подпись · время 09:40", color = UniversityScheduleColors.dim, fontSize = 10.sp)
+                    Text("РАСПИСАНИЕ", color = ScheduleColors.foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+                    Text("Заголовок карточки", color = ScheduleColors.foreground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Обычный текст расписания на день", color = ScheduleColors.muted, fontSize = 13.sp)
+                    Text("Мелкая подпись · время 09:40", color = ScheduleColors.dim, fontSize = 10.sp)
                 }
             }
 
@@ -349,7 +349,7 @@ private fun TypographySettingsCard(
                 onScaleChanged = onScaleChanged,
             )
             TextButton(onClick = onResetAll) {
-                Text("Сбросить все размеры к 100%", color = UniversityScheduleColors.cyan, fontSize = 11.sp)
+                Text("Сбросить все размеры к 100%", color = ScheduleColors.cyan, fontSize = 11.sp)
             }
         }
     }
@@ -368,8 +368,8 @@ private fun TypographyScaleControl(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(title, color = UniversityScheduleColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            Text("${(scale * 100).roundToInt()}%", color = UniversityScheduleColors.cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = ScheduleColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Text("${(scale * 100).roundToInt()}%", color = ScheduleColors.cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
         Slider(
             value = scale,
@@ -378,14 +378,14 @@ private fun TypographyScaleControl(
             steps = 0,
             modifier = Modifier.fillMaxWidth(),
             colors = SliderDefaults.colors(
-                thumbColor = UniversityScheduleColors.cyan,
-                activeTrackColor = UniversityScheduleColors.indigo,
-                inactiveTrackColor = UniversityScheduleColors.outline,
+                thumbColor = ScheduleColors.cyan,
+                activeTrackColor = ScheduleColors.indigo,
+                inactiveTrackColor = ScheduleColors.outline,
             ),
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("100%", color = UniversityScheduleColors.dim, fontSize = 9.sp)
-            Text("150%", color = UniversityScheduleColors.dim, fontSize = 9.sp)
+            Text("100%", color = ScheduleColors.dim, fontSize = 9.sp)
+            Text("150%", color = ScheduleColors.dim, fontSize = 9.sp)
         }
     }
 }
@@ -414,20 +414,20 @@ private fun SemesterScheduleSettingsCard(
     var profileDateText by remember(selectedProfileId, profileDate) {
         mutableStateOf(formatIsoDateForInput(profileDate))
     }
-    Surface(shape = RoundedCornerShape(21.dp), color = UniversityScheduleColors.surface, border = BorderStroke(1.dp, UniversityScheduleColors.outline)) {
+    Surface(shape = RoundedCornerShape(21.dp), color = ScheduleColors.surface, border = BorderStroke(1.dp, ScheduleColors.outline)) {
         Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("СЕССИЯ ${academicYearLabel(todayDate)} · ${university.name.uppercase()}", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
-                Text("Период календаря", color = UniversityScheduleColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Расписание доступно с сегодняшнего дня до недели после окончания сессии. Даты по умолчанию ориентировочные — проверьте их для своего факультета и курса.", color = UniversityScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("СЕССИЯ ${academicYearLabel(todayDate)} · ${university.name.uppercase()}", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                Text("Период календаря", color = ScheduleColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Расписание доступно с сегодняшнего дня до недели после окончания сессии. Даты по умолчанию ориентировочные — проверьте их для своего факультета и курса.", color = ScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
             AcademicTrack.availableForUniversity(universityId).forEach { track ->
                 val selected = selectedTrack == track
                 Surface(
                     onClick = { onTrackSelected(universityId, track) },
                     shape = RoundedCornerShape(13.dp),
-                    color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.14f) else UniversityScheduleColors.elevatedSurface,
-                    border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo else UniversityScheduleColors.outline),
+                    color = if (selected) ScheduleColors.indigo.copy(alpha = 0.14f) else ScheduleColors.elevatedSurface,
+                    border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo else ScheduleColors.outline),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -435,15 +435,15 @@ private fun SemesterScheduleSettingsCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(track.label, color = UniversityScheduleColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(track.label, color = ScheduleColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             Text(
                                 sessionTrackHint(track),
-                                color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.muted,
+                                color = if (selected) ScheduleColors.cyan else ScheduleColors.muted,
                                 fontSize = 9.sp,
                                 lineHeight = 13.sp,
                             )
                         }
-                        Text(if (selected) "✓" else "○", color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.dim, fontSize = 14.sp)
+                        Text(if (selected) "✓" else "○", color = if (selected) ScheduleColors.cyan else ScheduleColors.dim, fontSize = 14.sp)
                     }
                 }
             }
@@ -466,22 +466,22 @@ private fun SemesterScheduleSettingsCard(
             )
             if (preferences.hasUniversitySessionEndDateOverride(universityId)) {
                 TextButton(onClick = { onUniversitySessionEndDateChanged(universityId, null) }) {
-                    Text("Использовать дату по умолчанию для вуза", color = UniversityScheduleColors.cyan, fontSize = 10.sp)
+                    Text("Использовать дату по умолчанию для вуза", color = ScheduleColors.cyan, fontSize = 10.sp)
                 }
             }
             Text(
                 "Покрытие автоматически продлевается ещё на ${SemesterCoveragePolicy.DAYS_AFTER_SESSION} дней после указанной даты.",
-                color = UniversityScheduleColors.dim,
+                color = ScheduleColors.dim,
                 fontSize = 9.sp,
                 lineHeight = 13.sp,
             )
             if (selectedProfileId != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     val profileLabel = selectedProfileName ?: "выбранного расписания"
-                    Text("ОТДЕЛЬНО ДЛЯ ЭТОГО РАСПИСАНИЯ", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 0.9.sp)
+                    Text("ОТДЕЛЬНО ДЛЯ ЭТОГО РАСПИСАНИЯ", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 0.9.sp)
                     Text(
                         "Факультеты могут заканчивать сессию в разные даты. Для «$profileLabel» можно задать свою; календарь захватит ещё 7 дней.",
-                        color = UniversityScheduleColors.muted,
+                        color = ScheduleColors.muted,
                         fontSize = 10.sp,
                         lineHeight = 15.sp,
                     )
@@ -504,7 +504,7 @@ private fun SemesterScheduleSettingsCard(
                     )
                     if (profileDateOverride != null) {
                         TextButton(onClick = { onProfileSessionEndDateChanged(selectedProfileId, null) }) {
-                            Text("Использовать дату вуза", color = UniversityScheduleColors.cyan, fontSize = 10.sp)
+                            Text("Использовать дату вуза", color = ScheduleColors.cyan, fontSize = 10.sp)
                         }
                     }
                 }
@@ -553,29 +553,29 @@ private fun DeadlineReminderSettingsCard(
     preferences: DeadlineReminderPreferences,
     onChange: (DeadlineReminderPreferences) -> Unit,
 ) {
-    Surface(shape = RoundedCornerShape(21.dp), color = UniversityScheduleColors.surface, border = BorderStroke(1.dp, UniversityScheduleColors.outline)) {
+    Surface(shape = RoundedCornerShape(21.dp), color = ScheduleColors.surface, border = BorderStroke(1.dp, ScheduleColors.outline)) {
         Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("ДЕДЛАЙНЫ", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Напоминания", color = UniversityScheduleColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Общие значения для задач с режимом «По умолчанию».", color = UniversityScheduleColors.muted, fontSize = 10.sp, lineHeight = 14.sp)
+                    Text("ДЕДЛАЙНЫ", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Напоминания", color = ScheduleColors.foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Общие значения для задач с режимом «По умолчанию».", color = ScheduleColors.muted, fontSize = 10.sp, lineHeight = 14.sp)
                 }
                 Switch(
                     checked = preferences.enabled,
                     onCheckedChange = { onChange(preferences.copy(enabled = it)) },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = UniversityScheduleColors.cyan,
-                        checkedTrackColor = UniversityScheduleColors.indigo,
-                        uncheckedThumbColor = UniversityScheduleColors.dim,
-                        uncheckedTrackColor = UniversityScheduleColors.elevatedSurface,
-                        uncheckedBorderColor = UniversityScheduleColors.outline,
+                        checkedThumbColor = ScheduleColors.cyan,
+                        checkedTrackColor = ScheduleColors.indigo,
+                        uncheckedThumbColor = ScheduleColors.dim,
+                        uncheckedTrackColor = ScheduleColors.elevatedSurface,
+                        uncheckedBorderColor = ScheduleColors.outline,
                     ),
                 )
             }
             if (preferences.enabled) {
                 HorizontalDividerLine()
-                Text("НАПОМИНАТЬ ЗАРАНЕЕ", color = UniversityScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.9.sp)
+                Text("НАПОМИНАТЬ ЗАРАНЕЕ", color = ScheduleColors.dim, fontSize = 8.sp, letterSpacing = 0.9.sp)
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -593,22 +593,22 @@ private fun DeadlineReminderSettingsCard(
                                 onChange(preferences.copy(offsetsMinutes = next.distinct().sortedDescending()))
                             },
                             shape = RoundedCornerShape(11.dp),
-                            color = if (selected) UniversityScheduleColors.indigo.copy(alpha = 0.17f) else UniversityScheduleColors.elevatedSurface,
-                            border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo else UniversityScheduleColors.outline),
+                            color = if (selected) ScheduleColors.indigo.copy(alpha = 0.17f) else ScheduleColors.elevatedSurface,
+                            border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo else ScheduleColors.outline),
                         ) {
                             Text(
                                 DeadlineReminderIntervals.label(minutes),
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                                color = if (selected) UniversityScheduleColors.cyan else UniversityScheduleColors.muted,
+                                color = if (selected) ScheduleColors.cyan else ScheduleColors.muted,
                                 fontSize = 9.sp,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                             )
                         }
                     }
                 }
-                Text("Можно выбрать несколько интервалов. Уведомления доставляются устройством и работают без сети.", color = UniversityScheduleColors.dim, fontSize = 9.sp, lineHeight = 13.sp)
+                Text("Можно выбрать несколько интервалов. Уведомления доставляются устройством и работают без сети.", color = ScheduleColors.dim, fontSize = 9.sp, lineHeight = 13.sp)
             } else {
-                Text("Все напоминания о дедлайнах приостановлены.", color = UniversityScheduleColors.dim, fontSize = 10.sp)
+                Text("Все напоминания о дедлайнах приостановлены.", color = ScheduleColors.dim, fontSize = 10.sp)
             }
         }
     }
@@ -617,11 +617,11 @@ private fun DeadlineReminderSettingsCard(
 @Composable
 private fun InfoCard() {
     val uriHandler = LocalUriHandler.current
-    Surface(shape = RoundedCornerShape(21.dp), color = UniversityScheduleColors.surface, border = BorderStroke(1.dp, UniversityScheduleColors.outline)) {
+    Surface(shape = RoundedCornerShape(21.dp), color = ScheduleColors.surface, border = BorderStroke(1.dp, ScheduleColors.outline)) {
         Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("ОБРАТНАЯ СВЯЗЬ", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
+            Text("ОБРАТНАЯ СВЯЗЬ", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
             TextButton(onClick = { uriHandler.openUri(PROJECT_TELEGRAM_BOT_URL) }) {
-                Text("Telegram-бот ↗", color = UniversityScheduleColors.cyan, fontWeight = FontWeight.SemiBold)
+                Text("Telegram-бот ↗", color = ScheduleColors.cyan, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -636,17 +636,17 @@ private fun AppearanceSettingsCard(
 ) {
     Surface(
         shape = RoundedCornerShape(21.dp),
-        color = UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        color = ScheduleColors.surface,
+        border = BorderStroke(1.dp, ScheduleColors.outline),
     ) {
         Column(
             Modifier.fillMaxWidth().padding(17.dp),
             verticalArrangement = Arrangement.spacedBy(13.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("ВНЕШНИЙ ВИД", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
-                Text("Своя палитра", color = UniversityScheduleColors.foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Text("Тема и акценты сохраняются на устройстве и применяются сразу.", color = UniversityScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("ВНЕШНИЙ ВИД", color = ScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.SemiBold)
+                Text("Своя палитра", color = ScheduleColors.foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text("Тема и акценты сохраняются на устройстве и применяются сразу.", color = ScheduleColors.muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 ScheduleAppTheme.entries.forEach { theme ->
@@ -661,11 +661,11 @@ private fun AppearanceSettingsCard(
             HorizontalDividerLine()
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("ЦВЕТА ЗАНЯТИЙ", color = UniversityScheduleColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Выберите акцент для каждого типа пары", color = UniversityScheduleColors.muted, fontSize = 9.sp)
+                    Text("ЦВЕТА ЗАНЯТИЙ", color = ScheduleColors.foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Выберите акцент для каждого типа пары", color = ScheduleColors.muted, fontSize = 9.sp)
                 }
                 TextButton(onClick = onResetLessonColors) {
-                    Text("Сбросить", color = UniversityScheduleColors.cyan, fontSize = 10.sp)
+                    Text("Сбросить", color = ScheduleColors.cyan, fontSize = 10.sp)
                 }
             }
             LessonAccentEditor(
@@ -708,8 +708,8 @@ private fun ThemeChoice(
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(13.dp),
-        color = if (selected) UniversityScheduleColors.elevatedSurface else UniversityScheduleColors.surface,
-        border = BorderStroke(1.dp, if (selected) UniversityScheduleColors.indigo else UniversityScheduleColors.outline),
+        color = if (selected) ScheduleColors.elevatedSurface else ScheduleColors.surface,
+        border = BorderStroke(1.dp, if (selected) ScheduleColors.indigo else ScheduleColors.outline),
     ) {
         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Surface(
@@ -727,14 +727,14 @@ private fun ThemeChoice(
                     Text("Aa", color = preview.foreground, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            Text(theme.label, color = UniversityScheduleColors.foreground, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(theme.label, color = ScheduleColors.foreground, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(
                 when (theme) {
                     ScheduleAppTheme.BLUE -> "Насыщенный синий"
                     ScheduleAppTheme.BLACK -> "AMOLED"
                     ScheduleAppTheme.WHITE -> "Светлая"
                 },
-                color = UniversityScheduleColors.dim,
+                color = ScheduleColors.dim,
                 fontSize = 7.sp,
                 maxLines = 1,
             )
@@ -751,8 +751,8 @@ private fun LessonAccentEditor(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = UniversityScheduleColors.muted, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-            Text(colorHex.uppercase(), color = UniversityScheduleColors.dim, fontSize = 9.sp, letterSpacing = 0.4.sp)
+            Text(label, color = ScheduleColors.muted, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+            Text(colorHex.uppercase(), color = ScheduleColors.dim, fontSize = 9.sp, letterSpacing = 0.4.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             LESSON_COLOR_PRESETS.forEach { color ->
@@ -768,13 +768,13 @@ private fun LessonAccentEditor(
 
 @Composable
 private fun ColorSwatch(colorHex: String, selected: Boolean, onClick: () -> Unit) {
-    val color = com.example.bruschedule.ui.theme.LessonThemeMapper.parseHex(colorHex) ?: UniversityScheduleColors.indigo
+    val color = com.example.bruschedule.ui.theme.LessonThemeMapper.parseHex(colorHex) ?: ScheduleColors.indigo
     Box(
         modifier = Modifier
             .size(25.dp)
             .clip(CircleShape)
             .background(color)
-            .border(1.dp, if (selected) UniversityScheduleColors.foreground else UniversityScheduleColors.outline, CircleShape)
+            .border(1.dp, if (selected) ScheduleColors.foreground else ScheduleColors.outline, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -811,14 +811,14 @@ private val LESSON_COLOR_PRESETS = listOf(
 @Composable
 private fun JournalLine(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = UniversityScheduleColors.muted, fontSize = 10.sp, modifier = Modifier.weight(1f))
-        Text(value, color = UniversityScheduleColors.foreground, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = ScheduleColors.muted, fontSize = 10.sp, modifier = Modifier.weight(1f))
+        Text(value, color = ScheduleColors.foreground, fontSize = 10.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun HorizontalDividerLine() {
-    Spacer(Modifier.fillMaxWidth().height(1.dp).background(UniversityScheduleColors.outline))
+    Spacer(Modifier.fillMaxWidth().height(1.dp).background(ScheduleColors.outline))
 }
 
 private fun formatSyncTimestamp(epochMillis: Long): String {
