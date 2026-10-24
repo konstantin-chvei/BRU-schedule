@@ -17,7 +17,7 @@
 
 Debug APK: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Он подписан отладочным ключом и предназначен только для проверки.
 
-Идентификатор приложения: `com.konstantinchvei.bruschedule`. Не меняйте его после первой публикации.
+Идентификатор Android-приложения и iOS Bundle ID: `com.konstantinchvei.bruschedule`. Перед первой публикацией подтвердите, что это желаемый и доступный идентификатор в аккаунтах магазинов; после выпуска его нельзя менять без создания нового приложения.
 
 Для релизного Android App Bundle выполните `:androidApp:bundleRelease` или используйте **Build → Generate Signed Bundle / APK** в Android Studio. Перед распространением подпишите сборку собственным keystore. Keystore и пароли храните вне Git; все обновления должны быть подписаны тем же ключом. Текущая CI-сборка не создаёт подписанный релиз.
 
