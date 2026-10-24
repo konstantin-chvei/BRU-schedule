@@ -1,11 +1,6 @@
 name: Import university schedule datasets
 
 on:
-  push:
-    branches:
-      - arena/a130e7c0-bru-schedule
-    paths:
-      - ".github/workflows/import-schedule-data.yml"
   workflow_dispatch:
     inputs:
       university:
@@ -27,7 +22,6 @@ concurrency:
 
 jobs:
   import-and-publish:
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Run schedule import once') }}
     name: Parse schedules and publish GitHub datasets
     runs-on: ubuntu-24.04
     timeout-minutes: 360
