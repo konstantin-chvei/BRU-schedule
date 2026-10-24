@@ -116,34 +116,44 @@ jobs:
       - name: Commit and publish updated datasets to the selected branch
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add schedule-data/
-          if git diff --cached --quiet; then
-            echo "No schedule dataset changes to publish"
-            exit 0
-          fi
-          git commit -m "Update published university schedule datasets"
-
           branch="${GITHUB_REF#refs/heads/}"
           if [[ "$branch" == "$GITHUB_REF" || -z "$branch" ]]; then
             echo "::error::Refusing to publish schedule data outside a branch: $GITHUB_REF"
             exit 1
           fi
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          imported_data="$RUNNER_TEMP/imported-schedule-data"
+          mkdir -p "$imported_data"
+          cp -a schedule-data/. "$imported_data/"
+
           for attempt in 1 2 3; do
             git fetch origin "refs/heads/${branch}:refs/remotes/origin/${branch}"
-            if ! git rebase "refs/remotes/origin/${branch}"; then
-              git rebase --abort || true
-              echo "::error::Could not rebase schedule data onto the latest ${branch}; resolve the data conflict and rerun."
-              exit 1
-            fi
-            if git push origin "HEAD:${GITHUB_REF}"; then
+            publish_dir="$RUNNER_TEMP/schedule-data-publish-${attempt}"
+            git worktree add --detach "$publish_dir" "refs/remotes/origin/${branch}"
+            git -C "$publish_dir" config user.name "github-actions[bot]"
+            git -C "$publish_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$publish_dir" rm -r --ignore-unmatch --quiet schedule-data
+            mkdir -p "$publish_dir/schedule-data"
+            cp -a "$imported_data"/. "$publish_dir/schedule-data/"
+            git -C "$publish_dir" add -- schedule-data/
+
+            if git -C "$publish_dir" diff --cached --quiet; then
+              echo "No schedule dataset changes to publish"
+              git worktree remove "$publish_dir"
               exit 0
             fi
+
+            git -C "$publish_dir" commit -m "Update published university schedule datasets"
+            if git -C "$publish_dir" push origin "HEAD:${GITHUB_REF}"; then
+              git worktree remove "$publish_dir"
+              exit 0
+            fi
+            git worktree remove "$publish_dir"
             if [[ "$attempt" -eq 3 ]]; then
               echo "::error::Could not publish schedule data after three attempts."
               exit 1
             fi
-            echo "Push was rejected because the branch advanced; fetching and rebasing again (attempt $((attempt + 1))/3)."
+            echo "Push was rejected because the branch advanced; rebuilding the publish commit on the latest ${branch} (attempt $((attempt + 1))/3)."
           done
