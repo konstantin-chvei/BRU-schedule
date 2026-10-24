@@ -291,7 +291,7 @@ class ScheduleDocumentHtmlAdapterTest {
 
     @Test
     fun bsuCatalogueFollowsDropboxFolderLinksToDocxSchedules() {
-        val facultyUrl = "https://chemistry.bsu.by/index.php/ru/opisanie-kursa/cv-prepodavatelej/14-studentam/7-raspisanie"
+        val facultyUrl = "https://chemistry.bsu.by/index.php/ru/studentam/grafik-uchebnogo-protsessa/raspisanie"
         val folderUrl = "https://www.dropbox.com/scl/fo/course-folder?rlkey=key&dl=0"
         val docxUrl = "https://www.dropbox.com/scl/fi/course-folder/file/1kurs.docx?rlkey=key&dl=0"
         val documentXml = """
