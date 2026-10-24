@@ -15,7 +15,7 @@ class KtorHtmlTransport(
 
     override suspend fun get(url: String): String {
         val isScheduleDataFile = GitHubScheduleDataPaths.isPublishedDataUrl(url)
-        val isDailyMessagesFile = url == GitHubDailyMessagesRemoteDataSource.DAILY_MESSAGES_URL
+        val isDailyMessagesFile = GitHubDailyMessagesRemoteDataSource.isDailyMessagesUrl(url)
         require(isScheduleDataFile || isDailyMessagesFile) {
             "Разрешены только опубликованные файлы GitHub Pages; сайты вузов не запрашиваются"
         }

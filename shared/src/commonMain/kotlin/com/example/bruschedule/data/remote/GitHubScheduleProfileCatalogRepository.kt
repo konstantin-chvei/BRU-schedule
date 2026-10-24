@@ -62,25 +62,33 @@ class GitHubScheduleProfileCatalogRepository(
                 return@withLock cached.candidates
             }
 
-            val indexUrl = GitHubScheduleDataPaths.indexUrl(universityId, type)
-            try {
-                val csv = transport.get(indexUrl)
-                val candidates = parseIndex(universityId, type, csv)
-                cache[cacheKey] = CachedIndex(now, candidates)
-                candidates
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Throwable) {
-                cached?.let { return@withLock it.candidates }
-                val detail = failure.message?.takeIf(String::isNotBlank)
-                error(
-                    if (detail == null) {
-                        "Не удалось открыть каталог расписаний GitHub. Проверьте подключение и повторите поиск"
+            var lastFailure: Throwable? = null
+            for (indexUrl in GitHubScheduleDataPaths.indexUrls(universityId, type)) {
+                try {
+                    val csv = transport.get(indexUrl)
+                    val pagesUrl = if (indexUrl.startsWith(GitHubScheduleDataPaths.LEGACY_PAGES_URL)) {
+                        GitHubScheduleDataPaths.LEGACY_PAGES_URL
                     } else {
-                        "Не удалось открыть каталог расписаний GitHub: $detail"
-                    },
-                )
+                        GitHubScheduleDataPaths.PAGES_URL
+                    }
+                    val candidates = parseIndex(universityId, type, csv, pagesUrl)
+                    cache[cacheKey] = CachedIndex(now, candidates)
+                    return@withLock candidates
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    lastFailure = failure
+                }
             }
+            cached?.let { return@withLock it.candidates }
+            val detail = lastFailure?.message?.takeIf(String::isNotBlank)
+            error(
+                if (detail == null) {
+                    "Не удалось открыть каталог расписаний GitHub. Проверьте подключение и повторите поиск"
+                } else {
+                    "Не удалось открыть каталог расписаний GitHub: $detail"
+                },
+            )
         }
     }
 
@@ -88,6 +96,7 @@ class GitHubScheduleProfileCatalogRepository(
         universityId: String,
         type: ScheduleProfileType,
         content: String,
+        pagesUrl: String,
     ): List<ProfileCandidate> {
         val rows = ScheduleCsvTable.parse(content)
         if (rows.isEmpty()) return emptyList()
@@ -108,7 +117,7 @@ class GitHubScheduleProfileCatalogRepository(
             if (id.isBlank() || name.isBlank()) return@mapNotNull null
             val path = row.valueAt(pathColumn).trim()
             val safePath = path.ifBlank { "schedules/$expectedFolder/$id.html" }
-            val scheduleUrl = GitHubScheduleDataPaths.scheduleUrl(universityId, type, safePath)
+            val scheduleUrl = GitHubScheduleDataPaths.scheduleUrl(universityId, type, safePath, pagesUrl)
             val status = row.valueAt(statusColumn).trim().lowercase()
             val available = when {
                 status.isBlank() -> path.isNotBlank()

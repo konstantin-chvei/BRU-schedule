@@ -7,28 +7,72 @@ object GitHubScheduleDataPaths {
     const val REPOSITORY = "schedule"
     const val DATA_DIRECTORY = "schedule-data"
 
+    // Transitional read fallback for profiles and Pages data created before the repository rename.
+    const val LEGACY_REPOSITORY = "BRU-schedule"
+
     const val PAGES_URL = "https://$OWNER.github.io/$REPOSITORY/"
     const val UNIVERSITIES_ROOT = "${PAGES_URL}${DATA_DIRECTORY}/universities"
+    const val LEGACY_PAGES_URL = "https://$OWNER.github.io/$LEGACY_REPOSITORY/"
+    const val LEGACY_UNIVERSITIES_ROOT = "${LEGACY_PAGES_URL}${DATA_DIRECTORY}/universities"
 
-    fun indexUrl(universityId: String, type: ScheduleProfileType): String {
-        require(isSafeSlug(universityId)) { "Идентификатор вуза в GitHub-каталоге некорректен" }
-        val profileFolder = if (type == ScheduleProfileType.GROUP) "groups" else "teachers"
-        return "$UNIVERSITIES_ROOT/$universityId/$profileFolder/index.csv"
-    }
+    fun indexUrl(universityId: String, type: ScheduleProfileType): String =
+        indexUrl(universityId, type, PAGES_URL)
 
-    fun scheduleUrl(universityId: String, type: ScheduleProfileType, relativePath: String): String {
+    fun legacyIndexUrl(universityId: String, type: ScheduleProfileType): String =
+        indexUrl(universityId, type, LEGACY_PAGES_URL)
+
+    fun indexUrls(universityId: String, type: ScheduleProfileType): List<String> =
+        listOf(indexUrl(universityId, type), legacyIndexUrl(universityId, type))
+
+    fun scheduleUrl(
+        universityId: String,
+        type: ScheduleProfileType,
+        relativePath: String,
+        pagesUrl: String = PAGES_URL,
+    ): String {
         require(isSafeSlug(universityId)) { "Идентификатор вуза в GitHub-каталоге некорректен" }
+        require(pagesUrl == PAGES_URL || pagesUrl == LEGACY_PAGES_URL) {
+            "Разрешены только известные адреса GitHub Pages"
+        }
         val path = relativePath.trim().removePrefix("./")
         val requiredPrefix = if (type == ScheduleProfileType.GROUP) "schedules/groups/" else "schedules/teachers/"
         require(path.startsWith(requiredPrefix) && isSafeRelativePath(path)) {
             "Путь расписания должен находиться в папке $requiredPrefix"
         }
-        return "$UNIVERSITIES_ROOT/$universityId/$path"
+        return "${pagesUrl}${DATA_DIRECTORY}/universities/$universityId/$path"
+    }
+
+    /** Maps saved URLs from the previous Pages repository name to the new canonical URL. */
+    fun canonicalScheduleUrl(url: String): String? {
+        val root = when {
+            url.startsWith("$UNIVERSITIES_ROOT/", ignoreCase = true) -> UNIVERSITIES_ROOT
+            url.startsWith("$LEGACY_UNIVERSITIES_ROOT/", ignoreCase = true) -> LEGACY_UNIVERSITIES_ROOT
+            else -> return null
+        }
+        val relativePath = url.substring(root.length + 1)
+        val segments = relativePath.split('/')
+        val isSchedulePath = segments.size >= 4 &&
+            isSafeSlug(segments.first()) &&
+            segments[1] == "schedules" &&
+            segments[2] in setOf("groups", "teachers") &&
+            isSafeRelativePath(relativePath)
+        return if (isSchedulePath) "$UNIVERSITIES_ROOT/$relativePath" else null
+    }
+
+    /** Tries the new Pages URL first, then the previous URL during repository migration. */
+    fun scheduleUrls(url: String): List<String> {
+        val canonicalUrl = canonicalScheduleUrl(url) ?: return emptyList()
+        val relativePath = canonicalUrl.removePrefix("$UNIVERSITIES_ROOT/")
+        return listOf(canonicalUrl, "$LEGACY_UNIVERSITIES_ROOT/$relativePath")
     }
 
     fun isPublishedDataUrl(url: String): Boolean {
-        if (!url.startsWith("$UNIVERSITIES_ROOT/", ignoreCase = true)) return false
-        val relativePath = url.substringAfter("$UNIVERSITIES_ROOT/")
+        val root = when {
+            url.startsWith("$UNIVERSITIES_ROOT/", ignoreCase = true) -> UNIVERSITIES_ROOT
+            url.startsWith("$LEGACY_UNIVERSITIES_ROOT/", ignoreCase = true) -> LEGACY_UNIVERSITIES_ROOT
+            else -> return false
+        }
+        val relativePath = url.substring(root.length + 1)
         val segments = relativePath.split('/')
         val isProfileIndex = segments.size == 3 &&
             isSafeSlug(segments[0]) &&
@@ -37,19 +81,16 @@ object GitHubScheduleDataPaths {
         return isProfileIndex || isScheduleFileUrl(url)
     }
 
-    fun isScheduleFileUrl(url: String): Boolean {
-        if (!url.startsWith("$UNIVERSITIES_ROOT/", ignoreCase = true)) return false
-        val relativePath = url.substringAfter("$UNIVERSITIES_ROOT/")
-        val segments = relativePath.split('/')
-        return segments.size >= 4 &&
-            isSafeSlug(segments.first()) &&
-            segments[1] == "schedules" &&
-            segments[2] in setOf("groups", "teachers") &&
-            isSafeRelativePath(relativePath)
-    }
+    fun isScheduleFileUrl(url: String): Boolean = canonicalScheduleUrl(url) != null
 
     fun isCsvScheduleUrl(url: String?): Boolean =
         url != null && isScheduleFileUrl(url) && url.endsWith(".csv", ignoreCase = true)
+
+    private fun indexUrl(universityId: String, type: ScheduleProfileType, pagesUrl: String): String {
+        require(isSafeSlug(universityId)) { "Идентификатор вуза в GitHub-каталоге некорректен" }
+        val profileFolder = if (type == ScheduleProfileType.GROUP) "groups" else "teachers"
+        return "${pagesUrl}${DATA_DIRECTORY}/universities/$universityId/$profileFolder/index.csv"
+    }
 
     private fun isSafeRelativePath(path: String): Boolean =
         path.isNotBlank() &&
