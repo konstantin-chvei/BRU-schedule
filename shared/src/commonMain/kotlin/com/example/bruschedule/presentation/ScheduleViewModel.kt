@@ -72,7 +72,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
-enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS }
+enum class MainDestination { SCHEDULE, DEADLINES, SETTINGS, SCHEDULE_MANAGEMENT }
 
 data class LessonUiItem(
     val lesson: Lesson,

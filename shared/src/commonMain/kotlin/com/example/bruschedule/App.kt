@@ -108,7 +108,7 @@ fun App(graph: AppGraph) {
                             onClick = { viewModel.showDestination(MainDestination.DEADLINES) },
                         )
                         NavigationDestination(
-                            selected = state.destination == MainDestination.SETTINGS,
+                            selected = state.destination == MainDestination.SETTINGS || state.destination == MainDestination.SCHEDULE_MANAGEMENT,
                             destination = MainDestination.SETTINGS,
                             label = "Настройки",
                             onClick = { viewModel.showDestination(MainDestination.SETTINGS) },
@@ -129,6 +129,12 @@ fun App(graph: AppGraph) {
                         MainDestination.SCHEDULE -> ScheduleHomeScreen(state, viewModel, innerPadding)
                         MainDestination.DEADLINES -> DeadlinesDashboardScreen(state, viewModel, innerPadding)
                         MainDestination.SETTINGS -> ScheduleSettingsScreen(state, viewModel, innerPadding)
+                        MainDestination.SCHEDULE_MANAGEMENT -> ScheduleSettingsScreen(
+                            state = state,
+                            viewModel = viewModel,
+                            contentPadding = innerPadding,
+                            focusScheduleManagement = true,
+                        )
                     }
                 }
             }
@@ -192,7 +198,7 @@ private fun NavigationGlyph(
         when (destination) {
             MainDestination.SCHEDULE -> drawCalendarGlyph(color, accent)
             MainDestination.DEADLINES -> drawChecklistGlyph(color, accent)
-            MainDestination.SETTINGS -> drawSettingsGlyph(color)
+            MainDestination.SETTINGS, MainDestination.SCHEDULE_MANAGEMENT -> drawSettingsGlyph(color)
         }
     }
 }

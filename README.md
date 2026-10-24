@@ -9,3 +9,7 @@ universityschedule помогает смотреть расписание зан
 3. В меню выберите **«На экран Домой»**. Если этого пункта нет, прокрутите список или добавьте его через **«Изменить действия»**.
 4. Если появится настройка **«Открывать как веб-приложение»**, включите её и нажмите **«Добавить»**.
 5. Запустите universityschedule с нового значка на домашнем экране. Для первой загрузки расписания понадобится интернет; после этого сохранённое расписание будет доступно без сети.
+
+## Запуск Android из Android Studio
+
+Выберите общую конфигурацию запуска **universityschedule Android** и синхронизируйте Gradle. Она запускает launcher activity, указанную в Android-манифесте, и берёт application ID из Gradle. Если Android Studio сообщает, что `com.example.bruschedule.MainActivity` не найдена, переключитесь со старой конфигурации с указанным вручную именем activity на **universityschedule Android**. Kotlin namespace `com.example.bruschedule` и application ID `com.konstantinchvei.universalschedule` намеренно различаются; менять их не нужно.

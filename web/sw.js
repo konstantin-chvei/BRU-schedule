@@ -1,4 +1,4 @@
-const SHELL_CACHE = "schedule-shell-v7";
+const SHELL_CACHE = "schedule-shell-v8";
 const DATA_CACHE = "schedule-data-v2";
 const SHELL_FILES = [
   "./",

@@ -2234,6 +2234,7 @@ textarea.form-control { min-height: 96px; padding: 14px; }
 .typography-settings .settings-card { gap: 12px; }
 .semester-settings .settings-card { gap: 11px; }
 .reminder-settings .settings-card { gap: 12px; }
+.management-settings { scroll-margin-top: calc(16px + env(safe-area-inset-top)); }
 .management-settings .settings-card { gap: 13px; }
 .info-settings .settings-card { display: flex; flex-direction: column; gap: 4px; }
 .appearance-settings .settings-subhead .text-button { font-size: calc(10px * var(--scale-caption)); }

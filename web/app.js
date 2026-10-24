@@ -443,7 +443,7 @@
     const errorCode = profile.scheduleAvailable === false ? "SYNC404" : "SYNC001";
     if (!loaded && ui.busyProfileId === profile.id) return `<div class="schedule-status-card is-loading"><span class="status-spinner"></span><span class="schedule-status-copy"><strong>Загружаем расписание</strong><span>Получаем расписание и сохраняем его на устройстве. Это может занять несколько секунд.</span></span></div>`;
     if (loaded && ui.busyProfileId === profile.id) return `<div class="schedule-status-card is-refreshing"><span class="status-spinner"></span><span>Обновляем семестровый цикл · сохранённое расписание доступно</span></div>`;
-    if (record.lastError && loaded) return `<div class="schedule-status-card is-warning"><strong>Показана сохранённая локальная копия расписания.</strong><span>${esc(record.lastError)} Код ${errorCode}. Пришлите скриншот и опишите действие.</span></div>`;
+    if (record.lastError && loaded) return `<div class="schedule-status-card is-warning"><strong>Показана сохранённая локальная копия расписания.</strong><span>${esc(record.lastError)} Код ${errorCode}. Пришлите скриншот и опишите действие.</span><button class="text-button" type="button" data-action="open-settings">Открыть настройки&nbsp;<span class="inline-arrow" aria-hidden="true"></span></button></div>`;
     if (!loaded && record.lastError) return `<div class="schedule-status-card is-error"><strong>Не удалось загрузить расписание.</strong><span>${esc(record.lastError)} Код ${errorCode}. Пришлите скриншот и опишите действие.</span><button class="text-button" type="button" data-action="open-settings">Открыть настройки&nbsp;<span class="inline-arrow" aria-hidden="true"></span></button></div>`;
     if (!loaded) return `<div class="schedule-status-card"><span class="settings-label">РАСПИСАНИЕ ЕЩЁ НЕ ЗАГРУЖЕНО</span><span>Чтобы загрузить расписание и сохранить его офлайн, откройте настройки и нажмите «Обновить расписание».</span><button class="text-button" type="button" data-action="open-settings">Открыть настройки&nbsp;<span class="inline-arrow" aria-hidden="true"></span></button></div>`;
     return "";
@@ -647,7 +647,8 @@
     </div></section>`;
   }
   function renderInfoSettings() {
-    return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/bru_schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a><a class="secondary-button install-guide-link" href="./ios-install.html">Установка на iPhone / iPad</a></div></section>`;
+    return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/bru_schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a></div></section>
+      <section class="settings-section install-guide-settings"><div class="settings-card"><a class="secondary-button install-guide-link" href="https://konstantin-chvei.github.io/BRU-schedule/ios-install.html">Установка на iPhone / iPad</a></div></section>`;
   }
   function renderSettingsPage() {
     const profile = selectedProfile();
@@ -655,6 +656,16 @@
       <div class="settings-page-heading"><h1>Настройки</h1><p>Оформление и напоминания.</p></div>
       ${renderThemeSettings()}${renderTypographySettings()}${renderSemesterSettings(profile)}${renderReminderSettings()}${renderProfileManagement()}${renderInfoSettings()}
     </main>${renderNav()}${renderModal()}</div>`;
+  }
+
+  function openScheduleManagementSettings() {
+    ui.route = "settings";
+    ui.modal = null;
+    ui.suspendedLessonDraft = null;
+    render();
+    window.requestAnimationFrame(() => {
+      appRoot.querySelector(".management-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function render() {
@@ -972,27 +983,6 @@
       showToast("Профиль добавлен, но расписание пока недоступно.");
     }
   }
-  function mergeRemoteAndCustom(remoteLessons, existingLessons) {
-    const custom = existingLessons.filter((lesson) => lesson.isCustom);
-    const customById = new Map(custom.map((lesson) => [lesson.id, lesson]));
-    const customBySourceKey = new Map(custom.filter((lesson) => lesson.sourceKey).map((lesson) => [lesson.sourceKey, lesson]));
-    const previousById = new Map(existingLessons.filter((lesson) => !lesson.isCustom).map((lesson) => [lesson.id, lesson]));
-    const previousBySourceKey = new Map(existingLessons.filter((lesson) => !lesson.isCustom && lesson.sourceKey).map((lesson) => [lesson.sourceKey, lesson]));
-    const remote = remoteLessons.map((lesson) => {
-      const override = customById.get(lesson.id) || (lesson.sourceKey && customBySourceKey.get(lesson.sourceKey));
-      if (override) return { ...lesson, ...override, isCustom: true };
-      const previous = previousById.get(lesson.id) || (lesson.sourceKey && previousBySourceKey.get(lesson.sourceKey));
-      return {
-        ...lesson,
-        notes: previous ? previous.notes || "" : lesson.notes || "",
-        rating: previous ? previous.rating ?? null : null,
-        stickers: previous && Array.isArray(previous.stickers) ? [...previous.stickers] : [],
-      };
-    });
-    const newIds = new Set(remote.map((lesson) => lesson.id));
-    return [...remote, ...custom.filter((lesson) => !newIds.has(lesson.id))]
-      .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate) || a.startTime.localeCompare(b.startTime) || Number(a.slotNumber) - Number(b.slotNumber));
-  }
   function conciseSyncError(error) {
     if (error?.status === 404) return "Расписание для этого профиля недоступно. Сохранённая копия не удалена.";
     if (!navigator.onLine) return "Нет подключения к интернету. Если расписание уже загружалось, сохранённая копия остаётся доступна.";
@@ -1032,7 +1022,7 @@
       if (!parsed.length) throw new Error("В расписании нет пар в текущем учебном периоде.");
       const current = scheduleFor(profile.id);
       const previousLessons = current.lessons.filter((lesson) => !lesson.isCustom);
-      const merged = mergeRemoteAndCustom(parsed, current.lessons);
+      const merged = Engine.mergeRemoteAndCustom(parsed, current.lessons);
       state.schedules[profile.id] = {
         ...current,
         lessons: merged,
@@ -1493,7 +1483,7 @@
       ui.modal = null; ui.suspendedLessonDraft = null;
       render();
     } else if (action === "open-settings") {
-      ui.route = "settings"; ui.modal = null; ui.suspendedLessonDraft = null; render();
+      openScheduleManagementSettings();
     } else if (action === "close-modal") {
       if (ui.suspendedLessonDraft && ["lesson-editor", "deadline-editor"].includes(ui.modal?.kind)) {
         ui.modal = ui.suspendedLessonDraft;

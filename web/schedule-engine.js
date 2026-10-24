@@ -195,6 +195,68 @@
     return [...output.values()].sort((a, b) => a.lessonDate.localeCompare(b.lessonDate) || a.startTime.localeCompare(b.startTime) || a.slotNumber - b.slotNumber);
   }
 
+  function mergeRemoteAndCustom(remoteLessons, existingLessons) {
+    const custom = existingLessons.filter((lesson) => lesson.isCustom);
+    const groupBySourceKey = (lessons) => {
+      const grouped = new Map();
+      for (const lesson of lessons) {
+        if (!lesson.sourceKey) continue;
+        const matches = grouped.get(lesson.sourceKey) || [];
+        if (!matches.some((candidate) => candidate.id === lesson.id)) matches.push(lesson);
+        grouped.set(lesson.sourceKey, matches);
+      }
+      return grouped;
+    };
+    const customById = new Map(custom.map((lesson) => [lesson.id, lesson]));
+    const customBySourceKey = groupBySourceKey(custom);
+    const previousWebsiteLessons = existingLessons.filter((lesson) => !lesson.isCustom);
+    const previousById = new Map(previousWebsiteLessons.map((lesson) => [lesson.id, lesson]));
+    const previousBySourceKey = groupBySourceKey(previousWebsiteLessons);
+    const remoteSourceKeyCounts = new Map();
+    const remoteOccurrenceCounts = new Map();
+    const occurrenceKey = (lesson) => JSON.stringify([lesson.sourceKey, lesson.lessonDate]);
+    for (const lesson of remoteLessons) {
+      if (!lesson.sourceKey) continue;
+      remoteSourceKeyCounts.set(lesson.sourceKey, (remoteSourceKeyCounts.get(lesson.sourceKey) || 0) + 1);
+      const key = occurrenceKey(lesson);
+      remoteOccurrenceCounts.set(key, (remoteOccurrenceCounts.get(key) || 0) + 1);
+    }
+
+    // A source key can identify a repeating weekly template, not one dated occurrence.
+    // Never fan one local edit out to every date that shares that template key.
+    const findSourceKeyMatch = (lesson, bySourceKey) => {
+      if (!lesson.sourceKey) return null;
+      const candidates = bySourceKey.get(lesson.sourceKey) || [];
+      if (!candidates.length) return null;
+      if (candidates.length === 1 && remoteSourceKeyCounts.get(lesson.sourceKey) === 1) return candidates[0];
+      const sameDate = candidates.filter((candidate) => candidate.lessonDate === lesson.lessonDate);
+      return sameDate.length === 1 && remoteOccurrenceCounts.get(occurrenceKey(lesson)) === 1
+        ? sameDate[0]
+        : null;
+    };
+
+    const remote = remoteLessons.map((lesson) => {
+      const override = customById.get(lesson.id) || findSourceKeyMatch(lesson, customBySourceKey);
+      if (override) return { ...lesson, ...override, isCustom: true };
+      const previous = previousById.get(lesson.id) || findSourceKeyMatch(lesson, previousBySourceKey);
+      return {
+        ...lesson,
+        notes: previous ? previous.notes || "" : lesson.notes || "",
+        rating: previous ? previous.rating ?? null : null,
+        stickers: previous && Array.isArray(previous.stickers) ? [...previous.stickers] : [],
+      };
+    });
+    const representedCustomIds = new Set(remote.filter((lesson) => lesson.isCustom).map((lesson) => lesson.id));
+    const mergedById = new Map();
+    for (const lesson of [...remote, ...custom.filter((item) => !representedCustomIds.has(item.id))]) {
+      const key = lesson.id || JSON.stringify([lesson.profileId, lesson.lessonDate, lesson.startTime, lesson.subjectName]);
+      const current = mergedById.get(key);
+      if (!current || (!current.isCustom && lesson.isCustom)) mergedById.set(key, lesson);
+    }
+    return [...mergedById.values()]
+      .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate) || a.startTime.localeCompare(b.startTime) || Number(a.slotNumber) - Number(b.slotNumber));
+  }
+
   function parseCSVSchedule(text, profile) {
     const rows = parseCSV(text);
     const lessons = rows.map((row) => {
@@ -414,7 +476,7 @@
   }
 
   window.ScheduleEngine = Object.freeze({
-    addDays, dayNumber, differenceInDays, fromISO, hash, lessonTypeLabel, parseCSV,
+    addDays, dayNumber, differenceInDays, fromISO, hash, lessonTypeLabel, mergeRemoteAndCustom, parseCSV,
     normalize, parseDate, parseSchedule, parseTimeRange, toISO, weekStart,
   });
 })();

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -34,10 +36,12 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,16 +79,25 @@ fun ScheduleSettingsScreen(
     state: ScheduleUiState,
     viewModel: ScheduleViewModel,
     contentPadding: PaddingValues,
+    focusScheduleManagement: Boolean = false,
 ) {
     val sync = state.syncState
+    val scrollState = rememberScrollState()
+    val scheduleManagementRequester = remember { BringIntoViewRequester() }
     var showDeleteConfirmation by remember(state.selectedProfile?.id) { mutableStateOf(false) }
     var profileSelectorExpanded by remember(state.selectedProfile?.id, state.profiles.size) { mutableStateOf(false) }
+    LaunchedEffect(focusScheduleManagement) {
+        if (focusScheduleManagement) {
+            withFrameNanos { }
+            scheduleManagementRequester.bringIntoView()
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(UniversityScheduleColors.background)
             .padding(contentPadding)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 21.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -120,7 +133,12 @@ fun ScheduleSettingsScreen(
             onChange = viewModel::setDeadlineReminderPreferences,
         )
 
-        Surface(shape = RoundedCornerShape(21.dp), color = UniversityScheduleColors.surface, border = BorderStroke(1.dp, UniversityScheduleColors.outline)) {
+        Surface(
+            modifier = Modifier.bringIntoViewRequester(scheduleManagementRequester),
+            shape = RoundedCornerShape(21.dp),
+            color = UniversityScheduleColors.surface,
+            border = BorderStroke(1.dp, UniversityScheduleColors.outline),
+        ) {
             Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
                 Text("УПРАВЛЕНИЕ РАСПИСАНИЕМ", color = UniversityScheduleColors.cyan, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold)
                 Box {

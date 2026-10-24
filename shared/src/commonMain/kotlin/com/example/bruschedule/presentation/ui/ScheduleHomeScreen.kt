@@ -158,15 +158,15 @@ fun ScheduleHomeScreen(
                 )
                 !state.hasRemoteSchedule && syncError != null -> ScheduleErrorStatusCard(
                     error = syncError,
-                    onOpenSettings = { viewModel.showDestination(MainDestination.SETTINGS) },
+                    onOpenSettings = { viewModel.showDestination(MainDestination.SCHEDULE_MANAGEMENT) },
                 )
                 !state.hasRemoteSchedule -> ScheduleNotLoadedCard(
-                    onOpenSettings = { viewModel.showDestination(MainDestination.SETTINGS) },
+                    onOpenSettings = { viewModel.showDestination(MainDestination.SCHEDULE_MANAGEMENT) },
                 )
                 state.isRefreshing -> ScheduleRefreshingBanner()
                 syncError != null -> CachedScheduleWarning(
                     error = syncError,
-                    onOpenSettings = { viewModel.showDestination(MainDestination.SETTINGS) },
+                    onOpenSettings = { viewModel.showDestination(MainDestination.SCHEDULE_MANAGEMENT) },
                 )
             }
             Spacer(Modifier.height(12.dp))

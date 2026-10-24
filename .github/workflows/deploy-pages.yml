@@ -32,6 +32,9 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v7
 
+      - name: Test web schedule merging
+        run: node --test web/tests/*.test.cjs
+
       - name: Test schedule-data tools
         run: python3 -m unittest discover -s tools/schedules/tests -v
 
