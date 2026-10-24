@@ -118,7 +118,7 @@ class GitHubScheduleProfileCatalogRepository(
             val details = listOfNotNull(
                 row.valueAt(subtitleColumn).trim().takeIf(String::isNotBlank),
                 row.valueAt(updatedColumn).trim().takeIf(String::isNotBlank)?.let { "обновлено $it" },
-                if (available) "GitHub" else "расписание ещё не опубликовано",
+                if (available) "Расписание доступно" else "Расписание пока недоступно",
             ).joinToString(" · ")
             ProfileCandidate(
                 type = type,

@@ -10,9 +10,10 @@ import kotlin.test.assertTrue
 
 class DailyMessageSelectorTest {
     @Test
-    fun bundledOfflineFallbackContainsThirtyMessages() {
-        assertEquals(30, DEFAULT_DAILY_MESSAGES.size)
+    fun bundledOfflineFallbackContainsTwentyNineMessages() {
+        assertEquals(29, DEFAULT_DAILY_MESSAGES.size)
         assertTrue(DEFAULT_DAILY_MESSAGES.all { it.isNotBlank() })
+        assertTrue(DEFAULT_DAILY_MESSAGES.none { it == "Если день начался не так — обнови расписание." })
     }
 
     @Test

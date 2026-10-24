@@ -12,7 +12,7 @@ class ScheduleErrorInfoTest {
         val raw = "rasp.bru.by ответил кодом 406 при запросе https://rasp.bru.by/private/path"
         val error = ScheduleErrorInfo.fromThrowable(IllegalStateException(raw))
 
-        assertTrue(error.message.contains("HTTP 406"))
+        assertTrue(error.message.contains("Не удалось загрузить расписание"))
         assertTrue(error.code.contains("HTTP406"))
         assertTrue(error.code.length < 50)
         assertFalse(error.message.contains("private/path"))
@@ -27,7 +27,7 @@ class ScheduleErrorInfoTest {
         val legacy = ScheduleErrorInfo.decodeStored(
             "rasp.bru.by ответил кодом 404 при запросе https://rasp.bru.by/removed.html",
         )
-        assertTrue(legacy.message.contains("не нашёл файл"))
+        assertTrue(legacy.message.contains("Расписание не найдено"))
         assertFalse(legacy.message.contains("removed.html"))
         assertTrue(legacy.code.length < 50)
     }
@@ -41,7 +41,7 @@ class ScheduleErrorInfoTest {
             ),
         )
 
-        assertTrue(error.message.contains("GitHub Pages"))
+        assertTrue(error.message.contains("безопасно подключиться"))
         assertTrue(error.message.contains("данные не изменены"))
         assertFalse(error.message.contains("https://"))
         assertTrue(error.code.contains("TLS"))
@@ -54,7 +54,7 @@ class ScheduleErrorInfoTest {
             IllegalStateException("Error Domain=NSURLErrorDomain Code=-1202"),
         )
 
-        assertTrue(error.message.contains("GitHub Pages"))
+        assertTrue(error.message.contains("безопасно подключиться"))
         assertTrue(error.code.contains("TLS"))
     }
 
@@ -67,7 +67,7 @@ class ScheduleErrorInfoTest {
         val missing = ScheduleErrorInfo.fromThrowable(IllegalStateException("Группа МПР-261 не найдена в каталогах"))
 
         assertTrue(network.message.contains("не ответил вовремя"))
-        assertTrue(unavailableCatalog.message.contains("связаться с GitHub Pages"))
-        assertTrue(missing.message.contains("больше не опубликован"))
+        assertTrue(unavailableCatalog.message.contains("связаться с сервером"))
+        assertTrue(missing.message.contains("больше недоступно"))
     }
 }

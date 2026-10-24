@@ -4,13 +4,15 @@
   const STORAGE_KEY = "bru.schedule.ios-pwa.v2";
   const DATA_ROOT = new URL("./schedule-data/", window.location.href);
   const INDEX_TTL_MS = 12 * 60 * 60 * 1000;
+  const DAILY_MESSAGES_REFRESH_TTL_MS = 24 * 60 * 60 * 1000;
   const MAX_RESULTS = 100;
+  const REMOVED_DAILY_MESSAGE = "Если день начался не так — обнови расписание.";
   const appRoot = document.querySelector("#app");
   const toastBox = document.querySelector("#toast");
   const Engine = window.ScheduleEngine;
   const UNIVERSITY_LIST = [
-    { id: "bru", name: "Белорусско-Российский университет", short: "БРУ", hint: "Каталог групп и преподавателей" },
-    { id: "bsu", name: "Белорусский государственный университет", short: "БГУ", hint: "Доступные факультетские каталоги" },
+    { id: "bru", name: "Белорусско-Российский университет", short: "БРУ", hint: "Группы и преподаватели" },
+    { id: "bsu", name: "Белорусский государственный университет", short: "БГУ", hint: "Расписания факультетов" },
   ];
   const TRACKS = {
     bru: [
@@ -67,7 +69,6 @@
     "Не всё срочно. Проверь дедлайны.",
     "Запомни: аудитория тоже важна.",
     "Даже вторник достоин хорошего плана.",
-    "Если день начался не так — обнови расписание.",
     "Пусть сойдутся группа, время и аудитория.",
     "Ты справишься. А приложение напомнит.",
   ];
@@ -125,7 +126,7 @@
       }
       next.semester = { ...base.semester, ...(saved.semester || {}), tracksByUniversityId: { ...(saved.semester?.tracksByUniversityId || {}) }, endDateOverrides: { ...(saved.semester?.endDateOverrides || {}) }, profileEndDates: { ...(saved.semester?.profileEndDates || {}) } };
       next.reminders = { ...base.reminders, ...(saved.reminders || {}) };
-      next.dailyMessages = Array.isArray(saved.dailyMessages) ? saved.dailyMessages : [];
+      next.dailyMessages = normalizeDailyMessages(Array.isArray(saved.dailyMessages) ? saved.dailyMessages : []);
       if (!Engine.fromISO(next.selectedDate)) next.selectedDate = base.selectedDate;
       if (!Engine.fromISO(next.calendarMonth)) next.calendarMonth = base.calendarMonth;
       if (!next.selectedProfileId || !next.profiles.some((profile) => profile.id === next.selectedProfileId)) {
@@ -147,7 +148,6 @@
     modal: null,
     suspendedLessonDraft: null,
     busyProfileId: null,
-    loadingDailyMessage: false,
     search: { universityId: state.selectedUniversityId, type: "GROUP", query: "", results: [], searched: false, loading: false, error: "" },
     toastTimer: null,
   };
@@ -241,6 +241,13 @@
     ui.monthCursor = `${state.selectedDate.slice(0, 7)}-01`;
     state.calendarMonth = ui.monthCursor;
   }
+  function normalizeDailyMessages(messages) {
+    return messages
+      .filter((message) => typeof message === "string")
+      .map((message) => message.trim())
+      .filter((message) => message && !message.startsWith("#") && message !== REMOVED_DAILY_MESSAGE)
+      .slice(0, 100);
+  }
   function getDailyMessages() { return state.dailyMessages.length ? state.dailyMessages : DAILY_MESSAGES_DEFAULT; }
   function dailyQuote() {
     const messages = getDailyMessages();
@@ -307,7 +314,7 @@
     const university = universityById(state.selectedUniversityId);
     return `<button class="university-card" type="button" data-action="open-university-picker" aria-label="Выбрать вуз">
       <span class="university-badge">ВУЗ</span>
-      <span class="university-copy"><span class="university-name">${esc(university.name)}</span><span class="university-label">КАТАЛОГ GITHUB · ${esc(university.short)}</span></span>
+      <span class="university-copy"><span class="university-name">${esc(university.name)}</span><span class="university-label">${esc(university.short)}</span></span>
       <span class="university-change">СМЕНИТЬ&nbsp;<span class="chevron-down" aria-hidden="true"></span></span>
     </button>`;
   }
@@ -630,16 +637,13 @@
     const status = !profile ? "Не загружено" : ui.busyProfileId === profile.id ? "Обновляем" : record.lastError ? "Ошибка загрузки" : record.lastSuccessAt ? "Синхронизировано" : "Не загружено";
     const statusClass = !profile ? "" : ui.busyProfileId === profile.id ? "is-loading" : record.lastError ? "is-error" : record.lastSuccessAt ? "is-success" : "";
     const rows = record ? `<div class="management-journal"><div><span>Последнее успешное обновление</span><strong>${record.lastSuccessAt ? esc(formatDateTime(record.lastSuccessAt)) : "Пока нет"}</strong></div><div><span>Последняя попытка</span><strong>${record.lastAttemptAt ? esc(formatDateTime(record.lastAttemptAt)) : "Ещё не запускали"}</strong></div><div><span>Локальный сейв</span><strong>${record.previousSnapshotAt ? esc(formatDateTime(record.previousSnapshotAt)) : record.previousLessons.length ? "Предыдущая версия сохранена" : "Пока не создан"}</strong></div></div>` : "";
-    const error = record?.lastError ? `<div class="schedule-status-card is-error"><strong>${profile.scheduleAvailable === false ? "Расписание больше недоступно в каталоге." : "Последняя попытка обновления завершилась ошибкой."}</strong><span>${esc(record.lastError)} Код ${profile.scheduleAvailable === false ? "SYNC404" : "SYNC001"}. Пришлите скриншот и опишите действие.</span></div>` : "";
+    const error = record?.lastError ? `<div class="schedule-status-card is-error"><strong>${profile.scheduleAvailable === false ? "Расписание для этого профиля недоступно." : "Последняя попытка обновления завершилась ошибкой."}</strong><span>${esc(record.lastError)} Код ${profile.scheduleAvailable === false ? "SYNC404" : "SYNC001"}. Пришлите скриншот и опишите действие.</span></div>` : "";
     return `<section class="settings-section management-settings"><div class="settings-card">
       <div class="settings-card-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ РАСПИСАНИЕМ</p></div></div>
       ${profiles.length ? `<div class="profile-select-wrap"><div class="profile-selector"><span class="profile-selector-copy"><span class="profile-selector-label">Выбранное расписание</span><strong>${esc(profile?.name || "Добавьте расписание")}</strong></span><span class="profile-selector-status ${statusClass}">${esc(status)}</span><span class="profile-selector-chevron"><span class="chevron-down" aria-hidden="true"></span></span><select id="managed-profile" class="profile-selector-native" data-setting-profile aria-label="Выбранное расписание">${profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === profile?.id ? "selected" : ""}>${esc(item.name)} · ${TYPE_LABELS[item.type] || "Профиль"}</option>`).join("")}<option value="" disabled>Добавить расписание…</option></select></div></div>
         <div class="settings-divider"></div>${rows}<p class="form-help">Профиль не загружается автоматически. Для обновления нажмите кнопку ниже.</p>${error}
         <div class="management-actions"><button class="primary-button" type="button" data-action="refresh-profile" data-id="${esc(profile.id)}" ${ui.busyProfileId === profile.id ? "disabled" : ""}>${ui.busyProfileId === profile.id ? "Обновляем расписание…" : "Обновить расписание"}</button><button class="secondary-button" type="button" data-action="rollback-profile" data-id="${esc(profile.id)}" ${record.previousLessons.length ? "" : "disabled"}>Восстановить локальный сейв</button><button class="danger-outline-button" type="button" data-action="delete-profile" data-id="${esc(profile.id)}" ${ui.busyProfileId === profile.id ? "disabled" : ""}>Удалить это расписание</button></div>` : `<p class="settings-copy">Сначала добавьте расписание на главном экране.</p><button class="primary-button" style="width:100%;margin-top:9px" type="button" data-action="open-add-profile">Добавить расписание</button>`}
     </div></section>`;
-  }
-  function renderDailySettings() {
-    return `<section class="settings-section daily-message-settings"><div class="settings-card"><p class="eyebrow">ЕЖЕДНЕВНЫЕ СООБЩЕНИЯ</p><p class="daily-message-text">${esc(dailyQuote())}</p><p class="settings-copy">Список сохраняется на устройстве. Проверка GitHub запускается только по кнопке.</p><button class="secondary-button" type="button" data-action="refresh-daily-message" ${ui.loadingDailyMessage ? "disabled" : ""}>${ui.loadingDailyMessage ? "Загружаем…" : "Проверить обновления фраз"}</button></div></section>`;
   }
   function renderInfoSettings() {
     return `<section class="settings-section info-settings"><div class="settings-card"><p class="eyebrow">ОБРАТНАЯ СВЯЗЬ</p><a class="text-button info-link" href="https://t.me/bru_schedule_suggestion_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a><a class="secondary-button install-guide-link" href="./ios-install.html">Установка на iPhone / iPad</a></div></section>`;
@@ -648,7 +652,7 @@
     const profile = selectedProfile();
     return `<div class="app-shell"><main class="page-content settings-page">
       <div class="settings-page-heading"><h1>Настройки</h1><p>Оформление и напоминания.</p></div>
-      ${renderThemeSettings()}${renderTypographySettings()}${renderSemesterSettings(profile)}${renderReminderSettings()}${renderDailySettings()}${renderProfileManagement()}${renderInfoSettings()}
+      ${renderThemeSettings()}${renderTypographySettings()}${renderSemesterSettings(profile)}${renderReminderSettings()}${renderProfileManagement()}${renderInfoSettings()}
     </main>${renderNav()}${renderModal()}</div>`;
   }
 
@@ -670,7 +674,7 @@
     const choices = UNIVERSITY_LIST.map((university) => `<button class="search-result" type="button" data-action="choose-university" data-id="${university.id}">
       <span class="university-badge">${glyph("cap", "")}</span><span class="search-result-copy"><span class="search-result-name">${esc(university.name)}</span><span class="search-result-subtitle">${esc(university.hint)}</span></span><span class="search-result-status">${state.selectedUniversityId === university.id ? "Выбрано" : "Выбрать"}</span>
     </button>`).join("");
-    return modalShell("ПОДДЕРЖИВАЕМЫЕ КАТАЛОГИ", "Выберите вуз", `<p class="settings-copy">В списке только вузы, для которых в GitHub опубликованы индексы или адаптеры расписания. Произвольные адреса не запрашиваются.</p><div class="search-results">${choices}</div>`, `<button class="secondary-button" type="button" data-action="close-modal">Закрыть</button>`);
+    return modalShell("ВЫБОР ВУЗА", "Выберите вуз", `<div class="search-results">${choices}</div>`, `<button class="secondary-button" type="button" data-action="close-modal">Закрыть</button>`);
   }
   function renderAddProfileModal() {
     const university = universityById(ui.search.universityId);
@@ -685,21 +689,21 @@
             const duplicate = state.profiles.some((profile) => profile.universityId === candidate.universityId && profile.type === candidate.type && profile.sourceKey === candidate.sourceKey);
             return `<button class="search-result" type="button" data-action="add-profile-result" data-index="${index}" ${duplicate || !candidate.scheduleAvailable ? "disabled" : ""}>
               <span class="search-result-copy"><span class="search-result-name">${esc(candidate.name)}</span><span class="search-result-subtitle">${esc(candidate.subtitle || `${university.short} · ${ui.search.type === "GROUP" ? "Группа" : "Преподаватель"}`)}</span></span>
-              <span class="search-result-status${candidate.scheduleAvailable ? "" : " is-offline"}">${duplicate ? "Добавлено" : candidate.scheduleAvailable ? "Добавить" : "Нет файла"}</span>
+              <span class="search-result-status${candidate.scheduleAvailable ? "" : " is-offline"}">${duplicate ? "Добавлено" : candidate.scheduleAvailable ? "Добавить" : "Нет расписания"}</span>
             </button>`;
           }).join("")}</div>`
           : ui.search.searched
-            ? `<p class="add-profile-empty-results">В опубликованном каталоге совпадений нет. Проверьте ввод или дождитесь, пока расписание добавят в GitHub.</p>`
+            ? `<p class="add-profile-empty-results">Ничего не найдено. Проверьте запрос или попробуйте позже.</p>`
             : "";
     const body = `<div class="add-profile-content">
-      <p class="add-profile-intro">${esc(university.name)}. Введите код группы или имя преподавателя. Поиск читает опубликованный каталог GitHub — сайты вузов приложение не опрашивает.</p>
+      <p class="add-profile-intro">${esc(university.name)}. Введите код группы или имя преподавателя.</p>
       <div class="choice-row add-profile-types"><button class="choice-pill${ui.search.type === "GROUP" ? " is-active" : ""}" type="button" data-action="set-search-type" data-type="GROUP">Группа</button><button class="choice-pill${ui.search.type === "TEACHER" ? " is-active" : ""}" type="button" data-action="set-search-type" data-type="TEACHER">Преподаватель</button></div>
       <form id="profile-search-form" class="add-profile-search-form" data-form="profile-search" novalidate>
         <div class="form-field add-profile-query-field"><label for="profile-query">${inputLabel}</label><input id="profile-query" class="form-control" name="query" type="search" value="${esc(ui.search.query)}" placeholder="${esc(placeholder)}" autocomplete="off" data-search-query></div>
-        <button class="primary-button add-profile-search-button" type="submit" ${ui.search.loading || !ui.search.query.trim() ? "disabled" : ""}>${ui.search.loading ? '<span class="loading-spinner" aria-hidden="true"></span>Ищем в каталоге GitHub' : "Искать расписание"}</button>
+        <button class="primary-button add-profile-search-button" type="submit" ${ui.search.loading || !ui.search.query.trim() ? "disabled" : ""}>${ui.search.loading ? '<span class="loading-spinner" aria-hidden="true"></span>Ищем расписание…' : "Искать расписание"}</button>
       </form>
       ${resultMarkup}
-      <p class="add-profile-note">Пары загружаются только после явного нажатия «Обновить» в настройках. По ссылке добавить расписание нельзя. Односимвольные коды групп поддерживаются.</p>
+      <p class="add-profile-note">Односимвольные коды групп поддерживаются.</p>
       <button class="text-button add-profile-close" type="button" data-action="close-modal">Закрыть</button>
     </div>`;
     return modalShell("НОВОЕ РАСПИСАНИЕ", "Найти профиль", body, "", false, "add-profile-sheet");
@@ -724,7 +728,7 @@
     const typeField = `<div class="lesson-dropdown-field"><label class="lesson-dropdown-label" for="field-type">ТИП ЗАНЯТИЯ</label><div class="lesson-dropdown-control"><select id="field-type" name="type" data-field="type">${typeOptions.map(([value, label]) => `<option value="${value}" ${fields.type === value ? "selected" : ""}>${label}</option>`).join("")}</select><span class="select-chevron" aria-hidden="true"></span></div></div>`;
     const recurrenceField = `<div class="lesson-dropdown-field"><label class="lesson-dropdown-label" for="field-recurrence">ПОВТОРЕНИЕ</label><div class="lesson-dropdown-control"><select id="field-recurrence" data-field="recurrence">${recurrenceOptions.map(([value, label]) => `<option value="${value}" ${fields.recurrence === value ? "selected" : ""}>${label}</option>`).join("")}</select><span class="select-chevron" aria-hidden="true"></span></div></div>`;
     const linkedDeadlines = linkedCount ? `<label class="checkbox-inline lesson-linked-deadlines"><input type="checkbox" data-field="moveLinkedDeadlines" ${fields.moveLinkedDeadlines ? "checked" : ""}><span>Перенести ${linkedCount} связанных дедлайнов на дату этой пары</span></label>` : "";
-    const sourceNote = existing && !existing.isCustom ? `<p class="lesson-source-note">Пара из каталога. Изменения сохранятся как локальное переопределение.</p>` : "";
+    const sourceNote = existing && !existing.isCustom ? `<p class="lesson-source-note">Занятие из расписания. Изменения сохранятся в приложении.</p>` : "";
     const existingActions = existing ? `<div class="lesson-editor-actions"><button class="secondary-button" type="button" data-action="add-deadline-from-lesson" data-id="${esc(existing.id)}">+ Добавить дедлайн к этой паре</button>${existing.isCustom ? `<button class="danger-button" type="button" data-action="delete-lesson" data-id="${esc(existing.id)}">Удалить эту пару</button>` : ""}</div>` : "";
     const body = `<form id="lesson-form" class="lesson-editor-form" data-form="lesson" novalidate><div class="lesson-editor-stack">
       ${formInput("Предмет", "subjectName", fields.subjectName, { required: true })}
@@ -864,10 +868,10 @@
   }
   async function fetchCatalogText(path, accept = "text/plain,text/html,*/*;q=0.8") {
     const url = new URL(path, DATA_ROOT);
-    if (url.origin !== DATA_ROOT.origin || !url.pathname.includes("/schedule-data/")) throw new Error("Небезопасный путь к каталогу.");
+    if (url.origin !== DATA_ROOT.origin || !url.pathname.includes("/schedule-data/")) throw new Error("Некорректный путь к расписанию.");
     const response = await fetch(url, { headers: { Accept: accept }, cache: "default" });
     if (!response.ok) {
-      const error = new Error(`GitHub вернул HTTP ${response.status}.`);
+      const error = new Error(`Не удалось загрузить данные (HTTP ${response.status}).`);
       error.status = response.status;
       throw error;
     }
@@ -881,7 +885,7 @@
     const path = `universities/${universityId}/${folder}/index.csv`;
     const content = await fetchCatalogText(path, "text/csv,text/plain,*/*;q=0.8");
     const rows = Engine.parseCSV(content);
-    if (!rows.length) throw new Error("Индекс каталога пуст или повреждён.");
+    if (!rows.length) throw new Error("Индекс расписания пуст или повреждён.");
     indexCache.set(key, { rows, loadedAt: Date.now() });
     return rows;
   }
@@ -922,10 +926,10 @@
       ui.search.loading = false;
       ui.search.error = "";
       render();
-      if (!matches.length) showToast("Совпадений в каталоге не найдено.");
+      if (!matches.length) showToast("Ничего не найдено. Проверьте запрос.");
     } catch (error) {
       ui.search.loading = false;
-      ui.search.error = "Каталог сейчас недоступен. Проверьте интернет и попробуйте ещё раз.";
+      ui.search.error = "Не удалось выполнить поиск. Проверьте интернет и попробуйте ещё раз.";
       render();
       issue("Не удалось загрузить индекс расписаний.", "CAT001", error);
     }
@@ -964,7 +968,7 @@
       showToast("Профиль добавлен. Загружаем опубликованное расписание…");
       await refreshProfileSchedule(profile.id);
     } else {
-      showToast("Профиль добавлен, но файл расписания пока не опубликован в каталоге.");
+      showToast("Профиль добавлен, но расписание пока недоступно.");
     }
   }
   function mergeRemoteAndCustom(remoteLessons, existingLessons) {
@@ -989,9 +993,9 @@
       .sort((a, b) => a.lessonDate.localeCompare(b.lessonDate) || a.startTime.localeCompare(b.startTime) || Number(a.slotNumber) - Number(b.slotNumber));
   }
   function conciseSyncError(error) {
-    if (error?.status === 404) return "Расписание больше недоступно в опубликованном каталоге GitHub. Сохранённая копия не удалена.";
+    if (error?.status === 404) return "Расписание для этого профиля недоступно. Сохранённая копия не удалена.";
     if (!navigator.onLine) return "Нет подключения к интернету. Если расписание уже загружалось, сохранённая копия остаётся доступна.";
-    return "Не удалось обновить расписание из каталога GitHub. Сохранённая копия не изменена.";
+    return "Не удалось обновить расписание. Сохранённая копия не изменена.";
   }
   async function refreshProfileSchedule(profileId) {
     const profile = getProfile(profileId);
@@ -1007,7 +1011,7 @@
         const relative = String(row?.schedule_path || "").replaceAll("\\", "/");
         const safe = relative.startsWith("schedules/") && relative.split("/").every((part) => part && part !== "." && part !== "..");
         if (!row || row.status !== "ready" || !safe) {
-          const missing = new Error("Профиль есть в каталоге, но расписание не опубликовано.");
+          const missing = new Error("Расписание для профиля пока недоступно.");
           missing.status = 404;
           throw missing;
         }
@@ -1045,7 +1049,7 @@
       if (error?.status === 404) profile.scheduleAvailable = false;
       state.schedules[profile.id] = record;
       saveState();
-      issue(error?.status === 404 ? "Расписание больше недоступно в каталоге; локальная копия сохранена." : "Не удалось обновить расписание; локальная копия сохранена.", error?.status === 404 ? "SYNC404" : "SYNC001", error);
+      issue(error?.status === 404 ? "Расписание недоступно; локальная копия сохранена." : "Не удалось обновить расписание; локальная копия сохранена.", error?.status === 404 ? "SYNC404" : "SYNC001", error);
     } finally {
       ui.busyProfileId = null;
       render();
@@ -1103,25 +1107,26 @@
     const stickers = current.includes(sticker) ? current.filter((item) => item !== sticker) : [...current, sticker];
     updateLessonFeedback(lessonId, { stickers });
   }
-  async function refreshDailyMessages() {
-    ui.loadingDailyMessage = true;
-    render();
-    await registerServiceWorkerAfterUserAction();
+  async function refreshDailyMessagesOnStartup() {
+    const now = Date.now();
+    const lastUpdate = Number(state.dailyMessagesUpdatedAt);
+    const age = now - lastUpdate;
+    if (navigator.onLine === false || (Number.isFinite(lastUpdate) && lastUpdate > 0 && age >= 0 && age < DAILY_MESSAGES_REFRESH_TTL_MS)) return;
     try {
       const url = new URL("./content/daily-messages.txt", window.location.href);
       const response = await fetch(url, { headers: { Accept: "text/plain" }, cache: "no-cache" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const messages = (await response.text()).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const messages = normalizeDailyMessages((await response.text()).split(/\r?\n/));
       if (!messages.length) throw new Error("Файл сообщений пуст.");
       state.dailyMessages = messages;
       state.dailyMessagesUpdatedAt = Date.now();
       saveState();
-      showToast("Сообщение дня обновлено из GitHub.");
+      if (ui.route === "schedule") {
+        const quote = appRoot.querySelector(".brand-quote");
+        if (quote) quote.textContent = dailyQuote();
+      }
     } catch (error) {
-      issue("Не удалось получить сообщения дня из GitHub.", "MSG001", error);
-    } finally {
-      ui.loadingDailyMessage = false;
-      render();
+      console.warn("[MSG001] Не удалось обновить фразы дня", error);
     }
   }
 
@@ -1620,8 +1625,6 @@
       else render();
     } else if (action === "request-notification") {
       await requestNotifications();
-    } else if (action === "refresh-daily-message") {
-      await refreshDailyMessages();
     }
   }
 
@@ -1671,4 +1674,5 @@
   window.setInterval(checkOpenAppReminders, 60000);
   normalizeSelectedDate();
   render();
+  void refreshDailyMessagesOnStartup();
 })();

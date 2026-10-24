@@ -27,7 +27,7 @@ class KmpSettingsDailyMessagesRepository(
         settings.putString(LAST_ATTEMPT_KEY, now.toString())
         try {
             val fetched = remote.fetchMessages().normalizedMessages()
-            check(fetched.isNotEmpty()) { "GitHub Pages вернул пустой список ежедневных фраз" }
+            check(fetched.isNotEmpty()) { "Удалённый список ежедневных фраз пуст" }
             settings.putString(CACHE_KEY, fetched.joinToString("\n"))
             settings.putString(LAST_SUCCESS_KEY, nowEpochMillis().toString())
             mutableMessages.value = fetched
@@ -44,7 +44,7 @@ class KmpSettingsDailyMessagesRepository(
 
     private fun List<String>.normalizedMessages(): List<String> = asSequence()
         .map { it.trim() }
-        .filter { it.isNotEmpty() && !it.startsWith('#') }
+        .filter { it.isNotEmpty() && !it.startsWith('#') && it != REMOVED_DAILY_MESSAGE }
         .take(MAX_CACHED_MESSAGES)
         .toList()
 
@@ -55,5 +55,6 @@ class KmpSettingsDailyMessagesRepository(
         const val SUCCESS_TTL_MILLIS = 24L * 60L * 60L * 1000L
         const val RETRY_TTL_MILLIS = 60L * 60L * 1000L
         const val MAX_CACHED_MESSAGES = 100
+        const val REMOVED_DAILY_MESSAGE = "Если день начался не так — обнови расписание."
     }
 }

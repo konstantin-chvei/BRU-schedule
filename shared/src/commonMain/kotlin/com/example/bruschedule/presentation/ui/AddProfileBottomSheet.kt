@@ -71,7 +71,7 @@ fun AddProfileBottomSheet(
             Text("НОВОЕ РАСПИСАНИЕ", color = BruColors.cyan, fontSize = 9.sp, letterSpacing = 1.3.sp)
             Text("Найти профиль", color = BruColors.foreground, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "${university.name}. Введите код группы или имя преподавателя. Поиск читает опубликованный каталог GitHub — сайты вузов приложение не опрашивает.",
+                "${university.name}. Введите код группы или имя преподавателя.",
                 color = BruColors.muted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
@@ -113,7 +113,7 @@ fun AddProfileBottomSheet(
                     )
                     Spacer(Modifier.width(9.dp))
                 }
-                Text(if (searchState.loading) "Ищем в каталоге GitHub" else "Искать расписание", fontWeight = FontWeight.SemiBold)
+                Text(if (searchState.loading) "Ищем расписание…" else "Искать расписание", fontWeight = FontWeight.SemiBold)
             }
 
             searchState.error?.let { error ->
@@ -124,18 +124,12 @@ fun AddProfileBottomSheet(
             }
             if (!searchState.loading && searchState.candidates.isEmpty() && query.isNotBlank() && searchState.error == null) {
                 Text(
-                    "В опубликованном каталоге совпадений нет. Проверьте ввод или дождитесь, пока расписание добавят в GitHub.",
+                    "Ничего не найдено. Проверьте запрос или попробуйте позже.",
                     color = BruColors.muted,
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
                 )
             }
-            Text(
-                "Пары загружаются только после явного нажатия «Обновить» в настройках. По ссылке добавить расписание нельзя.",
-                color = BruColors.dim,
-                fontSize = 10.sp,
-                lineHeight = 15.sp,
-            )
             TextButton(onClick = onClose, modifier = Modifier.align(Alignment.End)) {
                 Text("Закрыть", color = BruColors.muted)
             }
@@ -184,7 +178,7 @@ private fun ProfileCandidateRow(candidate: ProfileCandidate, onClick: () -> Unit
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    candidate.subtitle.ifBlank { "Источник GitHub" },
+                    candidate.subtitle.ifBlank { if (candidate.type == ScheduleProfileType.GROUP) "Группа" else "Преподаватель" },
                     color = BruColors.muted,
                     fontSize = 10.sp,
                     maxLines = 2,

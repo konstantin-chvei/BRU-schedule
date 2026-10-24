@@ -170,7 +170,6 @@ class ScheduleViewModel(
     private val profileSearchGeneration = MutableStateFlow(0L)
     private val pendingRefreshProfileIds = mutableListOf<String>()
     private var activeRefreshProfileId: String? = null
-    private var dailyMessageRefreshJob: Job? = null
     private val nowEpochMillis = MutableStateFlow(clock.now().toEpochMilliseconds())
     private val appearance = appearancePreferences.observe().stateIn(
         scope = viewModelScope,
@@ -405,6 +404,15 @@ class ScheduleViewModel(
 
     init {
         viewModelScope.launch {
+            try {
+                dailyMessagesRepository.refresh()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                // Keep the cached or bundled messages when the network is unavailable.
+            }
+        }
+        viewModelScope.launch {
             typographyPreferencesRepository.observe().collect { typography.value = it }
         }
         viewModelScope.launch {
@@ -619,21 +627,6 @@ class ScheduleViewModel(
         notice.value = null
     }
 
-    fun refreshDailyMessages() {
-        if (dailyMessageRefreshJob?.isActive == true) return
-        notice.value = "Проверяем обновления ежедневных фраз…"
-        dailyMessageRefreshJob = viewModelScope.launch {
-            try {
-                dailyMessagesRepository.refresh()
-                notice.value = "Проверка завершена. Используется последняя сохранённая версия фраз"
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Throwable) {
-                notice.value = errorNotice("Не удалось проверить ежедневные фразы", failure, "DAILY")
-            }
-        }
-    }
-
     fun refreshSelectedProfile() {
         val id = selectedProfileId.value ?: uiState.value.selectedProfile?.id
         if (id == null) {
@@ -749,8 +742,7 @@ class ScheduleViewModel(
                 if (requestGeneration != profileSearchGeneration.value || uiState.value.selectedUniversity.id != university.id) return@launch
                 profileSearch.value = ProfileSearchUiState(query, type, candidates = candidates)
                 if (candidates.isEmpty()) {
-                    val profileLabel = if (type == ScheduleProfileType.GROUP) "группу" else "преподавателя"
-                    notice.value = "В опубликованном каталоге GitHub не найдена $profileLabel «$query». Проверьте ввод или обновление каталога"
+                    notice.value = "По запросу «$query» ничего не найдено. Проверьте ввод или попробуйте позже."
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -775,7 +767,7 @@ class ScheduleViewModel(
         profileSearchJob?.cancel()
         profileSearchJob = null
         if (!candidate.scheduleAvailable) {
-            notice.value = "Для «${candidate.name}» ещё не опубликован файл расписания GitHub"
+            notice.value = "Для «${candidate.name}» расписание пока недоступно."
             return
         }
         val profile = ScheduleProfile(

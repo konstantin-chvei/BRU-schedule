@@ -259,12 +259,6 @@ fun ScheduleHomeScreen(
                             },
                         )
                     }
-                    Text(
-                        "Поиск расписаний доступен только для вузов, внесённых в каталог GitHub.",
-                        color = BruColors.dim,
-                        fontSize = 10.sp,
-                        lineHeight = 15.sp,
-                    )
                 }
             },
             confirmButton = {
@@ -470,9 +464,9 @@ private fun UniversitySelectionPanel(
                 )
                 Text(
                     when (university.sourceType) {
-                        UniversitySourceType.BRU_CATALOG -> "КАТАЛОГ GITHUB · БРУ"
-                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "КАТАЛОГ GITHUB · БГУ"
-                        UniversitySourceType.DIRECT_HTML -> "КАТАЛОГ GITHUB НЕ НАСТРОЕН"
+                        UniversitySourceType.BRU_CATALOG,
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "РАСПИСАНИЯ ДОСТУПНЫ"
+                        UniversitySourceType.DIRECT_HTML -> "ПОКА НЕДОСТУПНО"
                     },
                     color = BruColors.dim,
                     fontSize = 8.sp,
@@ -506,9 +500,9 @@ private fun UniversityChoiceRow(
                 Text(university.name, color = BruColors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     when (university.sourceType) {
-                        UniversitySourceType.BRU_CATALOG -> "Опубликованные расписания и списки групп в GitHub"
-                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "Опубликованные расписания и списки групп в GitHub"
-                        UniversitySourceType.DIRECT_HTML -> "Каталог GitHub для этого вуза не настроен"
+                        UniversitySourceType.BRU_CATALOG,
+                        UniversitySourceType.BSU_HTML_AND_SHEETS -> "Расписания доступны"
+                        UniversitySourceType.DIRECT_HTML -> "Пока недоступно"
                     },
                     color = BruColors.muted,
                     fontSize = 9.sp,
