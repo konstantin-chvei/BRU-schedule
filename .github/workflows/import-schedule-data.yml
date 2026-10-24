@@ -118,4 +118,26 @@ jobs:
             exit 0
           fi
           git commit -m "Update published university schedule datasets"
-          git push origin "HEAD:${GITHUB_REF}"
+
+          branch="${GITHUB_REF#refs/heads/}"
+          if [[ "$branch" == "$GITHUB_REF" || -z "$branch" ]]; then
+            echo "::error::Refusing to publish schedule data outside a branch: $GITHUB_REF"
+            exit 1
+          fi
+
+          for attempt in 1 2 3; do
+            git fetch origin "refs/heads/${branch}:refs/remotes/origin/${branch}"
+            if ! git rebase "refs/remotes/origin/${branch}"; then
+              git rebase --abort || true
+              echo "::error::Could not rebase schedule data onto the latest ${branch}; resolve the data conflict and rerun."
+              exit 1
+            fi
+            if git push origin "HEAD:${GITHUB_REF}"; then
+              exit 0
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::Could not publish schedule data after three attempts."
+              exit 1
+            fi
+            echo "Push was rejected because the branch advanced; fetching and rebasing again (attempt $((attempt + 1))/3)."
+          done
