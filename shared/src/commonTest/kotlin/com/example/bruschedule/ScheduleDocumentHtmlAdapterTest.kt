@@ -182,6 +182,43 @@ class ScheduleDocumentHtmlAdapterTest {
     }
 
     @Test
+    fun bsuDatasetDiscoveryEnumeratesPublishedGroupsAcrossFacultySources() {
+        val facultyUrl = "https://fpmi.bsu.by/timetable"
+        val fileUrl = "https://fpmi.bsu.by/files/raspisanie.xlsx"
+        val workbook = Excel.createExcel()
+        val sheet = workbook["Расписание"]
+        sheet.updateCell(CellIndex.indexByString("A1"), TextCellValue("День"))
+        sheet.updateCell(CellIndex.indexByString("B1"), TextCellValue("Время"))
+        sheet.updateCell(CellIndex.indexByString("C1"), TextCellValue("Группа 1-11"))
+        sheet.updateCell(CellIndex.indexByString("A2"), TextCellValue("Понедельник"))
+        sheet.updateCell(CellIndex.indexByString("B2"), TextCellValue("08:30-09:50"))
+        sheet.updateCell(CellIndex.indexByString("C2"), TextCellValue("Математика"))
+        val workbookBytes = checkNotNull(workbook.encode())
+        var requestedBinaryUrl: String? = null
+        val transport = object : HtmlTransport, BinaryResourceTransport {
+            override suspend fun get(url: String): String = if (url == facultyUrl) {
+                "<a href=\"/files/raspisanie.xlsx\">Расписание групп</a>"
+            } else {
+                "<html><body></body></html>"
+            }
+
+            override suspend fun getBytes(url: String): ByteArray {
+                requestedBinaryUrl = url
+                return workbookBytes
+            }
+        }
+
+        val candidates = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.GROUP)
+        }
+
+        assertEquals(fileUrl, requestedBinaryUrl)
+        assertEquals(1, candidates.size)
+        assertTrue(candidates.single().name.contains("1-11"))
+        assertEquals(fileUrl, candidates.single().sourceUrl)
+    }
+
+    @Test
     fun bsuCatalogueFindsJournalismGroupsInTheCurrentFacultyXlsx() {
         val facultyUrl = "https://journ.bsu.by/raspisanie.html"
         val fileUrl = "https://journ.bsu.by/images/Journ26_27/Rasklad_1_kurs_26_27_post.xlsx"

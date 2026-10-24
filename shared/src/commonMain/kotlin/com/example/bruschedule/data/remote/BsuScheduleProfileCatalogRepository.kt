@@ -104,6 +104,28 @@ class BsuScheduleProfileCatalogRepository(
         return sortedCandidates(results, type, normalizedQuery)
     }
 
+    /** Discovers every timetable-backed group/teacher profile for static GitHub export. */
+    suspend fun discoverAll(type: ScheduleProfileType): List<ProfileCandidate> {
+        val results = supervisorScope {
+            FACULTIES.map { faculty ->
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    try {
+                        discoverFaculty(faculty, type, normalizedQuery = "") { }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        FacultyResult(candidates = emptyList(), pagesLoaded = 0, requestFailures = 1)
+                    }
+                }
+            }.awaitAll()
+        }
+        val successfulPages = results.sumOf(FacultyResult::pagesLoaded)
+        if (successfulPages == 0 && results.any { it.requestFailures > 0 }) {
+            error("Не удалось открыть сайты факультетов БГУ при сборке GitHub-каталога")
+        }
+        return sortedCandidates(results, type, normalizedQuery = "")
+    }
+
     private fun sortedCandidates(
         results: List<FacultyResult>,
         type: ScheduleProfileType,

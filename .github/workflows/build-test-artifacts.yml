@@ -59,6 +59,9 @@ jobs:
             fi
           } 2>&1 | tee "$LOG_PATH"
 
+      - name: Compile and test the importer with university-network access disabled
+        run: bash gradlew :androidApp:testDebugUnitTest --tests com.example.bruschedule.tools.ScheduleDataImporterTest --no-daemon
+
       - name: Report Android build errors
         if: failure()
         env:

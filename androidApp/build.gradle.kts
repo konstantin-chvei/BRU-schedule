@@ -17,6 +17,16 @@ dependencies {
 
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.ktor.client.core)
+    testImplementation(libs.ktor.client.cio)
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    testLogging {
+        showStandardStreams = true
+    }
 }
 
 android {

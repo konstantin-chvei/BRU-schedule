@@ -339,6 +339,64 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun bruDatasetDiscoveryEnumeratesPublishedTeachersFromTheOfficialIndex() {
+        val teacherUrl = "https://rasp.bru.by/teachers/ageeva-tn.html"
+        val teachersHtml = "<a href=\"/teachers/ageeva-tn.html\">Агеева Т.Н. 12</a>"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                BruScheduleDirectoryParser.TEACHERS_INDEX -> teachersHtml
+                else -> error("Unexpected fixture request: $url")
+            }
+        }
+
+        val candidates = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.TEACHER)
+        }
+
+        assertEquals(1, candidates.size)
+        assertEquals("Агеева Т.Н.", candidates.single().name)
+        assertEquals(teacherUrl, candidates.single().sourceUrl)
+    }
+
+    @Test
+    fun bruDatasetDiscoveryEnumeratesAllGroupsFromEveryPublishedFacultyDirectory() {
+        val autoUrl = "https://rasp.bru.by/full_time/auto/index.html"
+        val managementUrl = "https://rasp.bru.by/full_time/management/index.html"
+        val autoHtml = """
+            <h1>Автомеханический факультет</h1>
+            <a class="group-link" href="/full_time/auto/МПР-261_weeks_20261019_20261101.html">
+                <strong>МПР-261</strong><span class="period-label">19.10 – 01.11.2026</span>
+            </a>
+        """.trimIndent()
+        val managementHtml = """
+            <h1>Факультет управления и инноваций</h1>
+            <a class="group-link" href="/full_time/management/УИ-241_weeks_20261019_20261101.html">
+                <strong>УИ-241</strong><span class="period-label">19.10 – 01.11.2026</span>
+            </a>
+        """.trimIndent()
+        val fullTimeRoot = """
+            <a href="$managementUrl">Факультет управления и инноваций <small>Групп: 25</small></a>
+            <a href="$autoUrl">Автомеханический факультет <small>Групп: 24</small></a>
+        """.trimIndent()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                BruScheduleDirectoryParser.FULL_TIME_INDEX -> fullTimeRoot
+                BruScheduleDirectoryParser.PART_TIME_INDEX -> "<html><body></body></html>"
+                autoUrl -> autoHtml
+                managementUrl -> managementHtml
+                else -> error("Unexpected fixture request: $url")
+            }
+        }
+
+        val candidates = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.GROUP)
+        }
+
+        assertEquals(setOf("МПР-261", "УИ-241"), candidates.map { it.name }.toSet())
+        assertEquals(2, candidates.map { it.sourceUrl }.distinct().size)
+    }
+
+    @Test
     fun customUniversityProfileLoadsItsDirectTimetableUrl() {
         var requestedUrl: String? = null
         val transport = object : HtmlTransport {
@@ -496,6 +554,33 @@ class ScheduleArchitectureTest {
             BsuTeacherProfileSourceKey.decode(matches.single().sourceKey)?.facultyName,
         )
         assertTrue(matches.single().subtitle.contains("Экономический факультет"))
+    }
+
+    @Test
+    fun bsuDatasetDiscoveryEnumeratesTeachersFromEverySupportedFaculty() {
+        val facultyUrl = "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/"
+        val sheetUrl = "https://docs.google.com/spreadsheets/d/econ-teachers-all/edit?gid=123"
+        val gvizUrl = "https://docs.google.com/spreadsheets/d/econ-teachers-all/gviz/tq?tqx=out:html&gid=123"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                facultyUrl -> "<a href=\"$sheetUrl\">Расписание занятий 1 курса</a>"
+                gvizUrl -> """
+                    <table>
+                      <tr><th>День</th><th>Дата</th><th>Время</th><th>Группа 1-11</th><th>Преподаватель</th></tr>
+                      <tr><td>Понедельник</td><td>19.10.2026</td><td>08:15-09:40</td><td>Математика</td><td>Иванова И.И.</td></tr>
+                    </table>
+                """.trimIndent()
+                else -> "<html><body></body></html>"
+            }
+        }
+
+        val candidates = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.TEACHER)
+        }
+
+        assertEquals(1, candidates.size)
+        assertEquals("Иванова И.И.", candidates.single().name)
+        assertEquals(listOf(sheetUrl), BsuTeacherProfileSourceKey.decode(candidates.single().sourceKey)?.urls)
     }
 
     @Test

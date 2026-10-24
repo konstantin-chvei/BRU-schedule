@@ -26,17 +26,65 @@ class BruScheduleProfileCatalogRepository(
             ScheduleProfileType.TEACHER -> searchTeachers()
             ScheduleProfileType.GROUP -> searchGroups(query.trim())
         }
-        return candidates
-            .filter { parser.matchesQuery(it, query) }
-            .sortedBy { if (parser.isExactMatch(it, query)) 0 else 1 }
+        return filterCandidates(candidates, query)
             .distinctBy { "${it.type}|${it.sourceUrl}|${it.sourceKey}" }
             .take(40)
     }
+
+    /** Discovers the complete published BRU group/teacher directory for static GitHub export. */
+    suspend fun discoverAll(type: ScheduleProfileType): List<ProfileCandidate> {
+        val candidates = when (type) {
+            ScheduleProfileType.TEACHER -> searchTeachers()
+            ScheduleProfileType.GROUP -> discoverAllGroups()
+        }
+        return candidates.distinctBy { "${it.type}|${it.sourceUrl}|${it.sourceKey}" }
+            .sortedWith(compareBy({ it.name.lowercase() }, { it.subtitle }, { it.sourceUrl }))
+    }
+
+    private fun filterCandidates(candidates: List<ProfileCandidate>, query: String): List<ProfileCandidate> =
+        candidates.filter { parser.matchesQuery(it, query) }
+            .sortedBy { if (parser.isExactMatch(it, query)) 0 else 1 }
 
     private suspend fun searchTeachers(): List<ProfileCandidate> {
         val url = BruScheduleDirectoryParser.TEACHERS_INDEX
         val html = transport.get(url)
         return parser.teacherCandidates(html, url)
+    }
+
+    private suspend fun discoverAllGroups(): List<ProfileCandidate> {
+        val candidates = mutableListOf<ProfileCandidate>()
+        val failures = mutableListOf<String>()
+        val roots = listOf(
+            BruScheduleDirectoryParser.FULL_TIME_INDEX,
+            BruScheduleDirectoryParser.PART_TIME_INDEX,
+        )
+        for (root in roots) {
+            val rootHtml = try {
+                transport.get(root)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                failures += root
+                continue
+            }
+            candidates += parser.groupCandidates(rootHtml, root)
+            val faculties = parser.facultyDirectories(rootHtml, root, ScheduleProfileType.GROUP)
+            for (faculty in faculties) {
+                val html = try {
+                    transport.get(faculty.url)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    failures += faculty.url
+                    continue
+                }
+                candidates += parser.groupCandidates(html, faculty.url, faculty.name)
+            }
+        }
+        if (candidates.isEmpty() && failures.isNotEmpty()) {
+            error("Не удалось загрузить каталоги групп rasp.bru.by (${failures.size} страниц недоступно)")
+        }
+        return candidates
     }
 
     private suspend fun searchGroups(query: String): List<ProfileCandidate> {
