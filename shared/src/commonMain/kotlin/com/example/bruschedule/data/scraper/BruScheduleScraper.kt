@@ -135,7 +135,7 @@ class BruScheduleScraper(
             emptyList()
         }
         if (hasUnparsedLessonContent && genericFallback.none { fallback ->
-                result.none { recognized -> lessonIdentity(recognized) == lessonIdentity(fallback) }
+                result.none { recognized -> sameLesson(recognized, fallback) }
             }
         ) {
             error("Не удалось распознать пары в нестандартной разметке таблицы БРУ")
@@ -148,9 +148,8 @@ class BruScheduleScraper(
             }
         }
         val recognizedLessons = result.distinctBy { it.sourceKey }
-        val recognizedIdentities = recognizedLessons.map(::lessonIdentity).toSet()
         val additionalFallbackLessons = fallbackLessons.distinctBy(::lessonIdentity)
-            .filterNot { lessonIdentity(it) in recognizedIdentities }
+            .filterNot { fallback -> recognizedLessons.any { recognized -> sameLesson(recognized, fallback) } }
         return (recognizedLessons + additionalFallbackLessons)
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
     }
@@ -171,7 +170,21 @@ class BruScheduleScraper(
         lesson.subjectName,
         lesson.teacherName,
         lesson.classroom,
-    ).joinToString("|") { it.lowercase().replace('ё', 'е').replace(WHITESPACE, " ").trim() }
+    ).joinToString("|") { normalizeIdentity(it) }
+
+    private fun sameLesson(first: Lesson, second: Lesson): Boolean =
+        first.lessonDate == second.lessonDate &&
+            first.startTime == second.startTime &&
+            first.endTime == second.endTime &&
+            first.slotNumber == second.slotNumber &&
+            normalizeIdentity(first.subjectName) == normalizeIdentity(second.subjectName) &&
+            (first.teacherName.isBlank() || second.teacherName.isBlank() ||
+                normalizeIdentity(first.teacherName) == normalizeIdentity(second.teacherName)) &&
+            (first.classroom.isBlank() || second.classroom.isBlank() ||
+                normalizeIdentity(first.classroom) == normalizeIdentity(second.classroom))
+
+    private fun normalizeIdentity(value: String): String =
+        value.lowercase().replace('ё', 'е').replace(WHITESPACE, " ").trim()
 
     private fun parseDayColumns(
         headers: List<com.fleeksoft.ksoup.nodes.Element>,
