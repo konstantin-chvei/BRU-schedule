@@ -138,6 +138,7 @@ class BsuScheduleProfileCatalogRepository(
                                 candidates = emptyList(),
                                 pagesLoaded = 0,
                                 requestFailures = 1,
+                                sourceUnavailable = true,
                                 requestFailureDetails = listOf(failure.message ?: failure.toString()),
                             )
                         }
@@ -152,6 +153,7 @@ class BsuScheduleProfileCatalogRepository(
                 profilesDiscovered = sortedCandidates(listOf(result), type, normalizedQuery = "").size,
                 pagesLoaded = result.pagesLoaded,
                 requestFailures = result.requestFailures,
+                sourceUnavailable = result.sourceUnavailable,
                 crawlTruncated = result.crawlTruncated,
                 requestFailureDetails = result.requestFailureDetails,
             )
@@ -501,6 +503,7 @@ class BsuScheduleProfileCatalogRepository(
                 candidates,
                 pagesLoaded,
                 requestFailures,
+                sourceUnavailable = true,
                 crawlTruncated = crawlTruncated,
                 requestFailureDetails = requestFailureDetails.toList(),
             )
@@ -514,119 +517,36 @@ class BsuScheduleProfileCatalogRepository(
         )
     }
 
-    private suspend fun discoverBiologyFaculty(
-        faculty: FacultySource,
-        normalizedQuery: String,
-        onProgress: suspend (FacultyResult) -> Unit,
-    ): FacultyResult {
-        transport.primeBiologySession(BIOLOGY_ROOT)
-        val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        val weekDate = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1)).toString()
-        val requests = BIOLOGY_STUDY_MODES.flatMap { studyMode ->
+    private fun biologyIndexRequests(root: String, weekDate: String): List<BiologyRequest> =
+        BIOLOGY_STUDY_MODES.flatMap { studyMode ->
             (1..BIOLOGY_MAX_COURSES).map { course ->
+                val url = if (root == BIOLOGY_ROOT) {
+                    "$root?study_mode=${encodeQueryComponent(studyMode.label)}&course=$course&week_date=$weekDate"
+                } else {
+                    "$root?study=${studyMode.legacyCode}&course=$course&date=$weekDate"
+                }
                 BiologyRequest(
                     studyMode = studyMode,
                     course = course,
-                    url = "$BIOLOGY_ROOT?study_mode=${encodeQueryComponent(studyMode.label)}&course=$course&week_date=$weekDate",
+                    url = url,
+                    sourceRoot = root,
                 )
             }
         }
-        val responses = mutableListOf<BiologyPageResult>()
-        val candidates = mutableListOf<ProfileCandidate>()
-        var hasGroupCatalogue = false
-        supervisorScope {
-            val completedPages = Channel<BiologyPageResult>(capacity = requests.size)
-            val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
-            val workers = requests.map { request ->
-                launch(start = CoroutineStart.UNDISPATCHED) {
-                    val result = semaphore.withPermit {
-                        try {
-                            BiologyPageResult(request, transport.get(request.url), failed = false)
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (failure: Exception) {
-                            BiologyPageResult(
-                                request,
-                                html = null,
-                                failed = true,
-                                failureDetail = failure.message ?: failure.toString(),
-                            )
-                        }
-                    }
-                    completedPages.send(result)
-                }
-            }
-            repeat(requests.size) {
-                val response = completedPages.receive()
-                responses += response
-                val html = response.html ?: return@repeat
-                val groups = biologyParser.discoverGroups(html)
-                if (groups.isNotEmpty()) hasGroupCatalogue = true
-                val matches = groups.mapNotNull { group ->
-                    val mode = response.request.studyMode
-                    val searchable = "${group.name} ${group.programme} ${mode.label} ${response.request.course}"
-                    if (!matchesBiologyGroup(group, searchable, normalizedQuery)) return@mapNotNull null
-                    val sourceUrl = "$BIOLOGY_ROOT?study_mode=${encodeQueryComponent(mode.label)}" +
-                        "&course=${response.request.course}&group=${encodeQueryComponent(group.id)}&week_date=$weekDate"
-                    candidate(
-                        faculty = faculty,
-                        group = group.name,
-                        sourceUrl = sourceUrl,
-                        sourceKind = "HTML",
-                        sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}${group.id}",
-                        detail = listOfNotNull(
-                            mode.label,
-                            "${response.request.course} курс",
-                            group.programme.takeIf(String::isNotBlank),
-                        ).joinToString(" · "),
-                    )
-                }
-                if (matches.isNotEmpty()) {
-                    candidates += matches
-                    onProgress(
-                        FacultyResult(
-                            candidates = candidates.toList(),
-                            pagesLoaded = responses.count { it.html != null },
-                            requestFailures = responses.count(BiologyPageResult::failed),
-                            requestFailureDetails = responses.mapNotNull(BiologyPageResult::failureDetail)
-                                .take(MAX_FAILURE_DETAIL_SAMPLES),
-                        ),
-                    )
-                }
-            }
-            workers.joinAll()
-            completedPages.close()
-        }
-        return FacultyResult(
-            candidates = candidates,
-            pagesLoaded = responses.count { it.html != null },
-            requestFailures = responses.count(BiologyPageResult::failed),
-            requestFailureDetails = responses.mapNotNull(BiologyPageResult::failureDetail)
-                .take(MAX_FAILURE_DETAIL_SAMPLES),
-            sourceUnavailable = !hasGroupCatalogue,
-        )
-    }
 
-    private suspend fun discoverBiologyTeachers(
-        faculty: FacultySource,
-        normalizedQuery: String,
-        onProgress: suspend (FacultyResult) -> Unit,
-    ): FacultyResult {
-        transport.primeBiologySession(BIOLOGY_ROOT)
-        val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        val weekDate = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1)).toString()
-        val indexRequests = BIOLOGY_STUDY_MODES.flatMap { mode ->
-            (1..BIOLOGY_MAX_COURSES).map { course ->
-                BiologyRequest(
-                    studyMode = mode,
-                    course = course,
-                    url = "$BIOLOGY_ROOT?study_mode=${encodeQueryComponent(mode.label)}&course=$course&week_date=$weekDate",
-                )
-            }
+    private fun biologyGroupScheduleUrl(request: BiologyRequest, groupId: String, weekDate: String): String =
+        if (request.sourceRoot == BIOLOGY_ROOT) {
+            "$BIOLOGY_ROOT?study_mode=${encodeQueryComponent(request.studyMode.label)}" +
+                "&course=${request.course}&group=${encodeQueryComponent(groupId)}&week_date=$weekDate"
+        } else {
+            "${request.sourceRoot}?study=${request.studyMode.legacyCode}&course=${request.course}" +
+                "&group=${encodeQueryComponent(groupId)}&date=$weekDate"
         }
-        val indexResponses = supervisorScope {
+
+    private suspend fun fetchBiologyIndexPages(requests: List<BiologyRequest>): List<BiologyPageResult> =
+        supervisorScope {
             val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
-            indexRequests.map { request ->
+            requests.map { request ->
                 async(start = CoroutineStart.UNDISPATCHED) {
                     semaphore.withPermit {
                         try {
@@ -645,15 +565,103 @@ class BsuScheduleProfileCatalogRepository(
                 }
             }.awaitAll()
         }
-        val allTeacherRequests = indexResponses.flatMap { response ->
+
+    private suspend fun discoverBiologyFaculty(
+        faculty: FacultySource,
+        normalizedQuery: String,
+        onProgress: suspend (FacultyResult) -> Unit,
+    ): FacultyResult {
+        transport.primeBiologySession(BIOLOGY_ROOT)
+        val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val weekDate = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1)).toString()
+        val officialResponses = fetchBiologyIndexPages(biologyIndexRequests(BIOLOGY_ROOT, weekDate))
+        val officialHasGroupCatalogue = officialResponses.any { response ->
+            response.html?.let { biologyParser.discoverGroups(it).isNotEmpty() } == true
+        }
+        val legacyResponses = if (officialHasGroupCatalogue) {
+            emptyList()
+        } else {
+            transport.primeBiologySession(LEGACY_BIOLOGY_ROOT)
+            fetchBiologyIndexPages(biologyIndexRequests(LEGACY_BIOLOGY_ROOT, weekDate))
+        }
+        val catalogueResponses = if (officialHasGroupCatalogue) officialResponses else legacyResponses
+        val reportResponses = officialResponses + legacyResponses
+        val hasGroupCatalogue = catalogueResponses.any { response ->
+            response.html?.let { biologyParser.discoverGroups(it).isNotEmpty() } == true
+        }
+        val candidates = mutableListOf<ProfileCandidate>()
+        catalogueResponses.forEach { response ->
+            val html = response.html ?: return@forEach
+            val groups = biologyParser.discoverGroups(html)
+            val matches = groups.mapNotNull { group ->
+                val mode = response.request.studyMode
+                val searchable = "${group.name} ${group.programme} ${mode.label} ${response.request.course}"
+                if (!matchesBiologyGroup(group, searchable, normalizedQuery)) return@mapNotNull null
+                candidate(
+                    faculty = faculty,
+                    group = group.name,
+                    sourceUrl = biologyGroupScheduleUrl(response.request, group.id, weekDate),
+                    sourceKind = if (response.request.sourceRoot == BIOLOGY_ROOT) "HTML" else "HTML (legacy fallback)",
+                    sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}${group.id}",
+                    detail = listOfNotNull(
+                        mode.label,
+                        "${response.request.course} курс",
+                        group.programme.takeIf(String::isNotBlank),
+                    ).joinToString(" · "),
+                )
+            }
+            if (matches.isNotEmpty()) {
+                candidates += matches
+                onProgress(
+                    FacultyResult(
+                        candidates = candidates.toList(),
+                        pagesLoaded = reportResponses.count { it.html != null },
+                        requestFailures = reportResponses.count(BiologyPageResult::failed),
+                        requestFailureDetails = reportResponses.mapNotNull(BiologyPageResult::failureDetail)
+                            .take(MAX_FAILURE_DETAIL_SAMPLES),
+                        sourceUnavailable = !hasGroupCatalogue,
+                    ),
+                )
+            }
+        }
+        return FacultyResult(
+            candidates = candidates,
+            pagesLoaded = reportResponses.count { it.html != null },
+            requestFailures = reportResponses.count(BiologyPageResult::failed),
+            requestFailureDetails = reportResponses.mapNotNull(BiologyPageResult::failureDetail)
+                .take(MAX_FAILURE_DETAIL_SAMPLES),
+            sourceUnavailable = !hasGroupCatalogue,
+        )
+    }
+
+    private suspend fun discoverBiologyTeachers(
+        faculty: FacultySource,
+        normalizedQuery: String,
+        onProgress: suspend (FacultyResult) -> Unit,
+    ): FacultyResult {
+        transport.primeBiologySession(BIOLOGY_ROOT)
+        val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val weekDate = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1)).toString()
+        val officialIndexResponses = fetchBiologyIndexPages(biologyIndexRequests(BIOLOGY_ROOT, weekDate))
+        val officialHasGroupCatalogue = officialIndexResponses.any { response ->
+            response.html?.let { biologyParser.discoverGroups(it).isNotEmpty() } == true
+        }
+        val legacyIndexResponses = if (officialHasGroupCatalogue) {
+            emptyList()
+        } else {
+            transport.primeBiologySession(LEGACY_BIOLOGY_ROOT)
+            fetchBiologyIndexPages(biologyIndexRequests(LEGACY_BIOLOGY_ROOT, weekDate))
+        }
+        val catalogueIndexResponses = if (officialHasGroupCatalogue) officialIndexResponses else legacyIndexResponses
+        val reportIndexResponses = officialIndexResponses + legacyIndexResponses
+        val allTeacherRequests = catalogueIndexResponses.flatMap { response ->
             val html = response.html ?: return@flatMap emptyList()
             biologyParser.discoverGroups(html).map { group ->
                 BiologyTeacherRequest(
                     studyMode = response.request.studyMode,
                     course = response.request.course,
                     group = group,
-                    url = "$BIOLOGY_ROOT?study_mode=${encodeQueryComponent(response.request.studyMode.label)}" +
-                        "&course=${response.request.course}&group=${encodeQueryComponent(group.id)}&week_date=$weekDate",
+                    url = biologyGroupScheduleUrl(response.request, group.id, weekDate),
                 )
             }
         }.distinctBy(BiologyTeacherRequest::url)
@@ -692,7 +700,11 @@ class BsuScheduleProfileCatalogRepository(
                             faculty = faculty,
                             group = teacher,
                             sourceUrl = response.request.url,
-                            sourceKind = "HTML",
+                            sourceKind = if (response.request.url.startsWith(LEGACY_BIOLOGY_ROOT)) {
+                                "HTML (legacy fallback)"
+                            } else {
+                                "HTML"
+                            },
                             type = ScheduleProfileType.TEACHER,
                             sourceKey = teacher,
                             detail = listOf(
@@ -706,12 +718,12 @@ class BsuScheduleProfileCatalogRepository(
             onProgress(
                 FacultyResult(
                     candidates = candidates.toList(),
-                    pagesLoaded = indexResponses.count { it.html != null } +
+                    pagesLoaded = reportIndexResponses.count { it.html != null } +
                         timetableResponses.count { it.html != null },
-                    requestFailures = indexResponses.count(BiologyPageResult::failed) +
+                    requestFailures = reportIndexResponses.count(BiologyPageResult::failed) +
                         timetableResponses.count(BiologyTeacherPageResult::failed),
                     requestFailureDetails = (
-                        indexResponses.mapNotNull(BiologyPageResult::failureDetail) +
+                        reportIndexResponses.mapNotNull(BiologyPageResult::failureDetail) +
                             timetableResponses.mapNotNull(BiologyTeacherPageResult::failureDetail)
                         ).take(MAX_FAILURE_DETAIL_SAMPLES),
                     sourceUnavailable = teacherRequests.isEmpty(),
@@ -721,13 +733,14 @@ class BsuScheduleProfileCatalogRepository(
         }
         return FacultyResult(
             candidates = candidates,
-            pagesLoaded = indexResponses.count { it.html != null } + timetableResponses.count { it.html != null },
-            requestFailures = indexResponses.count(BiologyPageResult::failed) +
+            pagesLoaded = reportIndexResponses.count { it.html != null } +
+                timetableResponses.count { it.html != null },
+            requestFailures = reportIndexResponses.count(BiologyPageResult::failed) +
                 timetableResponses.count(BiologyTeacherPageResult::failed),
             requestFailureDetails = (
-                indexResponses.mapNotNull(BiologyPageResult::failureDetail) +
+                reportIndexResponses.mapNotNull(BiologyPageResult::failureDetail) +
                     timetableResponses.mapNotNull(BiologyTeacherPageResult::failureDetail)
-                ).take(MAX_FAILURE_DETAIL_SAMPLES),
+            ).take(MAX_FAILURE_DETAIL_SAMPLES),
             sourceUnavailable = teacherRequests.isEmpty(),
             crawlTruncated = crawlTruncated,
         )
@@ -888,12 +901,13 @@ class BsuScheduleProfileCatalogRepository(
         val requestFailureDetails: List<String> = emptyList(),
     )
 
-    private data class BiologyStudyMode(val label: String)
+    private data class BiologyStudyMode(val label: String, val legacyCode: String)
 
     private data class BiologyRequest(
         val studyMode: BiologyStudyMode,
         val course: Int,
         val url: String,
+        val sourceRoot: String,
     )
 
     private data class BiologyPageResult(
@@ -936,6 +950,7 @@ class BsuScheduleProfileCatalogRepository(
         const val MAX_IMPORT_PAGES_PER_FACULTY = 500
         const val MAX_LINK_REQUESTS_IN_FLIGHT_PER_FACULTY = 3
         const val BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL
+        const val LEGACY_BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL
         const val BIOLOGY_MAX_COURSES = 5
         const val MAX_BIOLOGY_REQUESTS_IN_FLIGHT = 5
         const val MAX_BIOLOGY_TEACHER_GROUP_PAGES = 200
@@ -945,9 +960,9 @@ class BsuScheduleProfileCatalogRepository(
             RegexOption.IGNORE_CASE,
         )
         val BIOLOGY_STUDY_MODES = listOf(
-            BiologyStudyMode("Дневная"),
-            BiologyStudyMode("Заочная"),
-            BiologyStudyMode("Магистратура"),
+            BiologyStudyMode("Дневная", "d"),
+            BiologyStudyMode("Заочная", "z"),
+            BiologyStudyMode("Магистратура", "m"),
         )
 
         val FACULTIES = listOf(

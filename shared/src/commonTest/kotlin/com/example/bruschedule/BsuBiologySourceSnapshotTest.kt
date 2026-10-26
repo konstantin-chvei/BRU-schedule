@@ -79,6 +79,73 @@ class BsuBiologySourceSnapshotTest {
     }
 
     @Test
+    fun officialBiologyCatalogueFallsBackToLegacyGroupIndexWhenNoGroupsArePublished() = runTest {
+        val requested = mutableListOf<String>()
+        val legacyIndexUrl = "${BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL}?study=d&course=3&date=2026-10-19"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return if (url == legacyIndexUrl) ATTACHED_SOURCE_FRAGMENT else "<html><body></body></html>"
+            }
+        }
+        val fixedClock = object : Clock {
+            override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
+        }
+
+        val matches = BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
+            .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "42A")
+
+        assertEquals(1, matches.size)
+        assertEquals("Группа 42A", matches.single().name)
+        assertTrue(matches.single().sourceUrl.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL))
+        assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL))
+        assertTrue(requested.contains(legacyIndexUrl))
+    }
+
+    @Test
+    fun emptyBiologyCataloguesAreReportedAsUnavailableInsteadOfACompleteEmptySource() = runTest {
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = "<html><body></body></html>"
+        }
+
+        val discovery = BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        val biology = discovery.sources.single { it.name == "Биологический факультет" }
+
+        assertTrue(biology.sourceUnavailable)
+        assertEquals(30, biology.pagesLoaded)
+        assertEquals(0, biology.profilesDiscovered)
+    }
+
+    @Test
+    fun officialBiologyTeacherDiscoveryFallsBackToLegacyGroupPagesWhenCatalogueIsEmpty() = runTest {
+        val requested = mutableListOf<String>()
+        val legacyIndexUrl = "${BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL}?study=d&course=3&date=2026-10-19"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return when {
+                    url == legacyIndexUrl -> ATTACHED_SOURCE_FRAGMENT
+                    url.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL) && "&group=" in url ->
+                        "<html><body><div class=\"lesson-teacher\">Иванова И.И.</div></body></html>"
+                    else -> "<html><body></body></html>"
+                }
+            }
+        }
+        val fixedClock = object : Clock {
+            override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
+        }
+
+        val matches = BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
+            .search(UniversityIds.BSU, ScheduleProfileType.TEACHER, "Иванова")
+
+        assertEquals(1, matches.size)
+        assertEquals("Иванова И.И.", matches.single().name)
+        assertTrue(matches.single().sourceUrl.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL))
+        assertTrue(requested.contains(legacyIndexUrl))
+        assertTrue(requested.any { it.startsWith("${BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL}?") && "&group=" in it })
+    }
+
+    @Test
     fun attachedFirstCourseGroup41PageParsesWeekAndCombinedRoomLocation() {
         val profile = ScheduleProfile(
             id = "bsu-bio-course-1-group-41",

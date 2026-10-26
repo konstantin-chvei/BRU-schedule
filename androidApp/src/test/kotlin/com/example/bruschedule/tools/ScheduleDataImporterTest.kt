@@ -166,6 +166,7 @@ private data class ImportSourceReport(
     val profilesDiscovered: Int,
     val pagesLoaded: Int,
     val requestFailures: Int,
+    val sourceUnavailable: Boolean,
     val crawlTruncated: Boolean,
     val requestFailureDetails: List<String>,
 )
@@ -280,6 +281,7 @@ private class UniversalScheduleDatasetImporter(
                 profilesDiscovered = report.profilesDiscovered,
                 pagesLoaded = report.pagesLoaded,
                 requestFailures = report.requestFailures,
+                sourceUnavailable = report.sourceUnavailable,
                 crawlTruncated = report.crawlTruncated,
                 requestFailureDetails = report.requestFailureDetails,
             )
@@ -295,6 +297,7 @@ private class UniversalScheduleDatasetImporter(
             profilesDiscovered = profiles,
             pagesLoaded = 0,
             requestFailures = 0,
+            sourceUnavailable = false,
             crawlTruncated = false,
             requestFailureDetails = emptyList(),
         )
@@ -542,6 +545,7 @@ private class UniversalScheduleDatasetImporter(
                     "\"profiles_discovered\": ${source.profilesDiscovered}, " +
                     "\"pages_loaded\": ${source.pagesLoaded}, " +
                     "\"request_failures\": ${source.requestFailures}, " +
+                    "\"source_unavailable\": ${source.sourceUnavailable}, " +
                     "\"crawl_truncated\": ${source.crawlTruncated}, " +
                     "\"request_failure_details\": [$failureDetails]}"
             }

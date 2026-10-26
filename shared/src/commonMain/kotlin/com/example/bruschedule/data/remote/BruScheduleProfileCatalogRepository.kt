@@ -35,7 +35,7 @@ class BruScheduleProfileCatalogRepository(
     /** Discovers the complete published BRU group/teacher directory for static GitHub export. */
     suspend fun discoverAll(type: ScheduleProfileType): List<ProfileCandidate> {
         val discovery = discoverAllWithReport(type)
-        if (discovery.candidates.isEmpty() && discovery.sources.any { it.requestFailures > 0 }) {
+        if (discovery.candidates.isEmpty() && discovery.sources.any { it.requestFailures > 0 || it.sourceUnavailable }) {
             error("Не удалось загрузить каталог расписаний rasp.bru.by")
         }
         return discovery.candidates
@@ -85,6 +85,7 @@ class BruScheduleProfileCatalogRepository(
                         profilesDiscovered = 0,
                         pagesLoaded = 0,
                         requestFailures = 1,
+                        sourceUnavailable = true,
                         requestFailureDetails = listOf(failure.message ?: failure.toString()),
                     ),
                 ),
@@ -110,6 +111,7 @@ class BruScheduleProfileCatalogRepository(
                     0,
                     0,
                     1,
+                    sourceUnavailable = true,
                     requestFailureDetails = listOf(failure.message ?: failure.toString()),
                 )
                 continue
@@ -141,6 +143,7 @@ class BruScheduleProfileCatalogRepository(
                         profilesDiscovered = 0,
                         pagesLoaded = 0,
                         requestFailures = 1,
+                        sourceUnavailable = true,
                         requestFailureDetails = listOf(failure.message ?: failure.toString()),
                     )
                     continue

@@ -8,6 +8,8 @@ data class ScheduleCatalogSourceReport(
     val profilesDiscovered: Int,
     val pagesLoaded: Int,
     val requestFailures: Int,
+    /** True when the source is unreachable or its catalogue cannot be read. */
+    val sourceUnavailable: Boolean = false,
     /** True when a crawl/link cap left candidate pages unexplored. */
     val crawlTruncated: Boolean = false,
     /** A small sample of request errors; consumers should redact URLs before publishing it. */

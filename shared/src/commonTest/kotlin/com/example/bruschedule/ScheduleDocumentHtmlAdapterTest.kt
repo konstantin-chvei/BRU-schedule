@@ -293,6 +293,7 @@ class ScheduleDocumentHtmlAdapterTest {
 
         assertEquals(0, fpmi.pagesLoaded)
         assertEquals(1, fpmi.requestFailures)
+        assertTrue(fpmi.sourceUnavailable)
         assertEquals(listOf("HTTP 503 from the faculty server"), fpmi.requestFailureDetails)
     }
 
@@ -355,8 +356,8 @@ class ScheduleDocumentHtmlAdapterTest {
         }
         val fpmi = discovery.sources.single { it.name == "ФПМИ" }
 
-        assertEquals(101, fpmi.profilesDiscovered)
-        assertEquals(101, fpmi.pagesLoaded)
+        assertEquals(100, fpmi.profilesDiscovered)
+        assertEquals(100, fpmi.pagesLoaded)
         assertTrue(fpmi.crawlTruncated)
         assertEquals(0, fpmi.requestFailures)
     }
