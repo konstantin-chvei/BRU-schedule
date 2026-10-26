@@ -162,7 +162,7 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
-    fun biologyRemoteMigratesLegacyProfilesAndLoadsEachWeekThroughTheSemesterCoverageHorizon() = runTest {
+    fun biologyRemoteKeepsOfficialProfilesOnBioBsuByThroughTheSemesterCoverageHorizon() = runTest {
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
@@ -178,15 +178,15 @@ class BsuBiologyScheduleParserTest {
 
         val combined = BruScheduleRemoteDataSource(transport).fetchHtml(profile, window)
 
-        val weekRequests = requested.filter { "date=" in it }
+        val weekRequests = requested.filter { "week_date=" in it }
         assertEquals(
             listOf("2026-10-19", "2026-10-26", "2026-11-02"),
-            weekRequests.map { it.substringAfter("date=").substringBefore('&') }.sorted(),
+            weekRequests.map { it.substringAfter("week_date=").substringBefore('&') }.sorted(),
         )
-        assertTrue(weekRequests.all { it.startsWith("https://bsu.bio/schedule.php?") })
-        assertTrue(weekRequests.all { it.contains("study=d") && it.contains("course=3") && it.contains("group=42") })
-        assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL))
-        assertTrue(requested.none { "week_date=" in it || "bio.bsu.by" in it })
+        assertTrue(weekRequests.all { it.startsWith("https://bio.bsu.by/schedule/?") })
+        assertTrue(weekRequests.all { it.contains("study_mode=") && it.contains("course=3") && it.contains("group=48") })
+        assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL))
+        assertTrue(requested.none { "bsu.bio" in it })
         assertTrue(combined.contains("BSU-BIO-WEEK:2026-10-19"))
         assertTrue(combined.contains("BSU-BIO-WEEK:2026-10-26"))
         assertTrue(combined.contains("BSU-BIO-WEEK:2026-11-02"))
@@ -289,8 +289,8 @@ class BsuBiologyScheduleParserTest {
 
     @Test
     fun biologyCatalogueSearchesTheNewStudyModeAndCourseFilters() {
-        val indexUrl = "https://bsu.bio/schedule.php?study=d&course=3&date=2026-10-19"
-        val expectedScheduleUrl = "https://bsu.bio/schedule.php?study=d&course=3&group=42&date=2026-10-19"
+        val indexUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&week_date=2026-10-19"
+        val expectedScheduleUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&group=42&week_date=2026-10-19"
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
@@ -315,17 +315,17 @@ class BsuBiologyScheduleParserTest {
         assertTrue(matches.single().subtitle.contains("Дневная"))
         assertTrue(matches.single().subtitle.contains("3 курс"))
         assertTrue(requested.contains(indexUrl))
-        assertEquals(15, requested.count { "?study=" in it })
-        assertTrue(requested.none { "study=t" in it })
+        assertEquals(15, requested.count { "?study_mode=" in it })
+        assertTrue(requested.none { "bsu.bio" in it })
         assertTrue(progressUpdates.any { update -> update.any { it.sourceUrl == expectedScheduleUrl } })
     }
 
     @Test
     fun biologyTeacherSearchScansEachCurrentGroupPageAndCombinesSourcesByTeacher() = runTest {
-        val indexUrl = "https://bsu.bio/schedule.php?study=d&course=3&date=2026-10-19"
+        val indexUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&week_date=2026-10-19"
         val groupUrls = listOf(
-            "https://bsu.bio/schedule.php?study=d&course=3&group=41&date=2026-10-19",
-            "https://bsu.bio/schedule.php?study=d&course=3&group=42&date=2026-10-19",
+            "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&group=41&week_date=2026-10-19",
+            "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&group=42&week_date=2026-10-19",
         )
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
@@ -334,7 +334,7 @@ class BsuBiologyScheduleParserTest {
                 return when {
                     url == indexUrl -> biologyGroupIndexHtml()
                     url in groupUrls -> biologyGroupPageHtml()
-                    "?study=" in url -> "<html><body>No timetable for this course</body></html>"
+                    "study_mode=" in url -> "<html><body>No timetable for this course</body></html>"
                     else -> error("No Biology teacher fixture for $url")
                 }
             }
@@ -357,13 +357,13 @@ class BsuBiologyScheduleParserTest {
 
     @Test
     fun biologyCatalogueFindsASingleSymbolGroupWithoutMatchingLongerCodes() = runTest {
-        val indexUrl = "https://bsu.bio/schedule.php?study=d&course=1&date=2026-10-19"
+        val indexUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=1&week_date=2026-10-19"
         val requested = mutableListOf<String>()
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
                 requested += url
                 return when (url) {
-                    BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL -> "<html><body>catalogue</body></html>"
+                    BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL -> "<html><body>catalogue</body></html>"
                     indexUrl -> """
                         <html><body>
                           <a href="/schedule.php?study=d&amp;course=1&amp;group=41&amp;date=2026-10-19">Группа 41</a>
@@ -385,33 +385,25 @@ class BsuBiologyScheduleParserTest {
         assertEquals("Группа 1", matches.single().name)
         assertEquals("bio-group-number:1", matches.single().sourceKey)
         assertEquals(
-            "https://bsu.bio/schedule.php?study=d&course=1&group=1&date=2026-10-19",
+            "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=1&group=1&week_date=2026-10-19",
             matches.single().sourceUrl,
         )
         assertTrue(requested.contains(indexUrl))
-        assertTrue(requested.all { it.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL) })
+        assertTrue(requested.all { it.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL) })
 
-        val candidate = matches.single()
         val profile = ScheduleProfile(
             id = "bsu-bio-single-symbol-1",
             type = ScheduleProfileType.GROUP,
-            name = candidate.name,
-            sourceUrl = candidate.sourceUrl,
-            sourceKey = candidate.sourceKey,
+            name = matches.single().name,
+            sourceUrl = matches.single().sourceUrl,
+            sourceKey = matches.single().sourceKey,
             universityId = UniversityIds.BSU,
         )
+        val officialGridWithTheSingleGroup = biologyWeekHtml("2026-10-19", "Физическая культура")
+            .replace("data-group-id=\"48\"", "data-group-id=\"1\"")
         val lessons = BsuBiologyScheduleHtmlParser().parse(
             profile,
-            """
-                <div class="schedule-heading"><h2>Группа №1 — Первый курс</h2><div class="week">19–25 октября 2026</div></div>
-                <section class="day"><h2 class="day-title">Понедельник</h2>
-                  <div class="lesson"><div class="lesson-time"><div class="lesson-number">1 пара</div><div class="lesson-hours">09:00-10:25</div></div>
-                    <div class="lesson-main"><div class="lesson-entry">
-                      <div class="discipline-line lesson-type-practice"><span class="discipline">Физическая культура</span><span class="lesson-type">Практика</span></div>
-                    </div></div>
-                  </div>
-                </section>
-            """.trimIndent(),
+            officialGridWithTheSingleGroup,
             LocalDate(2026, 10, 19),
         )
         assertEquals("Физическая культура", lessons.single().subjectName)
@@ -419,15 +411,81 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
+    fun biologyRemoteKeepsOfficialProfilesOnTheServerRenderedSiteAndUsesWeekDate() = runTest {
+        val requested = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return biologyWeekHtml("2026-10-19", "Физическая культура")
+                    .replace("data-group-id=\"48\"", "data-group-id=\"1\"")
+            }
+        }
+        val officialProfile = ScheduleProfile(
+            id = "bsu-bio-official-48",
+            type = ScheduleProfileType.GROUP,
+            name = "Группа 42",
+            sourceUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&group=1&week_date=2026-10-19",
+            sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}1",
+            universityId = UniversityIds.BSU,
+        )
+
+        val combined = BruScheduleRemoteDataSource(transport).fetchHtml(
+            officialProfile,
+            ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 10, 25)),
+        )
+
+        assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL))
+        assertTrue(requested.any { "study_mode=" in it && "week_date=2026-10-19" in it })
+        assertTrue(requested.all { it.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL) })
+        assertTrue(requested.none { "bsu.bio" in it })
+        assertTrue(combined.contains("BSU-BIO-WEEK:2026-10-19"))
+    }
+
+    @Test
+    fun biologyTeacherRemoteAcceptsOfficialServerRenderedGroupUrls() = runTest {
+        val teacherName = "Нестерова Оксана Львовна"
+        val groupUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&group=48&week_date=2026-10-19"
+        val requested = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return biologyWeekHtml("2026-10-19", "Математика")
+            }
+        }
+        val teacherProfile = ScheduleProfile(
+            id = "bsu-bio-teacher-official",
+            type = ScheduleProfileType.TEACHER,
+            name = teacherName,
+            sourceUrl = groupUrl,
+            sourceKey = BsuTeacherProfileSourceKey.encode(teacherName, listOf(groupUrl)),
+            universityId = UniversityIds.BSU,
+        )
+
+        val combined = BruScheduleRemoteDataSource(transport).fetchHtml(
+            teacherProfile,
+            ScheduleWindow(LocalDate(2026, 10, 19), LocalDate(2026, 10, 25)),
+        )
+        val lessons = BsuBiologyScheduleHtmlParser().parse(teacherProfile, combined, LocalDate(2026, 10, 19))
+
+        assertEquals(1, requested.count { "group=48" in it })
+        assertTrue(requested.any { it.contains("group=48") && "week_date=2026-10-19" in it })
+        assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL))
+        assertTrue(requested.none { "bsu.bio" in it })
+        assertTrue(combined.contains("BSU-BIO-TEACHER-PAGE:48:2026-10-19"))
+        assertEquals(1, lessons.size)
+        assertEquals(teacherName, lessons.single().teacherName)
+    }
+
+    @Test
     fun biologyCataloguePublishesMatchingGroupsBeforeTheRemainingCoursePagesFinish() = runTest {
-        val indexUrl = "https://bsu.bio/schedule.php?study=d&course=3&date=2026-10-19"
+        val indexUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&week_date=2026-10-19"
         val releaseRemainingPages = CompletableDeferred<Unit>()
         val firstMatch = CompletableDeferred<List<com.example.bruschedule.domain.model.ProfileCandidate>>()
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String = when {
-                url == BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL -> "<html><body>catalogue</body></html>"
+                url == BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL -> "<html><body>catalogue</body></html>"
                 url == indexUrl -> biologyGroupIndexHtml()
-                url.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL) -> {
+                url.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL) -> {
                     releaseRemainingPages.await()
                     "<html><body>other course</body></html>"
                 }

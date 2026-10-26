@@ -166,6 +166,7 @@ private data class ImportSourceReport(
     val profilesDiscovered: Int,
     val pagesLoaded: Int,
     val requestFailures: Int,
+    val crawlTruncated: Boolean,
 )
 
 private class UniversalScheduleDatasetImporter(
@@ -270,6 +271,7 @@ private class UniversalScheduleDatasetImporter(
                 profilesDiscovered = report.profilesDiscovered,
                 pagesLoaded = report.pagesLoaded,
                 requestFailures = report.requestFailures,
+                crawlTruncated = report.crawlTruncated,
             )
         }
     }
@@ -283,6 +285,7 @@ private class UniversalScheduleDatasetImporter(
             profilesDiscovered = profiles,
             pagesLoaded = 0,
             requestFailures = 0,
+            crawlTruncated = false,
         )
     }
 
@@ -524,7 +527,8 @@ private class UniversalScheduleDatasetImporter(
                     "\"source\": ${json(source.source)}, " +
                     "\"profiles_discovered\": ${source.profilesDiscovered}, " +
                     "\"pages_loaded\": ${source.pagesLoaded}, " +
-                    "\"request_failures\": ${source.requestFailures}}"
+                    "\"request_failures\": ${source.requestFailures}, " +
+                    "\"crawl_truncated\": ${source.crawlTruncated}}"
             }
         val serializedFailures = failedImports.joinToString(",\n") { failure ->
             "    {\"university\": ${json(failure.universityId)}, " +
@@ -545,6 +549,7 @@ private class UniversalScheduleDatasetImporter(
             appendLine("  \"preserved_profiles\": $preservedCount,")
             appendLine("  \"skipped_profiles\": ${failedImports.size},")
             appendLine("  \"catalogue_request_failures\": ${sourceReports.sumOf { it.requestFailures }},")
+            appendLine("  \"catalogue_truncated_sources\": ${sourceReports.count { it.crawlTruncated }},")
             appendLine("  \"failure_categories\": {$failureCategories},")
             appendLine("  \"catalogue_sources\": [${if (serializedSources.isBlank()) "" else "\n$serializedSources\n  "}],")
             appendLine("  \"failures\": [${if (serializedFailures.isBlank()) "" else "\n$serializedFailures\n  "}]")

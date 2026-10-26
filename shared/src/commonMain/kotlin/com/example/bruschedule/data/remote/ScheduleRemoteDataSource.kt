@@ -7,9 +7,11 @@ interface HtmlTransport {
     suspend fun get(url: String): String
 }
 
-suspend fun HtmlTransport.primeBiologySession() {
+suspend fun HtmlTransport.primeBiologySession(
+    url: String = BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL,
+) {
     try {
-        get(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL)
+        get(url)
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: Exception) {

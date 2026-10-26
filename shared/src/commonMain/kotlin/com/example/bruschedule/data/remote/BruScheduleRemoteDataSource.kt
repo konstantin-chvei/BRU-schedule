@@ -180,10 +180,14 @@ class BruScheduleRemoteDataSource(
     }
 
     private suspend fun fetchBiologyTeacherWeeks(sourceUrls: List<String>, window: ScheduleWindow): String {
-        transport.primeBiologySession()
+        transport.primeBiologySession(
+            sourceUrls.firstOrNull()?.substringBefore('?')
+                ?: BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL,
+        )
         val groupSources = sourceUrls.distinct().map { url ->
             require(url.startsWith("https://", ignoreCase = true) &&
-                url.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_GROUP_PAGE_PATH, ignoreCase = true)
+                (url.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_GROUP_PAGE_PATH, ignoreCase = true) ||
+                    url.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_HOST_PATH, ignoreCase = true))
             ) { "В профиле преподавателя Биофака найдена неподдерживаемая ссылка на группу" }
             val groupId = queryParameter(url, "group")
                 ?: error("В источнике преподавателя Биофака не указан код группы")
@@ -250,7 +254,7 @@ class BruScheduleRemoteDataSource(
         val configuredSourceUrl = profile.sourceUrl?.trim()?.takeIf(String::isNotBlank)
             ?: error("В профиле Биофака отсутствует ссылка на расписание")
         val sourceUrl = currentBiologySourceUrl(profile, configuredSourceUrl)
-        transport.primeBiologySession()
+        transport.primeBiologySession(sourceUrl.substringBefore('?'))
         val firstMonday = window.startDate.minus(DatePeriod(days = window.startDate.dayOfWeek.isoDayNumber - 1))
         val throughDate = window.semesterCoverageEndDate ?: window.endDate
         val mondays = buildList {
@@ -302,7 +306,9 @@ class BruScheduleRemoteDataSource(
 
     private fun currentBiologySourceUrl(profile: ScheduleProfile, configuredUrl: String): String {
         if (biologyScheduleParser.isGroupPageProfile(profile)) return configuredUrl
-        val groupNumber = queryParameter(configuredUrl, "group")
+        val configuredGroupParameter = queryParameter(configuredUrl, "group")
+        val groupNumber = configuredGroupParameter
+            ?: biologyGroupIdFromSourceKey(profile.sourceKey)
             ?: BIOLOGY_GROUP_NUMBER.find(profile.name)?.value
             ?: error("Профиль Биофака устарел. Выберите группу заново в поиске")
         val course = queryParameter(configuredUrl, "course")
@@ -319,9 +325,30 @@ class BruScheduleRemoteDataSource(
                 studyValue?.contains("магистр", ignoreCase = true) == true || "%d0%9c" in encodedUrl -> "m"
             else -> error("В профиле Биофака не указан режим обучения. Выберите группу заново в поиске")
         }
+        if (configuredUrl.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_HOST_PATH, ignoreCase = true)) {
+            val studyMode = when (study) {
+                "d" -> "Дневная"
+                "z" -> "Заочная"
+                "m" -> "Магистратура"
+                else -> error("В профиле Биофака указан неизвестный режим обучения")
+            }
+            return "${BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL}" +
+                "?study_mode=${encodeQueryComponent(studyMode)}&course=$course" +
+                "&group=${configuredGroupParameter ?: encodeQueryComponent(groupNumber)}"
+        }
         return "${BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL}?study=$study&course=$course" +
             "&group=${encodeQueryComponent(groupNumber)}"
     }
+
+    private fun biologyGroupIdFromSourceKey(sourceKey: String?): String? = sourceKey?.let { key ->
+        when {
+            key.startsWith(BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX) ->
+                key.removePrefix(BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX)
+            key.startsWith(BsuBiologyScheduleHtmlParser.BIO_GROUP_SOURCE_KEY_PREFIX) ->
+                key.removePrefix(BsuBiologyScheduleHtmlParser.BIO_GROUP_SOURCE_KEY_PREFIX)
+            else -> null
+        }
+    }?.takeIf(String::isNotBlank)
 
     private fun queryParameter(url: String, key: String): String? =
         url.substringAfter('?', "").substringBefore('#').split('&')

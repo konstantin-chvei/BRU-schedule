@@ -8,6 +8,8 @@ data class ScheduleCatalogSourceReport(
     val profilesDiscovered: Int,
     val pagesLoaded: Int,
     val requestFailures: Int,
+    /** True when a crawl/link cap left candidate pages unexplored. */
+    val crawlTruncated: Boolean = false,
 )
 
 data class ScheduleCatalogDiscoveryResult(

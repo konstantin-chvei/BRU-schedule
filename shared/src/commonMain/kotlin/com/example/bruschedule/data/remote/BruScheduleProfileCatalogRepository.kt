@@ -1,6 +1,7 @@
 package com.example.bruschedule.data.remote
 
 import com.example.bruschedule.data.scraper.BruScheduleDirectoryParser
+import com.example.bruschedule.data.scraper.FacultyDirectory
 import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
@@ -110,19 +111,59 @@ class BruScheduleProfileCatalogRepository(
             candidates += rootCandidates
             sources += ScheduleCatalogSourceReport(rootName, rootCandidates.size, 1, 0)
 
-            val faculties = parser.facultyDirectories(rootHtml, root, ScheduleProfileType.GROUP)
-            for (faculty in faculties) {
+            val visited = mutableSetOf(root)
+            val pending = mutableListOf<GroupDirectoryWork>()
+            pending += parser.facultyDirectories(rootHtml, root, ScheduleProfileType.GROUP).map { directory ->
+                GroupDirectoryWork(directory, depth = 1, facultyName = directory.name)
+            }
+            var nextPage = 0
+            var crawlLimitReached = false
+            while (nextPage < pending.size && visited.size < MAX_GROUP_CATALOG_PAGES_PER_FORM) {
+                val work = pending[nextPage++]
+                if (!visited.add(work.directory.url)) continue
+                val reportName = listOf(work.facultyName, work.directory.name)
+                    .distinct()
+                    .joinToString(" / ")
                 val html = try {
-                    transport.get(faculty.url)
+                    transport.get(work.directory.url)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    sources += ScheduleCatalogSourceReport(faculty.name, 0, 0, 1)
+                    sources += ScheduleCatalogSourceReport(reportName, 0, 0, 1)
                     continue
                 }
-                val facultyCandidates = parser.groupCandidates(html, faculty.url, faculty.name)
-                candidates += facultyCandidates
-                sources += ScheduleCatalogSourceReport(faculty.name, facultyCandidates.size, 1, 0)
+                val pageCandidates = parser.groupCandidates(
+                    html = html,
+                    facultyPageUrl = work.directory.url,
+                    facultyNameHint = work.facultyName,
+                )
+                candidates += pageCandidates
+                sources += ScheduleCatalogSourceReport(reportName, pageCandidates.size, 1, 0)
+
+                val nestedDirectories = parser.facultyDirectories(
+                    html = html,
+                    pageUrl = work.directory.url,
+                    type = ScheduleProfileType.GROUP,
+                ).filter { directory -> directory.url !in visited }
+                if (work.depth < MAX_GROUP_DIRECTORY_DEPTH) {
+                    pending += nestedDirectories.map { directory ->
+                        GroupDirectoryWork(directory, work.depth + 1, work.facultyName)
+                    }
+                } else if (nestedDirectories.isNotEmpty()) {
+                    crawlLimitReached = true
+                }
+            }
+            if (nextPage < pending.size && pending.drop(nextPage).any { it.directory.url !in visited }) {
+                crawlLimitReached = true
+            }
+            if (crawlLimitReached) {
+                sources += ScheduleCatalogSourceReport(
+                    name = "$rootName · обход остановлен по лимиту",
+                    profilesDiscovered = 0,
+                    pagesLoaded = 0,
+                    requestFailures = 0,
+                    crawlTruncated = true,
+                )
             }
         }
         val uniqueCandidates = candidates.distinctBy { "${it.type}|${it.sourceUrl}|${it.sourceKey}" }
@@ -154,21 +195,52 @@ class BruScheduleProfileCatalogRepository(
             if (exactRootMatches.isNotEmpty()) return exactRootMatches
             results += rootMatches
 
-            for (faculty in parser.facultyDirectories(rootHtml, root, ScheduleProfileType.GROUP)) {
-                val facultyHtml = fetchOrNull(faculty.url) ?: continue
-                val facultyMatches = parser.groupCandidates(facultyHtml, faculty.url, faculty.name).filter {
-                    parser.matchesQuery(it, query)
-                }
+            val visited = mutableSetOf(root)
+            val pending = mutableListOf<GroupDirectoryWork>()
+            pending += parser.facultyDirectories(rootHtml, root, ScheduleProfileType.GROUP).map { directory ->
+                GroupDirectoryWork(directory, depth = 1, facultyName = directory.name)
+            }
+            var nextPage = 0
+            while (nextPage < pending.size && visited.size < MAX_GROUP_SEARCH_PAGES_PER_FORM) {
+                val work = pending[nextPage++]
+                if (!visited.add(work.directory.url)) continue
+                val facultyHtml = fetchOrNull(work.directory.url) ?: continue
+                val facultyMatches = parser.groupCandidates(
+                    html = facultyHtml,
+                    facultyPageUrl = work.directory.url,
+                    facultyNameHint = work.facultyName,
+                ).filter { parser.matchesQuery(it, query) }
                 val exactMatches = facultyMatches.filter { parser.isExactMatch(it, query) }
-                if (exactMatches.isNotEmpty()) {
-                    return exactMatches
-                }
+                if (exactMatches.isNotEmpty()) return exactMatches
                 results += facultyMatches
+
+                if (work.depth < MAX_GROUP_SEARCH_DIRECTORY_DEPTH) {
+                    pending += parser.facultyDirectories(
+                        html = facultyHtml,
+                        pageUrl = work.directory.url,
+                        type = ScheduleProfileType.GROUP,
+                    ).map { directory ->
+                        GroupDirectoryWork(directory, work.depth + 1, work.facultyName)
+                    }
+                }
             }
         }
         if (results.isEmpty()) {
             lastNetworkError?.let { detail -> error("Не удалось загрузить каталог групп rasp.bru.by: $detail") }
         }
         return results
+    }
+
+    private data class GroupDirectoryWork(
+        val directory: FacultyDirectory,
+        val depth: Int,
+        val facultyName: String,
+    )
+
+    private companion object {
+        const val MAX_GROUP_DIRECTORY_DEPTH = 5
+        const val MAX_GROUP_CATALOG_PAGES_PER_FORM = 500
+        const val MAX_GROUP_SEARCH_DIRECTORY_DEPTH = 4
+        const val MAX_GROUP_SEARCH_PAGES_PER_FORM = 200
     }
 }

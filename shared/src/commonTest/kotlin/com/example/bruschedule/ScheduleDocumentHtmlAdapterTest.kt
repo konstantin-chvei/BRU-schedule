@@ -20,6 +20,7 @@ import kotlinx.datetime.LocalDate
 import kotlin.coroutines.startCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ScheduleDocumentHtmlAdapterTest {
@@ -247,6 +248,97 @@ class ScheduleDocumentHtmlAdapterTest {
         }
 
         assertEquals(schedulePages.keys, candidates.map { it.sourceUrl }.toSet())
+    }
+
+    @Test
+    fun bsuDatasetDiscoveryFollowsOfficialCrossSubdomainLinksAndBelarusianWeekdays() {
+        val facultyUrl = "https://fpmi.bsu.by/timetable"
+        val linkedUrl = "https://www.bsu.by/schedules/group-1-11.html"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                facultyUrl -> """
+                    <a href="http://www.bsu.by/schedules/group-1-11.html" title="Расписание группы 1-11">1-11</a>
+                """.trimIndent()
+                linkedUrl -> """
+                    <table>
+                      <tr><th>День недели</th><th>Время</th><th>Группа 1-11</th></tr>
+                      <tr><td>Панядзелак</td><td>08:30−09:50</td><td>Математика</td></tr>
+                    </table>
+                """.trimIndent()
+                else -> "<html><body></body></html>"
+            }
+        }
+
+        val candidates = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.GROUP)
+        }
+
+        assertTrue(candidates.any { it.name.contains("1-11") && it.sourceUrl == linkedUrl })
+    }
+
+    @Test
+    fun bsuExhaustiveDiscoveryFollowsUnlabelledOfficialHtmlPages() {
+        val facultyUrl = "https://fpmi.bsu.by/timetable"
+        val scheduleUrl = "https://fpmi.bsu.by/documents/a3.html"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                facultyUrl -> "<a href=\"$scheduleUrl\">Открыть страницу</a>"
+                scheduleUrl -> """
+                    <table>
+                      <tr><th>День недели</th><th>Время</th><th>Группа 2-11</th></tr>
+                      <tr><td>Понедельник</td><td>08:30-09:50</td><td>Физика</td></tr>
+                    </table>
+                """.trimIndent()
+                else -> "<html><body></body></html>"
+            }
+        }
+
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+
+        assertTrue(discovery.candidates.any { it.sourceUrl == scheduleUrl && it.name.contains("2-11") })
+        assertFalse(discovery.sources.single { it.name == "ФПМИ" }.crawlTruncated)
+    }
+
+    @Test
+    fun bsuImportReportFlagsFacultyLinkCapsInsteadOfReportingACompleteCrawl() {
+        val facultyUrl = "https://fpmi.bsu.by/timetable"
+        val schedulePages = (1..101).associate { number ->
+            val pageUrl = "https://fpmi.bsu.by/schedules/group-$number.html"
+            pageUrl to """
+                <table>
+                  <tr><th>День недели</th><th>Время</th><th>Группа $number-11</th></tr>
+                  <tr><td>Понедельник</td><td>08:30-09:50</td><td>Математика</td></tr>
+                </table>
+            """.trimIndent()
+        }
+        val rootHtml = """
+            <table>
+              <tr><th>День недели</th><th>Время</th><th>Группа 0-11</th></tr>
+              <tr><td>Понедельник</td><td>08:30-09:50</td><td>Подготовительный курс</td></tr>
+            </table>
+            ${schedulePages.keys.mapIndexed { index, pageUrl ->
+                "<a href=\"$pageUrl\" title=\"Расписание группы ${index + 1}-11\">Группа ${index + 1}-11</a>"
+            }.joinToString("\n")}
+        """.trimIndent()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when {
+                url == facultyUrl -> rootHtml
+                url in schedulePages -> schedulePages.getValue(url)
+                else -> "<html><body></body></html>"
+            }
+        }
+
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+        val fpmi = discovery.sources.single { it.name == "ФПМИ" }
+
+        assertEquals(100, fpmi.profilesDiscovered)
+        assertEquals(100, fpmi.pagesLoaded)
+        assertTrue(fpmi.crawlTruncated)
+        assertEquals(0, fpmi.requestFailures)
     }
 
     @Test

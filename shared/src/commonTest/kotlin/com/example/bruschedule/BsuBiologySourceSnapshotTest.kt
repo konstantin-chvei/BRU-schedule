@@ -1,15 +1,20 @@
 package com.example.bruschedule
 
+import com.example.bruschedule.data.remote.BsuScheduleProfileCatalogRepository
+import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.data.scraper.BsuScheduleHtmlParser
 import com.example.bruschedule.domain.model.LessonType
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.UniversityIds
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlinx.coroutines.test.runTest
 
 class BsuBiologySourceSnapshotTest {
     @Test
@@ -43,6 +48,34 @@ class BsuBiologySourceSnapshotTest {
         assertEquals("12:00", lesson.endTime)
         assertEquals(1, lesson.dayOfWeek)
         assertEquals(2, lesson.slotNumber)
+    }
+
+    @Test
+    fun officialBiologyCatalogueDiscoversServerRenderedGroupsFromTheOfficialUrl() = runTest {
+        val requested = mutableListOf<String>()
+        val indexUrl = "https://bio.bsu.by/schedule/?study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F&course=3&week_date=2026-10-19"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return if (url == indexUrl) ATTACHED_SOURCE_FRAGMENT else "<html><body></body></html>"
+            }
+        }
+        val fixedClock = object : Clock {
+            override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
+        }
+
+        val matches = BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
+            .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "42A")
+
+        assertEquals(1, matches.size)
+        assertEquals("Группа 42A", matches.single().name)
+        assertEquals("bio-group-number:49", matches.single().sourceKey)
+        assertTrue(matches.single().sourceUrl.startsWith("https://bio.bsu.by/schedule/?"))
+        assertTrue(matches.single().sourceUrl.contains("study_mode=%D0%94%D0%BD%D0%B5%D0%B2%D0%BD%D0%B0%D1%8F"))
+        assertTrue(matches.single().sourceUrl.contains("course=3&group=49&week_date=2026-10-19"))
+        assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL))
+        assertEquals(15, requested.count { "?study_mode=" in it })
+        assertTrue(requested.none { "bsu.bio" in it })
     }
 
     @Test

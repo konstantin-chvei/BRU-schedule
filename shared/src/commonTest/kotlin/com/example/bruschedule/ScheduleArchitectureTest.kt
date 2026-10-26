@@ -63,6 +63,22 @@ class ScheduleArchitectureTest {
             catalogue.configuredFacultyNames,
             BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames,
         )
+        assertTrue(
+            setOf(
+                "https://fpmi.bsu.by/timetable",
+                "https://sb.bsu.by/raspisanie",
+                "https://fir.bsu.by/students/timetable-in-menu",
+                "https://bio.bsu.by/schedule/",
+                "https://fsc.bsu.by/schedules/general-higher-education-lessons/",
+                "https://geo.bsu.by/index.php/uchebnyj-protsess/grafik-uchebnogo-protsessa/raspisanie-zanyatij.html",
+                "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/",
+                "https://mmf.bsu.by/ru/raspisanie-zanyatij/",
+                "https://hist.bsu.by/uchebnyj-protsess/grafik-uchebnogo-protsessa/raspisanie-zanyatij.html",
+                "https://philology.bsu.by/ru/studjentu/raspisanie",
+                "https://chemistry.bsu.by/index.php/ru/studentam/grafik-uchebnogo-protsessa/raspisanie",
+            ).all { it in catalogue.configuredFacultySourceUrls },
+            "The catalogue must retain every official faculty URL supplied for the full-university import",
+        )
         assertEquals(
             setOf(
                 "Экономический факультет",
@@ -461,6 +477,41 @@ class ScheduleArchitectureTest {
         assertTrue(discovery.sources.any { it.name == "Автомеханический факультет" && it.profilesDiscovered == 1 })
         assertTrue(discovery.sources.any { it.name == "Факультет управления и инноваций" && it.profilesDiscovered == 1 })
         assertTrue(discovery.sources.all { it.requestFailures == 0 })
+    }
+
+    @Test
+    fun bruDatasetDiscoveryAndSearchTraverseNestedCourseDirectories() {
+        val facultyUrl = "https://rasp.bru.by/full_time/auto/index.html"
+        val courseUrl = "https://rasp.bru.by/full_time/auto/1-kurs/index.php"
+        val fullTimeRoot = "<a href=\"$facultyUrl\">Автомеханический факультет</a>"
+        val facultyHtml = "<a href=\"$courseUrl\">1 курс</a>"
+        val courseHtml = """
+            <h1>Автомеханический факультет, 1 курс</h1>
+            <a class="group-link" href="/full_time/auto/1-kurs/МПР-261_weeks_20261019_20261101.html">
+                <strong>МПР-261</strong>
+            </a>
+        """.trimIndent()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when (url) {
+                BruScheduleDirectoryParser.FULL_TIME_INDEX -> fullTimeRoot
+                BruScheduleDirectoryParser.PART_TIME_INDEX -> "<html><body></body></html>"
+                facultyUrl -> facultyHtml
+                courseUrl -> courseHtml
+                else -> error("Unexpected nested BRU catalogue request: $url")
+            }
+        }
+
+        val discovery = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+        val search = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).search(ScheduleProfileType.GROUP, "МПР-261")
+        }
+
+        assertEquals("МПР-261", discovery.candidates.single().name)
+        assertEquals(courseUrl, discovery.candidates.single().sourceUrl)
+        assertTrue(discovery.sources.any { it.name == "Автомеханический факультет / 1 курс" && it.profilesDiscovered == 1 })
+        assertEquals(courseUrl, search.single().sourceUrl)
     }
 
     @Test

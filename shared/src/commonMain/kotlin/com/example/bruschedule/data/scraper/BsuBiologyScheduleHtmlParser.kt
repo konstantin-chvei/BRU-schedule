@@ -693,6 +693,7 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
     companion object {
         const val BIOLOGY_FACULTY_SOURCE_KEY = "Биологический факультет"
         const val BIOLOGY_SCHEDULE_URL = "https://bsu.bio/schedule.php"
+        const val BIOLOGY_SERVER_RENDERED_SCHEDULE_URL = "https://bio.bsu.by/schedule/"
         const val BIOLOGY_HOST_PATH = "bio.bsu.by/schedule"
         const val BIOLOGY_GROUP_PAGE_PATH = "bsu.bio/schedule.php"
         const val BIO_GROUP_SOURCE_KEY_PREFIX = "bio-group-id:"
