@@ -574,25 +574,15 @@ class BsuScheduleProfileCatalogRepository(
         transport.primeBiologySession(BIOLOGY_ROOT)
         val today = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         val weekDate = today.minus(DatePeriod(days = today.dayOfWeek.isoDayNumber - 1)).toString()
-        val officialResponses = fetchBiologyIndexPages(biologyIndexRequests(BIOLOGY_ROOT, weekDate))
-        val officialHasGroupCatalogue = officialResponses.any { response ->
-            response.html?.let { biologyParser.discoverGroups(it).isNotEmpty() } == true
-        }
-        val legacyResponses = if (officialHasGroupCatalogue) {
-            emptyList()
-        } else {
-            transport.primeBiologySession(LEGACY_BIOLOGY_ROOT)
-            fetchBiologyIndexPages(biologyIndexRequests(LEGACY_BIOLOGY_ROOT, weekDate))
-        }
-        val catalogueResponses = if (officialHasGroupCatalogue) officialResponses else legacyResponses
-        val reportResponses = officialResponses + legacyResponses
-        val hasGroupCatalogue = catalogueResponses.any { response ->
-            response.html?.let { biologyParser.discoverGroups(it).isNotEmpty() } == true
-        }
+        val officialRequests = biologyIndexRequests(BIOLOGY_ROOT, weekDate)
+        val officialResponses = mutableListOf<BiologyPageResult>()
         val candidates = mutableListOf<ProfileCandidate>()
-        catalogueResponses.forEach { response ->
-            val html = response.html ?: return@forEach
+        var hasGroupCatalogue = false
+
+        suspend fun collectCandidates(response: BiologyPageResult, reportResponses: List<BiologyPageResult>) {
+            val html = response.html ?: return
             val groups = biologyParser.discoverGroups(html)
+            if (groups.isNotEmpty()) hasGroupCatalogue = true
             val matches = groups.mapNotNull { group ->
                 val mode = response.request.studyMode
                 val searchable = "${group.name} ${group.programme} ${mode.label} ${response.request.course}"
@@ -624,6 +614,48 @@ class BsuScheduleProfileCatalogRepository(
                 )
             }
         }
+
+        supervisorScope {
+            val completedPages = Channel<BiologyPageResult>(capacity = officialRequests.size)
+            val semaphore = Semaphore(MAX_BIOLOGY_REQUESTS_IN_FLIGHT)
+            val workers = officialRequests.map { request ->
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    val response = semaphore.withPermit {
+                        try {
+                            BiologyPageResult(request, transport.get(request.url), failed = false)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Exception) {
+                            BiologyPageResult(
+                                request,
+                                html = null,
+                                failed = true,
+                                failureDetail = failure.message ?: failure.toString(),
+                            )
+                        }
+                    }
+                    completedPages.send(response)
+                }
+            }
+            repeat(officialRequests.size) {
+                val response = completedPages.receive()
+                officialResponses += response
+                collectCandidates(response, officialResponses)
+            }
+            workers.joinAll()
+            completedPages.close()
+        }
+
+        val legacyResponses = if (hasGroupCatalogue) {
+            emptyList()
+        } else {
+            transport.primeBiologySession(LEGACY_BIOLOGY_ROOT)
+            val fetchedPages = fetchBiologyIndexPages(biologyIndexRequests(LEGACY_BIOLOGY_ROOT, weekDate))
+            val reportResponses = officialResponses + fetchedPages
+            fetchedPages.forEach { response -> collectCandidates(response, reportResponses) }
+            fetchedPages
+        }
+        val reportResponses = officialResponses + legacyResponses
         return FacultyResult(
             candidates = candidates,
             pagesLoaded = reportResponses.count { it.html != null },
