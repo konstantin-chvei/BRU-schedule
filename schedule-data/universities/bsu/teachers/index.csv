@@ -1,35 +1,46 @@
 id,name,subtitle,source_key,schedule_path,status,updated_at
-avdeychik-e-v,Авдейчик Е.В.,Механико-математический факультет · расписаний: 1,avdeychik-e-v,schedules/teachers/avdeychik-e-v.csv,ready,2026-10-24T16:47:12.198004223Z
+ablameyko-s-v,Абламейко С.В.,Механико-математический факультет · расписаний: 3,ablameyko-s-v,schedules/teachers/ablameyko-s-v.csv,ready,2026-10-26T18:47:04.655400340Z
+avdeychik-e-v,Авдейчик Е.В.,Механико-математический факультет · расписаний: 4,avdeychik-e-v,schedules/teachers/avdeychik-e-v.csv,ready,2026-10-26T18:47:04.879367643Z
 adamovich-boris-vladislavovich,Адамович Борис Владиславович,Биологический факультет · расписаний: 3,adamovich-boris-vladislavovich,schedules/teachers/adamovich-boris-vladislavovich.csv,ready,2026-10-24T16:47:12.690529802Z
 admiralova-aleksandra-nikolaevna,Адмиралова Александра Николаевна,Биологический факультет · расписаний: 2,admiralova-aleksandra-nikolaevna,schedules/teachers/admiralova-aleksandra-nikolaevna.csv,ready,2026-10-24T16:47:18.147090303Z
-azarov-n-a,Азаров Н.А.,Механико-математический факультет · расписаний: 1,azarov-n-a,schedules/teachers/azarov-n-a.csv,ready,2026-10-24T16:47:20.020271981Z
-alenskiy-n-a,Аленский Н.А.,Механико-математический факультет · расписаний: 4,alenskiy-n-a,schedules/teachers/alenskiy-n-a.csv,ready,2026-10-24T16:47:25.668025928Z
+azarov-a-i,Азаров А.И.,Механико-математический факультет · расписаний: 8,azarov-a-i,schedules/teachers/azarov-a-i.csv,ready,2026-10-26T18:47:18.254542118Z
+azarov-n-a,Азаров Н.А.,Механико-математический факультет · расписаний: 6,azarov-n-a,schedules/teachers/azarov-n-a.csv,ready,2026-10-26T18:47:18.473264126Z
+alenskiy-n-a,Аленский Н.А.,Механико-математический факультет · расписаний: 7,alenskiy-n-a,schedules/teachers/alenskiy-n-a.csv,ready,2026-10-26T18:47:18.708366389Z
 alhimovich-anastasiya-evgenevna,Альхимович Анастасия Евгеньевна,Биологический факультет · расписаний: 10,alhimovich-anastasiya-evgenevna,schedules/teachers/alhimovich-anastasiya-evgenevna.csv,ready,2026-10-24T16:47:30.038794640Z
 ambrosova-marta-nikolaevna,Амбросова Марта Николаевна,Биологический факультет · расписаний: 9,ambrosova-marta-nikolaevna,schedules/teachers/ambrosova-marta-nikolaevna.csv,ready,2026-10-24T16:47:30.583435991Z
 amelishko-polina-sergeevna,Амелишко Полина Сергеевна,Биологический факультет · расписаний: 5,amelishko-polina-sergeevna,schedules/teachers/amelishko-polina-sergeevna.csv,ready,2026-10-24T16:47:30.923214938Z
 ananeva-irina-nikolaevna,Ананьева Ирина Николаевна,Биологический факультет · расписаний: 1,ananeva-irina-nikolaevna,schedules/teachers/ananeva-irina-nikolaevna.csv,ready,2026-10-24T16:47:31.660330645Z
+antonevich-a-b,Антоневич А.Б.,Механико-математический факультет · расписаний: 3,antonevich-a-b,schedules/teachers/antonevich-a-b.csv,ready,2026-10-26T18:47:19.059278288Z
 arhipenko-o-a,Архипенко О.А.,Механико-математический факультет · расписаний: 1,arhipenko-o-a,schedules/teachers/arhipenko-o-a.csv,ready,2026-10-24T16:47:32.184899988Z
+atrohov-k-g,Атрохов К.Г.,Механико-математический факультет · расписаний: 2,atrohov-k-g,schedules/teachers/atrohov-k-g.csv,ready,2026-10-26T18:47:19.235277787Z
 afanaseva-tatyana-sergeevna,Афанасьева Татьяна Сергеевна,Биологический факультет · расписаний: 2,afanaseva-tatyana-sergeevna,schedules/teachers/afanaseva-tatyana-sergeevna.csv,ready,2026-10-24T16:47:32.391213903Z
 bazylev-d-f,Базылев Д.Ф.,Механико-математический факультет · расписаний: 6,bazylev-d-f,schedules/teachers/bazylev-d-f.csv,ready,2026-10-24T16:47:39.811809651Z
 baychorov-vladimir-muhtarovich,Байчоров Владимир Мухтарович,Биологический факультет · расписаний: 1,baychorov-vladimir-muhtarovich,schedules/teachers/baychorov-vladimir-muhtarovich.csv,ready,2026-10-24T16:47:39.989216997Z
+ban-a-a,Бань А.А.,Механико-математический факультет · расписаний: 8,ban-a-a,schedules/teachers/ban-a-a.csv,ready,2026-10-26T18:47:19.493999376Z
+barvenov-s-a,Барвенов С.А.,Механико-математический факультет · расписаний: 7,barvenov-s-a,schedules/teachers/barvenov-s-a.csv,ready,2026-10-26T18:47:19.725021635Z
 bahmetova-arina-fyodorovna,Бахметова Арина Фёдоровна,Биологический факультет · расписаний: 2,bahmetova-arina-fyodorovna,schedules/teachers/bahmetova-arina-fyodorovna.csv,ready,2026-10-24T16:47:44.616008502Z
+bahtin-v-i,Бахтин В.И.,Механико-математический факультет · расписаний: 2,bahtin-v-i,schedules/teachers/bahtin-v-i.csv,ready,2026-10-26T18:47:19.899130272Z
 begun-anna-aleksandrovna,Бегун Анна Александровна,Биологический факультет · расписаний: 7,begun-anna-aleksandrovna,schedules/teachers/begun-anna-aleksandrovna.csv,ready,2026-10-24T16:47:45.048164490Z
+bedritskiy-a-s,Бедрицкий А.С.,Механико-математический факультет · расписаний: 7,bedritskiy-a-s,schedules/teachers/bedritskiy-a-s.csv,ready,2026-10-26T18:47:20.131869071Z
 belov-dmitriy-aleksandrovich,Белов Дмитрий Александрович,Биологический факультет · расписаний: 3,belov-dmitriy-aleksandrovich,schedules/teachers/belov-dmitriy-aleksandrovich.csv,ready,2026-10-24T16:47:45.490298394Z
+belyy-m-a,Белый М.А.,Механико-математический факультет · расписаний: 9,belyy-m-a,schedules/teachers/belyy-m-a.csv,ready,2026-10-26T18:47:20.426568484Z
 belko-elizaveta-aleksandrovna,Белько Елизавета Александровна,Биологический факультет · расписаний: 2,belko-elizaveta-aleksandrovna,schedules/teachers/belko-elizaveta-aleksandrovna.csv,ready,2026-10-24T16:47:45.911819304Z
 benyash-krivets-valeriy-vatslavovich,Беняш-Кривец Валерий Вацлавович,Биологический факультет · расписаний: 2,benyash-krivets-valeriy-vatslavovich,schedules/teachers/benyash-krivets-valeriy-vatslavovich.csv,ready,2026-10-24T16:47:46.137335655Z
 besarab-natalya-vasilevna,Бесараб Наталья Васильевна,Биологический факультет · расписаний: 2,besarab-natalya-vasilevna,schedules/teachers/besarab-natalya-vasilevna.csv,ready,2026-10-24T16:47:46.373962815Z
 bogatikov-andrey-nikolaevich,Богатиков Андрей Николаевич,Биологический факультет · расписаний: 13,bogatikov-andrey-nikolaevich,schedules/teachers/bogatikov-andrey-nikolaevich.csv,ready,2026-10-24T16:47:47.060349040Z
+bogdanovich-a-v,Богданович А.В.,Механико-математический факультет · расписаний: 4,bogdanovich-a-v,schedules/teachers/bogdanovich-a-v.csv,ready,2026-10-26T18:47:20.633237472Z
 bondarev-s-a,Бондарев С.А.,Механико-математический факультет · расписаний: 2,bondarev-s-a,schedules/teachers/bondarev-s-a.csv,ready,2026-10-24T16:47:49.080088682Z
 botogova-marina-georgievna,Ботогова Марина Георгиевна,Биологический факультет · расписаний: 2,botogova-marina-georgievna,schedules/teachers/botogova-marina-georgievna.csv,ready,2026-10-24T16:47:49.306370311Z
-brileva-t-i,Брилева Т.И.,Механико-математический факультет · расписаний: 5,brileva-t-i,schedules/teachers/brileva-t-i.csv,ready,2026-10-24T16:47:49.540131546Z
+brileva-t-i,Брилева Т.И.,Механико-математический факультет · расписаний: 5,brileva-t-i,schedules/teachers/brileva-t-i.csv,ready,2026-10-26T18:47:21.041122821Z
 brich-olga-valerevna,Брич Ольга Валерьевна,Биологический факультет · расписаний: 7,brich-olga-valerevna,schedules/teachers/brich-olga-valerevna.csv,ready,2026-10-24T16:47:50.079428443Z
 bronskaya-tatyana-adamovna,Бронская Татьяна Адамовна,Биологический факультет · расписаний: 4,bronskaya-tatyana-adamovna,schedules/teachers/bronskaya-tatyana-adamovna.csv,ready,2026-10-24T16:47:50.352343193Z
 buga-sergey-vladimirovich,Буга Сергей Владимирович,Биологический факультет · расписаний: 2,buga-sergey-vladimirovich,schedules/teachers/buga-sergey-vladimirovich.csv,ready,2026-10-24T16:47:50.576271504Z
 buklyarevich-anna-aleksandrovna,Букляревич Анна Александровна,Биологический факультет · расписаний: 1,buklyarevich-anna-aleksandrovna,schedules/teachers/buklyarevich-anna-aleksandrovna.csv,ready,2026-10-24T16:47:50.764032059Z
 bulatova-anna-aleksandrovna,Булатова Анна Александровна,Биологический факультет · расписаний: 3,bulatova-anna-aleksandrovna,schedules/teachers/bulatova-anna-aleksandrovna.csv,ready,2026-10-24T16:47:51.020550241Z
 bulahova-nadezhda-olegovna,Булахова Надежда Олеговна,Биологический факультет · расписаний: 2,bulahova-nadezhda-olegovna,schedules/teachers/bulahova-nadezhda-olegovna.csv,ready,2026-10-24T16:47:51.247620741Z
+bulyno-d-a,Булыно Д.А.,Механико-математический факультет · расписаний: 7,bulyno-d-a,schedules/teachers/bulyno-d-a.csv,ready,2026-10-26T18:47:21.272931775Z
 buslavskaya-m-s,Буславская М.С.,Механико-математический факультет · расписаний: 6,buslavskaya-m-s,schedules/teachers/buslavskaya-m-s.csv,ready,2026-10-24T16:47:51.482531216Z
-buhtoyarov-s-e,Бухтояров С.Е.,Механико-математический факультет · расписаний: 1,buhtoyarov-s-e,schedules/teachers/buhtoyarov-s-e.csv,ready,2026-10-24T16:47:51.647899447Z
+buhtoyarov-s-e,Бухтояров С.Е.,Механико-математический факультет · расписаний: 5,buhtoyarov-s-e,schedules/teachers/buhtoyarov-s-e.csv,ready,2026-10-26T18:47:21.488393752Z
 vasilenko-svetlana-leonidovna,Василенко Светлана Леонидовна,Биологический факультет · расписаний: 6,vasilenko-svetlana-leonidovna,schedules/teachers/vasilenko-svetlana-leonidovna.csv,ready,2026-10-24T16:48:03.768709029Z
 velko-oksana-aleksandrovna,Велько Оксана Александровна,Биологический факультет · расписаний: 4,velko-oksana-aleksandrovna,schedules/teachers/velko-oksana-aleksandrovna.csv,ready,2026-10-24T16:48:04.346272570Z
 veremeenko-ekaterina-gennadevna,Веремеенко Екатерина Геннадьевна,Биологический факультет · расписаний: 6,veremeenko-ekaterina-gennadevna,schedules/teachers/veremeenko-ekaterina-gennadevna.csv,ready,2026-10-24T16:48:04.710164469Z
@@ -40,7 +51,7 @@ voronovich-i-i,Воронович И.И.,Механико-математичес
 voropay-valeriya-yurevna,Воропай Валерия Юрьевна,Биологический факультет · расписаний: 6,voropay-valeriya-yurevna,schedules/teachers/voropay-valeriya-yurevna.csv,ready,2026-10-24T16:48:07.557224497Z
 gaevskiy-evgeniy-evgenevich,Гаевский Евгений Евгеньевич,Биологический факультет · расписаний: 5,gaevskiy-evgeniy-evgenevich,schedules/teachers/gaevskiy-evgeniy-evgenevich.csv,ready,2026-10-24T16:48:08.266891812Z
 galkin-i-m,Галкин И.М.,Механико-математический факультет · расписаний: 2,galkin-i-m,schedules/teachers/galkin-i-m.csv,ready,2026-10-24T16:48:08.673836889Z
-galkin-m-n,Галкин М.Н.,Механико-математический факультет · расписаний: 3,galkin-m-n,schedules/teachers/galkin-m-n.csv,ready,2026-10-24T16:48:08.864944036Z
+galkin-m-n,Галкин М.Н.,Механико-математический факультет · расписаний: 3,galkin-m-n,schedules/teachers/galkin-m-n.csv,ready,2026-10-26T18:47:21.907235250Z
 garkusha-ekaterina-sergeevna,Гаркуша Екатерина Сергеевна,Биологический факультет · расписаний: 13,garkusha-ekaterina-sergeevna,schedules/teachers/garkusha-ekaterina-sergeevna.csv,ready,2026-10-24T16:48:09.533111765Z
 gerlovskiy-denis-olegovich,Герловский Денис Олегович,Биологический факультет · расписаний: 7,gerlovskiy-denis-olegovich,schedules/teachers/gerlovskiy-denis-olegovich.csv,ready,2026-10-24T16:48:09.912472389Z
 german-alina-denisovna,Герман Алина Денисовна,Биологический факультет · расписаний: 3,german-alina-denisovna,schedules/teachers/german-alina-denisovna.csv,ready,2026-10-24T16:48:10.171750400Z
@@ -62,6 +73,7 @@ deniseyko-anzhelika-vitalevna,Денисейко Анжелика Виталье
 dzyuban-olga-valentinovna,Дзюбан Ольга Валентиновна,Биологический факультет · расписаний: 2,dzyuban-olga-valentinovna,schedules/teachers/dzyuban-olga-valentinovna.csv,ready,2026-10-24T16:48:15.839824313Z
 ditchenko-tatyana-ivanovna,Дитченко Татьяна Ивановна,Биологический факультет · расписаний: 10,ditchenko-tatyana-ivanovna,schedules/teachers/ditchenko-tatyana-ivanovna.csv,ready,2026-10-24T16:48:16.355507196Z
 dovgodilin-v-v,Довгодилин В.В.,Механико-математический факультет · расписаний: 2,dovgodilin-v-v,schedules/teachers/dovgodilin-v-v.csv,ready,2026-10-24T16:48:16.535627095Z
+dokukova-n-a,Докукова Н.А.,Механико-математический факультет · расписаний: 3,dokukova-n-a,schedules/teachers/dokukova-n-a.csv,ready,2026-10-26T18:47:22.600396213Z
 dolgova-elena-leonidovna,Долгова Елена Леонидовна,Биологический факультет · расписаний: 1,dolgova-elena-leonidovna,schedules/teachers/dolgova-elena-leonidovna.csv,ready,2026-10-24T16:48:16.714593568Z
 dorofeev-kirill-vladimirovich,Дорофеев Кирилл Владимирович,Биологический факультет · расписаний: 1,dorofeev-kirill-vladimirovich,schedules/teachers/dorofeev-kirill-vladimirovich.csv,ready,2026-10-24T16:48:16.898756815Z
 dosina-margarita-olegovna,Досина Маргарита Олеговна,Биологический факультет · расписаний: 3,dosina-margarita-olegovna,schedules/teachers/dosina-margarita-olegovna.csv,ready,2026-10-24T16:48:17.155671032Z
@@ -75,6 +87,7 @@ zhloba-albert-anatolevich,Жлоба Альберт Анатольевич,Би�
 zalesskaya-yu-i,Залесская Ю.И.,Механико-математический факультет · расписаний: 4,zalesskaya-yu-i,schedules/teachers/zalesskaya-yu-i.csv,ready,2026-10-24T16:48:20.666981026Z
 zamornikova-n-yu,Заморникова Н.Ю.,Механико-математический факультет · расписаний: 1,zamornikova-n-yu,schedules/teachers/zamornikova-n-yu.csv,ready,2026-10-24T16:48:20.836217140Z
 zamornikova-natalya-yurevna,Заморникова Наталья Юрьевна,Биологический факультет · расписаний: 2,zamornikova-natalya-yurevna,schedules/teachers/zamornikova-natalya-yurevna.csv,ready,2026-10-24T16:48:21.057302373Z
+zinkevich-e-v,Зинкевич Е.В.,Механико-математический факультет · расписаний: 3,zinkevich-e-v,schedules/teachers/zinkevich-e-v.csv,ready,2026-10-26T18:47:23.114421213Z
 zlotina-ekaterina-evgenevna,Злотина Екатерина Евгеньевна,Биологический факультет · расписаний: 6,zlotina-ekaterina-evgenevna,schedules/teachers/zlotina-ekaterina-evgenevna.csv,ready,2026-10-24T16:48:22.067630739Z
 zubar-valeriya-aleksandrovna,Зубарь Валерия Александровна,Биологический факультет · расписаний: 3,zubar-valeriya-aleksandrovna,schedules/teachers/zubar-valeriya-aleksandrovna.csv,ready,2026-10-24T16:48:22.333332434Z
 ivanov-k-a,Иванов К.А.,Механико-математический факультет · расписаний: 2,ivanov-k-a,schedules/teachers/ivanov-k-a.csv,ready,2026-10-24T16:48:22.718804533Z
@@ -93,7 +106,7 @@ karpovich-natalya-igorevna,Карпович Наталья Игоревна,Би
 kaskevich-v-i,Каскевич В.И.,Механико-математический факультет · расписаний: 1,kaskevich-v-i,schedules/teachers/kaskevich-v-i.csv,ready,2026-10-24T16:48:33.275484726Z
 kashkan-t-a,Кашкан Т.А.,Механико-математический факультет · расписаний: 4,kashkan-t-a,schedules/teachers/kashkan-t-a.csv,ready,2026-10-24T16:48:35.125327353Z
 kimbar-a-v,Кимбар А.В.,Механико-математический факультет · расписаний: 5,kimbar-a-v,schedules/teachers/kimbar-a-v.csv,ready,2026-10-24T16:48:35.338846924Z
-kozlov-i-i,Козлов И.И.,Механико-математический факультет · расписаний: 1,kozlov-i-i,schedules/teachers/kozlov-i-i.csv,ready,2026-10-24T16:48:36.382892507Z
+kozlov-i-i,Козлов И.И.,Механико-математический факультет · расписаний: 1,kozlov-i-i,schedules/teachers/kozlov-i-i.csv,ready,2026-10-26T18:47:23.890627168Z
 komar-elena-ivanovna,Комар Елена Ивановна,Биологический факультет · расписаний: 6,komar-elena-ivanovna,schedules/teachers/komar-elena-ivanovna.csv,ready,2026-10-24T16:48:36.932767514Z
 korzyuk-v-i,Корзюк В.И.,Механико-математический факультет · расписаний: 1,korzyuk-v-i,schedules/teachers/korzyuk-v-i.csv,ready,2026-10-24T16:48:37.775315039Z
 korik-elena-olegovna,Корик Елена Олеговна,Биологический факультет · расписаний: 8,korik-elena-olegovna,schedules/teachers/korik-elena-olegovna.csv,ready,2026-10-24T16:48:38.230398919Z
@@ -104,7 +117,7 @@ koshchits-tatyana-olegovna,Кощиц Татьяна Олеговна,Биоло
 kravchuk-a-i,Кравчук А.И.,Механико-математический факультет · расписаний: 3,kravchuk-a-i,schedules/teachers/kravchuk-a-i.csv,ready,2026-10-24T16:48:40.127325823Z
 krasitskiy-vasiliy-anatolevich,Красицкий Василий Анатольевич,Биологический факультет · расписаний: 1,krasitskiy-vasiliy-anatolevich,schedules/teachers/krasitskiy-vasiliy-anatolevich.csv,ready,2026-10-24T16:48:40.315059638Z
 kremen-e-v,Кремень Е.В.,Механико-математический факультет · расписаний: 1,kremen-e-v,schedules/teachers/kremen-e-v.csv,ready,2026-10-24T16:48:40.481892748Z
-krivitskaya-e-d,Кривицкая Е.Д.,Механико-математический факультет · расписаний: 3,krivitskaya-e-d,schedules/teachers/krivitskaya-e-d.csv,ready,2026-10-24T16:48:40.672029457Z
+krivitskaya-e-d,Кривицкая Е.Д.,Механико-математический факультет · расписаний: 4,krivitskaya-e-d,schedules/teachers/krivitskaya-e-d.csv,ready,2026-10-26T18:47:24.094738864Z
 krivosheya-irina-aleksandrovna,Кривошея Ирина Александровна,Биологический факультет · расписаний: 6,krivosheya-irina-aleksandrovna,schedules/teachers/krivosheya-irina-aleksandrovna.csv,ready,2026-10-24T16:48:41.058072024Z
 krotov-v-g,Кротов В.Г.,Механико-математический факультет · расписаний: 4,krotov-v-g,schedules/teachers/krotov-v-g.csv,ready,2026-10-24T16:48:41.277646921Z
 kruglova-oksana-yurevna,Круглова Оксана Юрьевна,Биологический факультет · расписаний: 10,kruglova-oksana-yurevna,schedules/teachers/kruglova-oksana-yurevna.csv,ready,2026-10-24T16:48:41.811196593Z
@@ -132,9 +145,10 @@ lebedev-a-v,Лебедев А.В.,Механико-математический 
 levandovskaya-a-i,Левандовская А.И.,Биологический факультет · расписаний: 9,levandovskaya-a-i,schedules/teachers/levandovskaya-a-i.csv,ready,2026-10-24T16:48:49.642793801Z
 levdanskaya-anastasiya-igorevna,Левданская Анастасия Игоревна,Биологический факультет · расписаний: 7,levdanskaya-anastasiya-igorevna,schedules/teachers/levdanskaya-anastasiya-igorevna.csv,ready,2026-10-24T16:48:50.008678832Z
 levykina-sofya-sergeevna,Левыкина Софья Сергеевна,Биологический факультет · расписаний: 2,levykina-sofya-sergeevna,schedules/teachers/levykina-sofya-sergeevna.csv,ready,2026-10-24T16:48:50.236193460Z
+legushev-d-a,Легушев Д.А.,Механико-математический факультет · расписаний: 2,legushev-d-a,schedules/teachers/legushev-d-a.csv,ready,2026-10-26T18:47:24.269608562Z
 leonchik-elena-sergeevna,Леончик Елена Сергеевна,Биологический факультет · расписаний: 1,leonchik-elena-sergeevna,schedules/teachers/leonchik-elena-sergeevna.csv,ready,2026-10-24T16:48:50.590958571Z
 listratenko-n-v,Листратенко Н.В.,Механико-математический факультет · расписаний: 6,listratenko-n-v,schedules/teachers/listratenko-n-v.csv,ready,2026-10-24T16:48:51.235781058Z
-lishay-d-v,Лишай Д.В.,Механико-математический факультет · расписаний: 1,lishay-d-v,schedules/teachers/lishay-d-v.csv,ready,2026-10-24T16:48:51.399015586Z
+lishay-d-v,Лишай Д.В.,Механико-математический факультет · расписаний: 1,lishay-d-v,schedules/teachers/lishay-d-v.csv,ready,2026-10-26T18:47:24.431953198Z
 logvina-anna-olegovna,Логвина Анна Олеговна,Биологический факультет · расписаний: 2,logvina-anna-olegovna,schedules/teachers/logvina-anna-olegovna.csv,ready,2026-10-24T16:48:52.034834436Z
 lomonosova-veronika-aleksandrovna,Ломоносова Вероника Александровна,Биологический факультет · расписаний: 2,lomonosova-veronika-aleksandrovna,schedules/teachers/lomonosova-veronika-aleksandrovna.csv,ready,2026-10-24T16:48:52.261777923Z
 lukashevich-valentin-arturovich,Лукашевич Валентин Артурович,Биологический факультет · расписаний: 1,lukashevich-valentin-arturovich,schedules/teachers/lukashevich-valentin-arturovich.csv,ready,2026-10-24T16:48:52.461917941Z
@@ -172,7 +186,7 @@ pesnyakevich-aleksandr-georgievich,Песнякевич Александр Ге�
 pesotskaya-karina-yurevna,Песоцкая Карина Юрьевна,Биологический факультет · расписаний: 2,pesotskaya-karina-yurevna,schedules/teachers/pesotskaya-karina-yurevna.csv,ready,2026-10-24T16:49:24.641540837Z
 petrova-svetlana-mihaylovna,Петрова Светлана Михайловна,Биологический факультет · расписаний: 7,petrova-svetlana-mihaylovna,schedules/teachers/petrova-svetlana-mihaylovna.csv,ready,2026-10-24T16:49:25.067059546Z
 petrovich-alina-dmitrievna,Петрович Алина Дмитриевна,Биологический факультет · расписаний: 4,petrovich-alina-dmitrievna,schedules/teachers/petrovich-alina-dmitrievna.csv,ready,2026-10-24T16:49:25.330843165Z
-poznyak-yu-v,Позняк Ю.В.,Механико-математический факультет · расписаний: 3,poznyak-yu-v,schedules/teachers/poznyak-yu-v.csv,ready,2026-10-24T16:49:25.832099483Z
+poznyak-yu-v,Позняк Ю.В.,Механико-математический факультет · расписаний: 6,poznyak-yu-v,schedules/teachers/poznyak-yu-v.csv,ready,2026-10-26T18:47:24.653309525Z
 poliksenova-valentina-dmitrievna,Поликсенова Валентина Дмитриевна,Биологический факультет · расписаний: 9,poliksenova-valentina-dmitrievna,schedules/teachers/poliksenova-valentina-dmitrievna.csv,ready,2026-10-24T16:49:26.520625254Z
 polyak-n-a,Поляк Н.А.,Механико-математический факультет · расписаний: 6,polyak-n-a,schedules/teachers/polyak-n-a.csv,ready,2026-10-24T16:49:26.747117775Z
 poskrobko-pavel-igorevich,Поскробко Павел Игоревич,Биологический факультет · расписаний: 4,poskrobko-pavel-igorevich,schedules/teachers/poskrobko-pavel-igorevich.csv,ready,2026-10-24T16:49:27.487006982Z
@@ -238,6 +252,7 @@ hramchenko-t-a,Храмченко Т.А.,Механико-математичес
 hrustalyov-vladislav-viktorovich,Хрусталёв Владислав Викторович,Биологический факультет · расписаний: 1,hrustalyov-vladislav-viktorovich,schedules/teachers/hrustalyov-vladislav-viktorovich.csv,ready,2026-10-24T16:49:54.684722605Z
 chumak-anatoliy-georgievich,Чумак Анатолий Георгиевич,Биологический факультет · расписаний: 4,chumak-anatoliy-georgievich,schedules/teachers/chumak-anatoliy-georgievich.csv,ready,2026-10-24T16:49:55.420125261Z
 shavel-mariya-igorevna,Шавель Мария Игоревна,Биологический факультет · расписаний: 10,shavel-mariya-igorevna,schedules/teachers/shavel-mariya-igorevna.csv,ready,2026-10-24T16:49:55.967056882Z
+shalesnayao-a,ШалеснаяО.А.,Механико-математический факультет · расписаний: 1,shalesnayao-a,schedules/teachers/shalesnayao-a.csv,ready,2026-10-26T18:47:25.167613080Z
 shapchits-mariya-pavlovna,Шапчиц Мария Павловна,Биологический факультет · расписаний: 3,shapchits-mariya-pavlovna,schedules/teachers/shapchits-mariya-pavlovna.csv,ready,2026-10-24T16:49:56.231003685Z
 sharangovich-maksim-andreevich,Шарангович Максим Андреевич,Биологический факультет · расписаний: 1,sharangovich-maksim-andreevich,schedules/teachers/sharangovich-maksim-andreevich.csv,ready,2026-10-24T16:49:56.418832101Z
 sharshun-anna-viktorovna,Шаршун Анна Викторовна,Биологический факультет · расписаний: 8,sharshun-anna-viktorovna,schedules/teachers/sharshun-anna-viktorovna.csv,ready,2026-10-24T16:49:56.878691388Z
