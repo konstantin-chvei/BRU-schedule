@@ -277,6 +277,26 @@ class ScheduleDocumentHtmlAdapterTest {
     }
 
     @Test
+    fun bsuCatalogueReportRetainsTheCauseOfARequestFailure() {
+        val facultyUrl = "https://fpmi.bsu.by/timetable"
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                if (url == facultyUrl) error("HTTP 503 from the faculty server")
+                return "<html><body></body></html>"
+            }
+        }
+
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+        val fpmi = discovery.sources.single { it.name == "ФПМИ" }
+
+        assertEquals(0, fpmi.pagesLoaded)
+        assertEquals(1, fpmi.requestFailures)
+        assertEquals(listOf("HTTP 503 from the faculty server"), fpmi.requestFailureDetails)
+    }
+
+    @Test
     fun bsuExhaustiveDiscoveryFollowsUnlabelledOfficialHtmlPages() {
         val facultyUrl = "https://fpmi.bsu.by/timetable"
         val scheduleUrl = "https://fpmi.bsu.by/documents/a3.html"
@@ -335,8 +355,8 @@ class ScheduleDocumentHtmlAdapterTest {
         }
         val fpmi = discovery.sources.single { it.name == "ФПМИ" }
 
-        assertEquals(100, fpmi.profilesDiscovered)
-        assertEquals(100, fpmi.pagesLoaded)
+        assertEquals(101, fpmi.profilesDiscovered)
+        assertEquals(101, fpmi.pagesLoaded)
         assertTrue(fpmi.crawlTruncated)
         assertEquals(0, fpmi.requestFailures)
     }

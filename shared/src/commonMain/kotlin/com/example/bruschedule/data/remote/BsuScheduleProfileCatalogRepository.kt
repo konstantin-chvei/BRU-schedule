@@ -119,20 +119,28 @@ class BsuScheduleProfileCatalogRepository(
     /** Returns per-faculty crawl statistics so a manual import can distinguish omissions from empty catalogues. */
     suspend fun discoverAllWithReport(type: ScheduleProfileType): ScheduleCatalogDiscoveryResult {
         val results = supervisorScope {
+            val facultySemaphore = Semaphore(MAX_IMPORT_FACULTY_CRAWLS_IN_FLIGHT)
             FACULTIES.map { faculty ->
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    try {
-                        discoverFaculty(
-                            faculty = faculty,
-                            type = type,
-                            normalizedQuery = "",
-                            onProgress = { },
-                            exhaustive = true,
-                        )
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        FacultyResult(candidates = emptyList(), pagesLoaded = 0, requestFailures = 1)
+                    facultySemaphore.withPermit {
+                        try {
+                            discoverFaculty(
+                                faculty = faculty,
+                                type = type,
+                                normalizedQuery = "",
+                                onProgress = { },
+                                exhaustive = true,
+                            )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Exception) {
+                            FacultyResult(
+                                candidates = emptyList(),
+                                pagesLoaded = 0,
+                                requestFailures = 1,
+                                requestFailureDetails = listOf(failure.message ?: failure.toString()),
+                            )
+                        }
                     }
                 }
             }.awaitAll()
@@ -145,6 +153,7 @@ class BsuScheduleProfileCatalogRepository(
                 pagesLoaded = result.pagesLoaded,
                 requestFailures = result.requestFailures,
                 crawlTruncated = result.crawlTruncated,
+                requestFailureDetails = result.requestFailureDetails,
             )
         }
         return ScheduleCatalogDiscoveryResult(candidates = candidates, sources = sources)
@@ -207,16 +216,24 @@ class BsuScheduleProfileCatalogRepository(
         val candidates = mutableListOf<ProfileCandidate>()
         val visited = mutableSetOf<String>()
         val scheduledPages = mutableSetOf<String>()
+        val requestFailureDetails = mutableListOf<String>()
         var pagesLoaded = 0
         var requestFailures = 0
         var crawlTruncated = false
+
+        fun recordRequestFailure(detail: String?) {
+            requestFailures++
+            if (!detail.isNullOrBlank() && requestFailureDetails.size < MAX_FAILURE_DETAIL_SAMPLES) {
+                requestFailureDetails += detail.trim().take(MAX_FAILURE_DETAIL_LENGTH)
+            }
+        }
 
         suspend fun fetch(url: String): String? = try {
             transport.get(url).also { pagesLoaded++ }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
-            requestFailures++
+        } catch (failure: Exception) {
+            recordRequestFailure(failure.message ?: failure.toString())
             null
         }
 
@@ -269,6 +286,7 @@ class BsuScheduleProfileCatalogRepository(
                     pagesLoaded = pagesLoaded,
                     requestFailures = requestFailures,
                     crawlTruncated = crawlTruncated,
+                    requestFailureDetails = requestFailureDetails.toList(),
                 ),
             )
             val maxLinkDepth = when {
@@ -349,15 +367,32 @@ class BsuScheduleProfileCatalogRepository(
                 val documentFormat = link.documentFormat
                 val html = when {
                     documentFormat != null -> {
-                        if (!documentFormat.isSupported) return LinkFetchResult(link, html = null, failed = true)
+                        if (!documentFormat.isSupported) {
+                            return LinkFetchResult(
+                                link,
+                                html = null,
+                                failed = true,
+                                failureDetail = "Формат документа ${documentFormat.displayName} не поддерживается",
+                            )
+                        }
                         val binaryTransport = transport as? BinaryResourceTransport
-                            ?: return LinkFetchResult(link, html = null, failed = true)
+                            ?: return LinkFetchResult(
+                                link,
+                                html = null,
+                                failed = true,
+                                failureDetail = "Транспорт не поддерживает загрузку документов",
+                            )
                         val bytes = binaryTransport.getBytes(documentAdapter.downloadUrl(link.url))
                         documentAdapter.toHtml(documentFormat, bytes)
                     }
                     link.isSheet -> {
                         val htmlUrl = GoogleSheetsScheduleUrl.toHtmlTableUrl(link.url)
-                            ?: return LinkFetchResult(link, html = null, failed = true)
+                            ?: return LinkFetchResult(
+                                link,
+                                html = null,
+                                failed = true,
+                                failureDetail = "Не удалось преобразовать ссылку Google Sheets",
+                            )
                         transport.get(htmlUrl)
                     }
                     else -> transport.get(link.url)
@@ -365,8 +400,13 @@ class BsuScheduleProfileCatalogRepository(
                 LinkFetchResult(link, html = html, failed = false)
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                LinkFetchResult(link, html = null, failed = true)
+            } catch (failure: Exception) {
+                LinkFetchResult(
+                    link,
+                    html = null,
+                    failed = true,
+                    failureDetail = failure.message ?: failure.toString(),
+                )
             }
 
             val linkResponses = supervisorScope {
@@ -381,7 +421,7 @@ class BsuScheduleProfileCatalogRepository(
                 val link = response.link
                 val html = response.html
                 if (response.failed || html == null) {
-                    requestFailures++
+                    recordRequestFailure(response.failureDetail)
                     return@forEach
                 }
                 pagesLoaded++
@@ -451,14 +491,27 @@ class BsuScheduleProfileCatalogRepository(
                     pagesLoaded = pagesLoaded,
                     requestFailures = requestFailures,
                     crawlTruncated = crawlTruncated,
+                    requestFailureDetails = requestFailureDetails.toList(),
                 ),
             )
         }
 
         val rootHtml = fetch(faculty.url)
-            ?: return FacultyResult(candidates, pagesLoaded, requestFailures, crawlTruncated = crawlTruncated)
+            ?: return FacultyResult(
+                candidates,
+                pagesLoaded,
+                requestFailures,
+                crawlTruncated = crawlTruncated,
+                requestFailureDetails = requestFailureDetails.toList(),
+            )
         inspectPage(faculty.url, rootHtml, depth = 0)
-        return FacultyResult(candidates, pagesLoaded, requestFailures, crawlTruncated = crawlTruncated)
+        return FacultyResult(
+            candidates,
+            pagesLoaded,
+            requestFailures,
+            crawlTruncated = crawlTruncated,
+            requestFailureDetails = requestFailureDetails.toList(),
+        )
     }
 
     private suspend fun discoverBiologyFaculty(
@@ -491,8 +544,13 @@ class BsuScheduleProfileCatalogRepository(
                             BiologyPageResult(request, transport.get(request.url), failed = false)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) {
-                            BiologyPageResult(request, html = null, failed = true)
+                        } catch (failure: Exception) {
+                            BiologyPageResult(
+                                request,
+                                html = null,
+                                failed = true,
+                                failureDetail = failure.message ?: failure.toString(),
+                            )
                         }
                     }
                     completedPages.send(result)
@@ -530,6 +588,8 @@ class BsuScheduleProfileCatalogRepository(
                             candidates = candidates.toList(),
                             pagesLoaded = responses.count { it.html != null },
                             requestFailures = responses.count(BiologyPageResult::failed),
+                            requestFailureDetails = responses.mapNotNull(BiologyPageResult::failureDetail)
+                                .take(MAX_FAILURE_DETAIL_SAMPLES),
                         ),
                     )
                 }
@@ -541,6 +601,8 @@ class BsuScheduleProfileCatalogRepository(
             candidates = candidates,
             pagesLoaded = responses.count { it.html != null },
             requestFailures = responses.count(BiologyPageResult::failed),
+            requestFailureDetails = responses.mapNotNull(BiologyPageResult::failureDetail)
+                .take(MAX_FAILURE_DETAIL_SAMPLES),
             sourceUnavailable = !hasGroupCatalogue,
         )
     }
@@ -571,8 +633,13 @@ class BsuScheduleProfileCatalogRepository(
                             BiologyPageResult(request, transport.get(request.url), failed = false)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) {
-                            BiologyPageResult(request, html = null, failed = true)
+                        } catch (failure: Exception) {
+                            BiologyPageResult(
+                                request,
+                                html = null,
+                                failed = true,
+                                failureDetail = failure.message ?: failure.toString(),
+                            )
                         }
                     }
                 }
@@ -602,8 +669,13 @@ class BsuScheduleProfileCatalogRepository(
                             BiologyTeacherPageResult(request, transport.get(request.url), failed = false)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) {
-                            BiologyTeacherPageResult(request, html = null, failed = true)
+                        } catch (failure: Exception) {
+                            BiologyTeacherPageResult(
+                                request,
+                                html = null,
+                                failed = true,
+                                failureDetail = failure.message ?: failure.toString(),
+                            )
                         }
                     }
                 }
@@ -638,6 +710,10 @@ class BsuScheduleProfileCatalogRepository(
                         timetableResponses.count { it.html != null },
                     requestFailures = indexResponses.count(BiologyPageResult::failed) +
                         timetableResponses.count(BiologyTeacherPageResult::failed),
+                    requestFailureDetails = (
+                        indexResponses.mapNotNull(BiologyPageResult::failureDetail) +
+                            timetableResponses.mapNotNull(BiologyTeacherPageResult::failureDetail)
+                        ).take(MAX_FAILURE_DETAIL_SAMPLES),
                     sourceUnavailable = teacherRequests.isEmpty(),
                     crawlTruncated = crawlTruncated,
                 ),
@@ -648,6 +724,10 @@ class BsuScheduleProfileCatalogRepository(
             pagesLoaded = indexResponses.count { it.html != null } + timetableResponses.count { it.html != null },
             requestFailures = indexResponses.count(BiologyPageResult::failed) +
                 timetableResponses.count(BiologyTeacherPageResult::failed),
+            requestFailureDetails = (
+                indexResponses.mapNotNull(BiologyPageResult::failureDetail) +
+                    timetableResponses.mapNotNull(BiologyTeacherPageResult::failureDetail)
+                ).take(MAX_FAILURE_DETAIL_SAMPLES),
             sourceUnavailable = teacherRequests.isEmpty(),
             crawlTruncated = crawlTruncated,
         )
@@ -796,6 +876,7 @@ class BsuScheduleProfileCatalogRepository(
         val link: LinkTarget,
         val html: String?,
         val failed: Boolean,
+        val failureDetail: String? = null,
     )
 
     private data class FacultyResult(
@@ -804,6 +885,7 @@ class BsuScheduleProfileCatalogRepository(
         val requestFailures: Int,
         val sourceUnavailable: Boolean = false,
         val crawlTruncated: Boolean = false,
+        val requestFailureDetails: List<String> = emptyList(),
     )
 
     private data class BiologyStudyMode(val label: String)
@@ -818,6 +900,7 @@ class BsuScheduleProfileCatalogRepository(
         val request: BiologyRequest,
         val html: String?,
         val failed: Boolean,
+        val failureDetail: String? = null,
     )
 
     private data class BiologyTeacherRequest(
@@ -831,6 +914,7 @@ class BsuScheduleProfileCatalogRepository(
         val request: BiologyTeacherRequest,
         val html: String?,
         val failed: Boolean,
+        val failureDetail: String? = null,
     )
 
     private data class FacultySource(val name: String, val url: String)
@@ -845,8 +929,11 @@ class BsuScheduleProfileCatalogRepository(
         const val MAX_PAGES_PER_FACULTY = 10
         const val MAX_TEACHER_PAGES_PER_FACULTY = 30
         const val MAX_IMPORT_LINK_DEPTH = 4
+        const val MAX_IMPORT_FACULTY_CRAWLS_IN_FLIGHT = 3
+        const val MAX_FAILURE_DETAIL_SAMPLES = 5
+        const val MAX_FAILURE_DETAIL_LENGTH = 300
         const val MAX_IMPORT_LINKS_PER_PAGE = 100
-        const val MAX_IMPORT_PAGES_PER_FACULTY = 100
+        const val MAX_IMPORT_PAGES_PER_FACULTY = 500
         const val MAX_LINK_REQUESTS_IN_FLIGHT_PER_FACULTY = 3
         const val BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL
         const val BIOLOGY_MAX_COURSES = 5

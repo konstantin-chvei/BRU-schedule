@@ -76,7 +76,7 @@ class BruScheduleProfileCatalogRepository(
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
             ScheduleCatalogDiscoveryResult(
                 candidates = emptyList(),
                 sources = listOf(
@@ -85,6 +85,7 @@ class BruScheduleProfileCatalogRepository(
                         profilesDiscovered = 0,
                         pagesLoaded = 0,
                         requestFailures = 1,
+                        requestFailureDetails = listOf(failure.message ?: failure.toString()),
                     ),
                 ),
             )
@@ -103,8 +104,14 @@ class BruScheduleProfileCatalogRepository(
                 transport.get(root)
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                sources += ScheduleCatalogSourceReport(rootName, 0, 0, 1)
+            } catch (failure: Exception) {
+                sources += ScheduleCatalogSourceReport(
+                    rootName,
+                    0,
+                    0,
+                    1,
+                    requestFailureDetails = listOf(failure.message ?: failure.toString()),
+                )
                 continue
             }
             val rootCandidates = parser.groupCandidates(rootHtml, root)
@@ -128,8 +135,14 @@ class BruScheduleProfileCatalogRepository(
                     transport.get(work.directory.url)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (_: Exception) {
-                    sources += ScheduleCatalogSourceReport(reportName, 0, 0, 1)
+                } catch (failure: Exception) {
+                    sources += ScheduleCatalogSourceReport(
+                        name = reportName,
+                        profilesDiscovered = 0,
+                        pagesLoaded = 0,
+                        requestFailures = 1,
+                        requestFailureDetails = listOf(failure.message ?: failure.toString()),
+                    )
                     continue
                 }
                 val pageCandidates = parser.groupCandidates(

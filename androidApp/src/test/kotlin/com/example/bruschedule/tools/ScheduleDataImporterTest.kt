@@ -167,6 +167,7 @@ private data class ImportSourceReport(
     val pagesLoaded: Int,
     val requestFailures: Int,
     val crawlTruncated: Boolean,
+    val requestFailureDetails: List<String>,
 )
 
 private class UniversalScheduleDatasetImporter(
@@ -254,7 +255,15 @@ private class UniversalScheduleDatasetImporter(
         System.err.println("${university.id}/${type.directoryName()} catalogue discovery failed: $detail")
         ScheduleCatalogDiscoveryResult(
             candidates = emptyList(),
-            sources = listOf(ScheduleCatalogSourceReport(sourceName, 0, 0, 1)),
+            sources = listOf(
+                ScheduleCatalogSourceReport(
+                    name = sourceName,
+                    profilesDiscovered = 0,
+                    pagesLoaded = 0,
+                    requestFailures = 1,
+                    requestFailureDetails = listOf(detail),
+                ),
+            ),
         )
     }
 
@@ -272,6 +281,7 @@ private class UniversalScheduleDatasetImporter(
                 pagesLoaded = report.pagesLoaded,
                 requestFailures = report.requestFailures,
                 crawlTruncated = report.crawlTruncated,
+                requestFailureDetails = report.requestFailureDetails,
             )
         }
     }
@@ -286,6 +296,7 @@ private class UniversalScheduleDatasetImporter(
             pagesLoaded = 0,
             requestFailures = 0,
             crawlTruncated = false,
+            requestFailureDetails = emptyList(),
         )
     }
 
@@ -522,13 +533,17 @@ private class UniversalScheduleDatasetImporter(
         val serializedSources = sourceReports
             .sortedWith(compareBy<ImportSourceReport>({ it.universityId }, { it.profileType }, { it.source }))
             .joinToString(",\n") { source ->
+                val failureDetails = source.requestFailureDetails.joinToString(", ") { detail ->
+                    json(redactUrls(detail).take(300))
+                }
                 "    {\"university\": ${json(source.universityId)}, " +
                     "\"type\": ${json(source.profileType)}, " +
                     "\"source\": ${json(source.source)}, " +
                     "\"profiles_discovered\": ${source.profilesDiscovered}, " +
                     "\"pages_loaded\": ${source.pagesLoaded}, " +
                     "\"request_failures\": ${source.requestFailures}, " +
-                    "\"crawl_truncated\": ${source.crawlTruncated}}"
+                    "\"crawl_truncated\": ${source.crawlTruncated}, " +
+                    "\"request_failure_details\": [$failureDetails]}"
             }
         val serializedFailures = failedImports.joinToString(",\n") { failure ->
             "    {\"university\": ${json(failure.universityId)}, " +

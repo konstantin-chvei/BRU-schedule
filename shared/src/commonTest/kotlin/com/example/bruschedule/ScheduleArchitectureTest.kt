@@ -515,6 +515,18 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun bruDirectoryDiscoveryIncludesNonIndexCatalogueHtmlPages() {
+        val parser = BruScheduleDirectoryParser()
+        val rootUrl = BruScheduleDirectoryParser.FULL_TIME_INDEX
+        val nestedUrl = "https://rasp.bru.by/full_time/auto/courses.html"
+        val rootHtml = "<a href=\"$nestedUrl\">Автомеханический факультет</a>"
+
+        val directories = parser.facultyDirectories(rootHtml, rootUrl, ScheduleProfileType.GROUP)
+
+        assertEquals(listOf(nestedUrl), directories.map { it.url })
+    }
+
+    @Test
     fun customUniversityProfileLoadsItsDirectTimetableUrl() {
         var requestedUrl: String? = null
         val transport = object : HtmlTransport {

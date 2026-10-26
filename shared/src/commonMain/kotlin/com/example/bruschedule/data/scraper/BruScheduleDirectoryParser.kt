@@ -26,10 +26,12 @@ class BruScheduleDirectoryParser {
                 if (!absolute.startsWith("$ROOT/", ignoreCase = true)) return@mapNotNull null
                 val path = absolute.substringAfter("rasp.bru.by", absolute).substringBefore('#').substringBefore('?')
                 val isDatedSchedule = path.contains("_weeks_", ignoreCase = true) || path.contains("_session_", ignoreCase = true)
+                val isGroupScheduleLink = anchor.attr("class").split(Regex("\\s+")).contains("group-link")
                 val fileName = path.substringAfterLast('/')
                 val isIndexPage = INDEX_PAGE_FILE_NAME.matches(fileName)
-                val appearsToBeFacultyDirectory = !isDatedSchedule && (
-                    isIndexPage || path.endsWith('/') || !fileName.contains('.')
+                val isCataloguePage = CATALOGUE_PAGE_FILE_NAME.matches(fileName)
+                val appearsToBeFacultyDirectory = !isDatedSchedule && !isGroupScheduleLink && (
+                    isIndexPage || isCataloguePage || path.endsWith('/') || !fileName.contains('.')
                     )
                 val isFormRootIndex = path.equals("${rootPath}index.html", ignoreCase = true) ||
                     path.equals("${rootPath}index.htm", ignoreCase = true) ||
@@ -285,6 +287,7 @@ class BruScheduleDirectoryParser {
         private val GROUP_DATE_SUFFIX = Regex("\\s+\\d{1,2}\\.\\d{1,2}")
         private val WEEK_RANGE = Regex("_weeks_(20\\d{6})_(20\\d{6})", RegexOption.IGNORE_CASE)
         private val INDEX_PAGE_FILE_NAME = Regex("index\\.(?:html?|php)", RegexOption.IGNORE_CASE)
+        private val CATALOGUE_PAGE_FILE_NAME = Regex(".+\\.(?:html?|php)", RegexOption.IGNORE_CASE)
         const val ROOT = "https://rasp.bru.by"
         const val FULL_TIME_INDEX = "$ROOT/full_time/index.html"
         const val PART_TIME_INDEX = "$ROOT/part_time/index.html"

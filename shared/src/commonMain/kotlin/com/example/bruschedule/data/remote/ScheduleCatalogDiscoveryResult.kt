@@ -10,6 +10,8 @@ data class ScheduleCatalogSourceReport(
     val requestFailures: Int,
     /** True when a crawl/link cap left candidate pages unexplored. */
     val crawlTruncated: Boolean = false,
+    /** A small sample of request errors; consumers should redact URLs before publishing it. */
+    val requestFailureDetails: List<String> = emptyList(),
 )
 
 data class ScheduleCatalogDiscoveryResult(
