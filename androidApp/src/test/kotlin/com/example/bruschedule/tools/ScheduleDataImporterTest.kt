@@ -9,6 +9,7 @@ import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.data.scraper.UniversityScheduleHtmlParser
 import com.example.bruschedule.domain.model.DefaultUniversities
 import com.example.bruschedule.domain.model.Lesson
+import com.example.bruschedule.domain.model.ProfileCandidate
 import com.example.bruschedule.domain.model.ScheduleProfile
 import com.example.bruschedule.domain.model.ScheduleProfileType
 import com.example.bruschedule.domain.model.ScheduleWindow
@@ -65,6 +66,24 @@ class ScheduleDataImporterTest {
         assertEquals("\"Преподаватель \"\"И.И.\"\"\"", csvCell("Преподаватель \"И.И.\""))
         assertEquals("строка 1 строка 2", csvCell("строка 1\nстрока 2"))
         assertEquals("Ошибка [source URL] HTTP 403", redactUrls("Ошибка https://example.org/secret?key=abc HTTP 403"))
+    }
+
+    @Test
+    fun bruOfflineRegistrySuppliesEverySavedGroupAndTeacherProfileToTheImporter() {
+        val repositoryRoot = findRepositoryRoot()
+        val groups = readRegistryCandidates(repositoryRoot, DefaultUniversities.BRU, ScheduleProfileType.GROUP)
+        val teachers = readRegistryCandidates(repositoryRoot, DefaultUniversities.BRU, ScheduleProfileType.TEACHER)
+
+        assertTrue("The BRU group registry should supplement the live catalogue", groups.size >= 31)
+        assertTrue("The saved BRU teacher directory should not collapse to the one live result", teachers.size >= 281)
+        assertEquals(teachers.size, teachers.map(ProfileCandidate::sourceUrl).distinct().size)
+        assertTrue(teachers.all { it.sourceUrl.startsWith("https://rasp.bru.by/teachers/") })
+        assertTrue(groups.all { it.sourceUrl.startsWith("https://rasp.bru.by/") })
+
+        val liveFirstTeacher = teachers.first().copy(subtitle = "Live directory result")
+        val mergedTeachers = mergeCatalogueCandidates(listOf(liveFirstTeacher), teachers)
+        assertEquals(teachers.size, mergedTeachers.size)
+        assertEquals("Live directory result", mergedTeachers.first().subtitle)
     }
 
     @Test
@@ -158,22 +177,34 @@ private class UniversalScheduleDatasetImporter(
         writeCsv(dataRoot.resolve("universities.csv"), listOf("id", "name", "website_url", "enabled"), rootEntries)
 
         for (university in universities) {
-            val groups = when (university.id) {
+            val liveGroups = when (university.id) {
                 UniversityIds.BRU -> BruScheduleProfileCatalogRepository(transport)
                     .discoverAll(ScheduleProfileType.GROUP)
                 UniversityIds.BSU -> BsuScheduleProfileCatalogRepository(transport)
                     .discoverAll(ScheduleProfileType.GROUP)
                 else -> error("No parser for ${university.id}")
             }
-            val teachers = when (university.id) {
+            val liveTeachers = when (university.id) {
                 UniversityIds.BRU -> BruScheduleProfileCatalogRepository(transport)
                     .discoverAll(ScheduleProfileType.TEACHER)
                 UniversityIds.BSU -> BsuScheduleProfileCatalogRepository(transport)
                     .discoverAll(ScheduleProfileType.TEACHER)
                 else -> error("No parser for ${university.id}")
             }
+            val groups = mergeCatalogueCandidates(
+                primary = liveGroups,
+                supplemental = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.GROUP),
+            )
+            val teachers = mergeCatalogueCandidates(
+                primary = liveTeachers,
+                supplemental = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.TEACHER),
+            )
             discoveredCount += groups.size + teachers.size
-            println("${university.id}: discovered ${groups.size} groups and ${teachers.size} teachers")
+            println(
+                "${university.id}: discovered ${groups.size} groups and ${teachers.size} teachers " +
+                    "(${groups.size - liveGroups.size} groups and ${teachers.size - liveTeachers.size} " +
+                    "supplemented from the offline registry)",
+            )
             importType(university, ScheduleProfileType.GROUP, groups)
             importType(university, ScheduleProfileType.TEACHER, teachers)
             writeUniversityMetadata(university)
@@ -477,43 +508,6 @@ private class UniversalScheduleDatasetImporter(
         })
     }
 
-    private fun parseCsv(content: String): List<List<String>> {
-        val rows = mutableListOf<List<String>>()
-        var row = mutableListOf<String>()
-        val field = StringBuilder()
-        var quoted = false
-        var index = 0
-        while (index < content.length) {
-            val char = content[index]
-            when {
-                char == '"' && quoted && content.getOrNull(index + 1) == '"' -> {
-                    field.append('"')
-                    index++
-                }
-                char == '"' -> quoted = !quoted
-                char == ',' && !quoted -> {
-                    row += field.toString().trim()
-                    field.clear()
-                }
-                (char == '\n' || char == '\r') && !quoted -> {
-                    row += field.toString().trim()
-                    if (row.any(String::isNotBlank)) rows += row
-                    row = mutableListOf()
-                    field.clear()
-                    if (char == '\r' && content.getOrNull(index + 1) == '\n') index++
-                }
-                else -> field.append(char)
-            }
-            index++
-        }
-        require(!quoted) { "CSV file contains an unterminated quoted field" }
-        if (field.isNotEmpty() || row.isNotEmpty()) {
-            row += field.toString().trim()
-            if (row.any(String::isNotBlank)) rows += row
-        }
-        return rows
-    }
-
     private fun atomicWrite(path: Path, content: String) {
         Files.createDirectories(path.parent)
         val temp = path.resolveSibling("${path.fileName}.tmp")
@@ -729,6 +723,156 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
         const val NANOS_PER_MILLISECOND = 1_000_000L
         const val USER_AGENT = "ScheduleGitHubDatasetImporter/1.0 (explicit manual import)"
     }
+}
+
+private fun findRepositoryRoot(): Path {
+    var current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize()
+    while (true) {
+        if (Files.isRegularFile(current.resolve("tools/schedules/registry/bru/teachers.csv"))) return current
+        current = current.parent ?: error(
+            "Could not locate the BRU schedule registry from ${System.getProperty("user.dir")}",
+        )
+    }
+}
+
+/** Keeps the checked-in BRU catalogue available when a live directory page is incomplete. */
+private fun readRegistryCandidates(
+    repositoryRoot: Path,
+    university: University,
+    type: ScheduleProfileType,
+): List<ProfileCandidate> {
+    if (university.id != UniversityIds.BRU) return emptyList()
+    val directoryName = when (type) {
+        ScheduleProfileType.GROUP -> "groups"
+        ScheduleProfileType.TEACHER -> "teachers"
+    }
+    val registryFile = repositoryRoot.resolve("tools/schedules/registry/${university.id}/$directoryName.csv")
+    if (!Files.isRegularFile(registryFile)) return emptyList()
+
+    val rows = parseCsv(String(Files.readAllBytes(registryFile), StandardCharsets.UTF_8))
+    if (rows.isEmpty()) return emptyList()
+    val header = rows.first().map { it.removePrefix("\uFEFF").trim().lowercase(Locale.ROOT) }
+    fun value(row: List<String>, vararg names: String): String {
+        val column = header.indexOfFirst { it in names }
+        if (column < 0) return ""
+        return row.getOrNull(column).orEmpty().trim()
+    }
+
+    return rows.drop(1).mapNotNull { row ->
+        val name = value(row, "name")
+        val sourceUrl = value(row, "source_url", "url")
+        if (name.isBlank() || sourceUrl.isBlank()) return@mapNotNull null
+        val uri = runCatching { URI(sourceUrl) }.getOrNull() ?: return@mapNotNull null
+        val path = uri.rawPath.orEmpty()
+        val expectedPath = when (type) {
+            ScheduleProfileType.GROUP -> path.startsWith("/full_time/") || path.startsWith("/part_time/")
+            ScheduleProfileType.TEACHER -> path.startsWith("/teachers/")
+        }
+        if (
+            !uri.scheme.equals("https", ignoreCase = true) ||
+            !uri.host.orEmpty().equals("rasp.bru.by", ignoreCase = true) ||
+            uri.userInfo != null || (uri.port != -1 && uri.port != 443) || !expectedPath
+        ) return@mapNotNull null
+
+        val sourceKey = value(row, "source_key", "key").ifBlank {
+            when (type) {
+                ScheduleProfileType.GROUP -> name
+                ScheduleProfileType.TEACHER -> path
+            }
+        }
+        if (sourceKey.isBlank()) return@mapNotNull null
+        ProfileCandidate(
+            type = type,
+            name = name,
+            sourceUrl = sourceUrl,
+            sourceKey = sourceKey,
+            subtitle = value(row, "subtitle"),
+            universityId = university.id,
+        )
+    }
+}
+
+private fun mergeCatalogueCandidates(
+    primary: List<ProfileCandidate>,
+    supplemental: List<ProfileCandidate>,
+): List<ProfileCandidate> {
+    val merged = mutableListOf<ProfileCandidate>()
+    (primary + supplemental).forEach { candidate ->
+        if (merged.none { it.hasSameCatalogueIdentity(candidate) }) merged += candidate
+    }
+    return merged
+}
+
+private fun ProfileCandidate.hasSameCatalogueIdentity(other: ProfileCandidate): Boolean {
+    if (type != other.type) return false
+    return when (type) {
+        ScheduleProfileType.TEACHER -> sourceIdentity(sourceUrl) == sourceIdentity(other.sourceUrl)
+        ScheduleProfileType.GROUP -> {
+            if (normalizeIdentity(name) != normalizeIdentity(other.name)) return false
+            val thisParts = sourcePathParts(sourceUrl)
+            val otherParts = sourcePathParts(other.sourceUrl)
+            val thisMode = thisParts.getOrNull(0).orEmpty()
+            val otherMode = otherParts.getOrNull(0).orEmpty()
+            if (thisMode.isBlank() || otherMode.isBlank()) {
+                sourceIdentity(sourceUrl) == sourceIdentity(other.sourceUrl)
+            } else if (thisMode != otherMode) {
+                false
+            } else {
+                val thisFaculty = thisParts.getOrNull(1).orEmpty().let(::normalizeIdentity)
+                val otherFaculty = otherParts.getOrNull(1).orEmpty().let(::normalizeIdentity)
+                thisFaculty.isBlank() || otherFaculty.isBlank() || thisFaculty == otherFaculty
+            }
+        }
+    }
+}
+
+private fun sourcePathParts(sourceUrl: String): List<String> =
+    runCatching { URI(sourceUrl).path.orEmpty().split('/').filter(String::isNotBlank) }.getOrDefault(emptyList())
+
+private fun sourceIdentity(sourceUrl: String): String = runCatching {
+    val uri = URI(sourceUrl)
+    "${uri.host.orEmpty().lowercase(Locale.ROOT)}${uri.path.orEmpty()}"
+}.getOrDefault(sourceUrl.lowercase(Locale.ROOT))
+
+private fun normalizeIdentity(value: String): String = value.lowercase(Locale.ROOT)
+    .replace('ё', 'е')
+    .filter(Char::isLetterOrDigit)
+
+private fun parseCsv(content: String): List<List<String>> {
+    val rows = mutableListOf<List<String>>()
+    var row = mutableListOf<String>()
+    val field = StringBuilder()
+    var quoted = false
+    var index = 0
+    while (index < content.length) {
+        val char = content[index]
+        when {
+            char == '"' && quoted && content.getOrNull(index + 1) == '"' -> {
+                field.append('"')
+                index++
+            }
+            char == '"' -> quoted = !quoted
+            char == ',' && !quoted -> {
+                row += field.toString().trim()
+                field.clear()
+            }
+            (char == '\n' || char == '\r') && !quoted -> {
+                row += field.toString().trim()
+                if (row.any(String::isNotBlank)) rows += row
+                row = mutableListOf()
+                field.clear()
+                if (char == '\r' && content.getOrNull(index + 1) == '\n') index++
+            }
+            else -> field.append(char)
+        }
+        index++
+    }
+    require(!quoted) { "CSV file contains an unterminated quoted field" }
+    if (field.isNotEmpty() || row.isNotEmpty()) {
+        row += field.toString().trim()
+        if (row.any(String::isNotBlank)) rows += row
+    }
+    return rows
 }
 
 private fun redactUrls(value: String): String {

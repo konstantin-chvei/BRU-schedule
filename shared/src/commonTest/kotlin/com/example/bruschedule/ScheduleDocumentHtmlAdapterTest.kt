@@ -219,6 +219,37 @@ class ScheduleDocumentHtmlAdapterTest {
     }
 
     @Test
+    fun bsuFullDatasetDiscoveryTraversesBeyondInteractiveSearchPageLimits() {
+        val facultyUrl = "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/"
+        val schedulePages = (1..13).associate { number ->
+            val group = "$number-11"
+            val pageUrl = "https://economy.bsu.by/schedules/group-$number.html"
+            pageUrl to """
+                <table>
+                  <tr><th>День недели</th><th>Время</th><th>Группа $group</th></tr>
+                  <tr><td>Понедельник</td><td>08:30-09:50</td><td>Математика</td></tr>
+                </table>
+            """.trimIndent()
+        }
+        val rootHtml = schedulePages.keys.mapIndexed { index, pageUrl ->
+            "<a href=\"$pageUrl\">Расписание группы ${index + 1}-11</a>"
+        }.joinToString("\n")
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = when {
+                url == facultyUrl -> rootHtml
+                url in schedulePages -> schedulePages.getValue(url)
+                else -> "<html><body></body></html>"
+            }
+        }
+
+        val candidates = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.GROUP)
+        }
+
+        assertEquals(schedulePages.keys, candidates.map { it.sourceUrl }.toSet())
+    }
+
+    @Test
     fun bsuCatalogueFindsJournalismGroupsInTheCurrentFacultyXlsx() {
         val facultyUrl = "https://journ.bsu.by/raspisanie.html"
         val fileUrl = "https://journ.bsu.by/images/Journ26_27/Rasklad_1_kurs_26_27_post.xlsx"

@@ -104,13 +104,19 @@ class BsuScheduleProfileCatalogRepository(
         return sortedCandidates(results, type, normalizedQuery)
     }
 
-    /** Discovers every timetable-backed group/teacher profile for static GitHub export. */
+    /** Uses a deeper crawl than interactive search so the manual dataset export can enumerate all linked schedules. */
     suspend fun discoverAll(type: ScheduleProfileType): List<ProfileCandidate> {
         val results = supervisorScope {
             FACULTIES.map { faculty ->
                 async(start = CoroutineStart.UNDISPATCHED) {
                     try {
-                        discoverFaculty(faculty, type, normalizedQuery = "") { }
+                        discoverFaculty(
+                            faculty = faculty,
+                            type = type,
+                            normalizedQuery = "",
+                            onProgress = { },
+                            exhaustive = true,
+                        )
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
@@ -171,6 +177,7 @@ class BsuScheduleProfileCatalogRepository(
         type: ScheduleProfileType,
         normalizedQuery: String,
         onProgress: suspend (FacultyResult) -> Unit,
+        exhaustive: Boolean = false,
     ): FacultyResult {
         if (faculty.url == BIOLOGY_ROOT) {
             return if (type == ScheduleProfileType.TEACHER) {
@@ -200,7 +207,11 @@ class BsuScheduleProfileCatalogRepository(
             inheritedGroupLabels: List<String> = emptyList(),
             sourceKind: String = "HTML",
         ) {
-            val pageLimit = if (type == ScheduleProfileType.TEACHER) MAX_TEACHER_PAGES_PER_FACULTY else MAX_PAGES_PER_FACULTY
+            val pageLimit = when {
+                exhaustive -> MAX_IMPORT_PAGES_PER_FACULTY
+                type == ScheduleProfileType.TEACHER -> MAX_TEACHER_PAGES_PER_FACULTY
+                else -> MAX_PAGES_PER_FACULTY
+            }
             if (!visited.add(pageUrl) || visited.size > pageLimit) return
 
             val discoveredLabels = (parser.discoverTableGroupLabels(html) + inheritedGroupLabels)
@@ -227,7 +238,11 @@ class BsuScheduleProfileCatalogRepository(
                 }
             }
             onProgress(FacultyResult(candidates.toList(), pagesLoaded, requestFailures))
-            val maxLinkDepth = if (type == ScheduleProfileType.TEACHER) MAX_TEACHER_LINK_DEPTH else MAX_LINK_DEPTH
+            val maxLinkDepth = when {
+                exhaustive -> MAX_IMPORT_LINK_DEPTH
+                type == ScheduleProfileType.TEACHER -> MAX_TEACHER_LINK_DEPTH
+                else -> MAX_LINK_DEPTH
+            }
             if (depth >= maxLinkDepth || pageUrl.contains("docs.google.com/spreadsheets/")) return
 
             val document = Ksoup.parse(html)
@@ -261,7 +276,13 @@ class BsuScheduleProfileCatalogRepository(
                         .thenBy { !it.isSheet }
                         .thenBy { !it.looksRelevant },
                 )
-                .take(if (type == ScheduleProfileType.TEACHER) MAX_TEACHER_LINKS_PER_PAGE else MAX_LINKS_PER_PAGE)
+                .take(
+                    when {
+                        exhaustive -> MAX_IMPORT_LINKS_PER_PAGE
+                        type == ScheduleProfileType.TEACHER -> MAX_TEACHER_LINKS_PER_PAGE
+                        else -> MAX_LINKS_PER_PAGE
+                    },
+                )
 
             suspend fun fetchLink(link: LinkTarget): LinkFetchResult = try {
                 val documentFormat = link.documentFormat
@@ -734,6 +755,9 @@ class BsuScheduleProfileCatalogRepository(
         const val MAX_TEACHER_LINKS_PER_PAGE = 40
         const val MAX_PAGES_PER_FACULTY = 10
         const val MAX_TEACHER_PAGES_PER_FACULTY = 30
+        const val MAX_IMPORT_LINK_DEPTH = 4
+        const val MAX_IMPORT_LINKS_PER_PAGE = 100
+        const val MAX_IMPORT_PAGES_PER_FACULTY = 100
         const val MAX_LINK_REQUESTS_IN_FLIGHT_PER_FACULTY = 3
         const val BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL
         const val BIOLOGY_MAX_COURSES = 5
