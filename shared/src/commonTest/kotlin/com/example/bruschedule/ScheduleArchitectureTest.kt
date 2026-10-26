@@ -482,7 +482,7 @@ class ScheduleArchitectureTest {
     @Test
     fun bruDatasetDiscoveryAndSearchTraverseNestedCourseDirectories() {
         val facultyUrl = "https://rasp.bru.by/full_time/auto/index.html"
-        val courseUrl = "https://rasp.bru.by/full_time/auto/1-kurs/index.php"
+        val courseUrl = "https://rasp.bru.by/full_time/auto/1-kurs/courses.html"
         val fullTimeRoot = "<a href=\"$facultyUrl\">Автомеханический факультет</a>"
         val facultyHtml = "<a href=\"$courseUrl\">1 курс</a>"
         val courseHtml = """

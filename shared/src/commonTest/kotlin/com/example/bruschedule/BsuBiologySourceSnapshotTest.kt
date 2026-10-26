@@ -85,7 +85,7 @@ class BsuBiologySourceSnapshotTest {
         val transport = object : HtmlTransport {
             override suspend fun get(url: String): String {
                 requested += url
-                return if (url == legacyIndexUrl) ATTACHED_SOURCE_FRAGMENT else "<html><body></body></html>"
+                return if (url == legacyIndexUrl) LEGACY_GROUP_INDEX_HTML else "<html><body></body></html>"
             }
         }
         val fixedClock = object : Clock {
@@ -98,6 +98,7 @@ class BsuBiologySourceSnapshotTest {
         assertEquals(1, matches.size)
         assertEquals("Группа 42A", matches.single().name)
         assertTrue(matches.single().sourceUrl.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL))
+        assertTrue(matches.single().sourceUrl.contains("group=49"))
         assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL))
         assertTrue(requested.contains(legacyIndexUrl))
     }
@@ -124,7 +125,7 @@ class BsuBiologySourceSnapshotTest {
             override suspend fun get(url: String): String {
                 requested += url
                 return when {
-                    url == legacyIndexUrl -> ATTACHED_SOURCE_FRAGMENT
+                    url == legacyIndexUrl -> LEGACY_GROUP_INDEX_HTML
                     url.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL) && "&group=" in url ->
                         "<html><body><div class=\"lesson-teacher\">Иванова И.И.</div></body></html>"
                     else -> "<html><body></body></html>"
@@ -205,6 +206,12 @@ class BsuBiologySourceSnapshotTest {
     }
 
     private companion object {
+        val LEGACY_GROUP_INDEX_HTML = """
+            <html><body>
+              <a href="schedule.php?study=d&amp;course=3&amp;group=49&amp;date=2026-10-19" title="Биоинженерия и биоинформатика">Группа 42A</a>
+            </body></html>
+        """.trimIndent()
+
         val LEGACY_GROUP_41_HTML = """
             <div class="schedule-heading"><h2>Группа №41 — Экология 6-05-0521-01</h2><div class="week">19–25 октября 2026</div></div>
             <section class="day"><h2 class="day-title">Понедельник</h2>
