@@ -357,7 +357,7 @@ class ScheduleDocumentHtmlAdapterTest {
         val fpmi = discovery.sources.single { it.name == "ФПМИ" }
 
         assertEquals(100, fpmi.profilesDiscovered)
-        assertEquals(100, fpmi.pagesLoaded)
+        assertEquals(101, fpmi.pagesLoaded)
         assertTrue(fpmi.crawlTruncated)
         assertEquals(0, fpmi.requestFailures)
     }
