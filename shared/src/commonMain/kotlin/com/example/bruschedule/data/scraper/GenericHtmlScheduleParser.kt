@@ -15,7 +15,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
 class GenericHtmlScheduleParser : ScheduleHtmlParser {
-    override val formatVersion: Int = 2
+    override val formatVersion: Int = 3
 
     override fun parse(
         profile: ScheduleProfile,
@@ -275,7 +275,8 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         val lines = contentLines(content)
         if (lines.isEmpty()) return
         val subjectLine = lines.firstOrNull { line ->
-            !TIME_RANGE.containsMatchIn(line) &&
+            !EMPTY_LESSON.matches(line) &&
+                !TIME_RANGE.containsMatchIn(line) &&
                 !EXPLICIT_DATE.containsMatchIn(line) &&
                 weekdayNumber(line) == null &&
                 teacherFromLine(line) == null &&
@@ -505,6 +506,10 @@ class GenericHtmlScheduleParser : ScheduleHtmlParser {
         val TYPE_ONLY_LINE = Regex("^(?:лекц(?:ия)?\\.?|лаб(?:ораторн(?:ая)?)?\\.?|практ(?:ика)?\\.?|лк\\.?|пз\\.?|семинар|зачет|экзамен|lecture|laboratory|practice)$", RegexOption.IGNORE_CASE)
         val SUBJECT_PREFIX = Regex("^(?:лекция|лекц\\.?|лабораторная|лаб\\.?|практика|практ\\.?|лк\\.?|пз\\.?)\\s*[:–-]?\\s*", RegexOption.IGNORE_CASE)
         val WHITESPACE = Regex("\\s+")
+        val EMPTY_LESSON = Regex(
+            "(?:[-–—−]+|нет(?:\\s+(?:занятий|пары|пар))?|(?:занятий|пар)\\s+нет|отсутствует|не\\s+проводится)",
+            RegexOption.IGNORE_CASE,
+        )
         val BR_TAG = Regex("(?i)<br\\s*/?>")
         val BLOCK_START_TAG = Regex("(?i)<(?:div|p|li)[^>]*>")
         val BLOCK_END_TAG = Regex("(?i)</(?:div|p|li)\\s*>")

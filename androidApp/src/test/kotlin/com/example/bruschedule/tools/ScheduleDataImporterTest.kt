@@ -5,6 +5,8 @@ import com.example.bruschedule.data.remote.BruScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.BruScheduleRemoteDataSource
 import com.example.bruschedule.data.remote.BsuScheduleProfileCatalogRepository
 import com.example.bruschedule.data.remote.HtmlTransport
+import com.example.bruschedule.data.remote.ScheduleCatalogDiscoveryResult
+import com.example.bruschedule.data.remote.ScheduleCatalogSourceReport
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
 import com.example.bruschedule.data.scraper.UniversityScheduleHtmlParser
 import com.example.bruschedule.domain.model.DefaultUniversities
@@ -84,6 +86,15 @@ class ScheduleDataImporterTest {
         val mergedTeachers = mergeCatalogueCandidates(listOf(liveFirstTeacher), teachers)
         assertEquals(teachers.size, mergedTeachers.size)
         assertEquals("Live directory result", mergedTeachers.first().subtitle)
+        assertEquals(teachers.size, mergeCatalogueCandidates(emptyList(), teachers).size)
+    }
+
+    @Test
+    fun importFailureCategoriesSeparateEmptySchedulesFromParserFailures() {
+        assertEquals("no_lessons_in_period", classifyImportFailure("В источнике не осталось пар в выбранном периоде"))
+        assertEquals("parser_error", classifyImportFailure("Не удалось распознать пары в опубликованном файле расписания"))
+        assertEquals("profile_unavailable", classifyImportFailure("Преподаватель не найден в каталоге rasp.bru.by"))
+        assertEquals("source_unavailable", classifyImportFailure("Ошибка HTTP 503"))
     }
 
     @Test
@@ -143,7 +154,18 @@ private data class FailedImport(
     val universityId: String,
     val profileType: String,
     val profileName: String,
+    val source: String,
+    val category: String,
     val reason: String,
+)
+
+private data class ImportSourceReport(
+    val universityId: String,
+    val profileType: String,
+    val source: String,
+    val profilesDiscovered: Int,
+    val pagesLoaded: Int,
+    val requestFailures: Int,
 )
 
 private class UniversalScheduleDatasetImporter(
@@ -155,6 +177,7 @@ private class UniversalScheduleDatasetImporter(
     private val parser = UniversityScheduleHtmlParser()
     private val preferences = SemesterSchedulePreferences()
     private val failedImports = mutableListOf<FailedImport>()
+    private val sourceReports = mutableListOf<ImportSourceReport>()
     private var discoveredCount = 0
     private var importedCount = 0
     private var preservedCount = 0
@@ -177,33 +200,22 @@ private class UniversalScheduleDatasetImporter(
         writeCsv(dataRoot.resolve("universities.csv"), listOf("id", "name", "website_url", "enabled"), rootEntries)
 
         for (university in universities) {
-            val liveGroups = when (university.id) {
-                UniversityIds.BRU -> BruScheduleProfileCatalogRepository(transport)
-                    .discoverAll(ScheduleProfileType.GROUP)
-                UniversityIds.BSU -> BsuScheduleProfileCatalogRepository(transport)
-                    .discoverAll(ScheduleProfileType.GROUP)
-                else -> error("No parser for ${university.id}")
-            }
-            val liveTeachers = when (university.id) {
-                UniversityIds.BRU -> BruScheduleProfileCatalogRepository(transport)
-                    .discoverAll(ScheduleProfileType.TEACHER)
-                UniversityIds.BSU -> BsuScheduleProfileCatalogRepository(transport)
-                    .discoverAll(ScheduleProfileType.TEACHER)
-                else -> error("No parser for ${university.id}")
-            }
-            val groups = mergeCatalogueCandidates(
-                primary = liveGroups,
-                supplemental = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.GROUP),
-            )
-            val teachers = mergeCatalogueCandidates(
-                primary = liveTeachers,
-                supplemental = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.TEACHER),
-            )
+            val groupDiscovery = discoverLiveCandidates(university, ScheduleProfileType.GROUP)
+            val teacherDiscovery = discoverLiveCandidates(university, ScheduleProfileType.TEACHER)
+            val registryGroups = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.GROUP)
+            val registryTeachers = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.TEACHER)
+            recordSourceReports(university, ScheduleProfileType.GROUP, groupDiscovery.sources)
+            recordSourceReports(university, ScheduleProfileType.TEACHER, teacherDiscovery.sources)
+            recordRegistrySource(university, ScheduleProfileType.GROUP, registryGroups.size)
+            recordRegistrySource(university, ScheduleProfileType.TEACHER, registryTeachers.size)
+
+            val groups = mergeCatalogueCandidates(groupDiscovery.candidates, registryGroups)
+            val teachers = mergeCatalogueCandidates(teacherDiscovery.candidates, registryTeachers)
             discoveredCount += groups.size + teachers.size
             println(
                 "${university.id}: discovered ${groups.size} groups and ${teachers.size} teachers " +
-                    "(${groups.size - liveGroups.size} groups and ${teachers.size - liveTeachers.size} " +
-                    "supplemented from the offline registry)",
+                    "(${groups.size - groupDiscovery.candidates.size} groups and " +
+                    "${teachers.size - teacherDiscovery.candidates.size} teachers supplemented from the offline registry)",
             )
             importType(university, ScheduleProfileType.GROUP, groups)
             importType(university, ScheduleProfileType.TEACHER, teachers)
@@ -216,6 +228,61 @@ private class UniversalScheduleDatasetImporter(
             imported = importedCount,
             preserved = preservedCount,
             skipped = failedImports.size,
+        )
+    }
+
+    private suspend fun discoverLiveCandidates(
+        university: University,
+        type: ScheduleProfileType,
+    ): ScheduleCatalogDiscoveryResult = try {
+        when (university.id) {
+            UniversityIds.BRU -> BruScheduleProfileCatalogRepository(transport).discoverAllWithReport(type)
+            UniversityIds.BSU -> BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(type)
+            else -> error("No parser for ${university.id}")
+        }
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        val sourceName = when (university.id) {
+            UniversityIds.BRU -> "Каталог БРУ"
+            UniversityIds.BSU -> "Каталог БГУ"
+            else -> university.id
+        }
+        val detail = redactUrls(failure.message?.takeIf(String::isNotBlank) ?: failure::class.simpleName.orEmpty())
+            .take(300)
+        System.err.println("${university.id}/${type.directoryName()} catalogue discovery failed: $detail")
+        ScheduleCatalogDiscoveryResult(
+            candidates = emptyList(),
+            sources = listOf(ScheduleCatalogSourceReport(sourceName, 0, 0, 1)),
+        )
+    }
+
+    private fun recordSourceReports(
+        university: University,
+        type: ScheduleProfileType,
+        reports: List<ScheduleCatalogSourceReport>,
+    ) {
+        sourceReports += reports.map { report ->
+            ImportSourceReport(
+                universityId = university.id,
+                profileType = type.directoryName(),
+                source = report.name,
+                profilesDiscovered = report.profilesDiscovered,
+                pagesLoaded = report.pagesLoaded,
+                requestFailures = report.requestFailures,
+            )
+        }
+    }
+
+    private fun recordRegistrySource(university: University, type: ScheduleProfileType, profiles: Int) {
+        if (profiles == 0) return
+        sourceReports += ImportSourceReport(
+            universityId = university.id,
+            profileType = type.directoryName(),
+            source = "Оффлайн-реестр",
+            profilesDiscovered = profiles,
+            pagesLoaded = 0,
+            requestFailures = 0,
         )
     }
 
@@ -281,12 +348,22 @@ private class UniversalScheduleDatasetImporter(
             } catch (failure: Exception) {
                 val rawDetail = failure.message?.takeIf(String::isNotBlank) ?: failure::class.simpleName.orEmpty()
                 val detail = redactUrls(rawDetail).take(300)
-                failedImports += FailedImport(university.id, typeDirectory, candidate.name, detail)
+                val category = classifyImportFailure(detail)
+                failedImports += FailedImport(
+                    universityId = university.id,
+                    profileType = typeDirectory,
+                    profileName = candidate.name,
+                    source = candidate.subtitle,
+                    category = category,
+                    reason = detail,
+                )
                 old?.takeIf { isReadyFile(university.id, it) }?.let { existingEntry ->
                     output[existingEntry.id] = existingEntry
                     preservedCount++
                 }
-                System.err.println("Skipped ${university.id}/$typeDirectory/${candidate.name}: $detail")
+                System.err.println(
+                    "Skipped ${university.id}/$typeDirectory/${candidate.name} [$category; ${candidate.subtitle}]: $detail",
+                )
             }
             processedForType++
             if (processedForType % PROGRESS_INTERVAL == 0 || processedForType == sortedCandidates.size) {
@@ -439,12 +516,26 @@ private class UniversalScheduleDatasetImporter(
     }
 
     private fun writeImportReport(universityIds: List<String>) {
+        val serializedSources = sourceReports
+            .sortedWith(compareBy<ImportSourceReport>({ it.universityId }, { it.profileType }, { it.source }))
+            .joinToString(",\n") { source ->
+                "    {\"university\": ${json(source.universityId)}, " +
+                    "\"type\": ${json(source.profileType)}, " +
+                    "\"source\": ${json(source.source)}, " +
+                    "\"profiles_discovered\": ${source.profilesDiscovered}, " +
+                    "\"pages_loaded\": ${source.pagesLoaded}, " +
+                    "\"request_failures\": ${source.requestFailures}}"
+            }
         val serializedFailures = failedImports.joinToString(",\n") { failure ->
             "    {\"university\": ${json(failure.universityId)}, " +
                 "\"type\": ${json(failure.profileType)}, " +
                 "\"profile\": ${json(failure.profileName)}, " +
+                "\"source\": ${json(failure.source)}, " +
+                "\"category\": ${json(failure.category)}, " +
                 "\"reason\": ${json(failure.reason)}}"
         }
+        val failureCategories = failedImports.groupingBy(FailedImport::category).eachCount()
+            .toSortedMap().entries.joinToString(", ") { (category, count) -> "${json(category)}: $count" }
         val report = buildString {
             appendLine("{")
             appendLine("  \"generated_at\": ${json(Instant.now().toString())},")
@@ -453,6 +544,9 @@ private class UniversalScheduleDatasetImporter(
             appendLine("  \"imported_profiles\": $importedCount,")
             appendLine("  \"preserved_profiles\": $preservedCount,")
             appendLine("  \"skipped_profiles\": ${failedImports.size},")
+            appendLine("  \"catalogue_request_failures\": ${sourceReports.sumOf { it.requestFailures }},")
+            appendLine("  \"failure_categories\": {$failureCategories},")
+            appendLine("  \"catalogue_sources\": [${if (serializedSources.isBlank()) "" else "\n$serializedSources\n  "}],")
             appendLine("  \"failures\": [${if (serializedFailures.isBlank()) "" else "\n$serializedFailures\n  "}]")
             appendLine("}")
         }
@@ -837,6 +931,22 @@ private fun sourceIdentity(sourceUrl: String): String = runCatching {
 private fun normalizeIdentity(value: String): String = value.lowercase(Locale.ROOT)
     .replace('ё', 'е')
     .filter(Char::isLetterOrDigit)
+
+private fun classifyImportFailure(reason: String): String {
+    val normalized = reason.lowercase(Locale.ROOT).replace('ё', 'е')
+    return when {
+        "в источнике не осталось пар" in normalized -> "no_lessons_in_period"
+        "не удалось распознать пары" in normalized ||
+            "не найдена таблица .schedule-table" in normalized ||
+            "не найдена таблица расписания" in normalized -> "parser_error"
+        listOf("последняя ошибка сайта", "ошибка http", "http 4", "http 5", "timeout", "timed out", "ошибка сети")
+            .any { marker -> marker in normalized } || "не удалось открыть" in normalized || "не удалось загрузить" in normalized ->
+            "source_unavailable"
+        "не найден" in normalized || "не найдена" in normalized || "не удалось найти расписание" in normalized ->
+            "profile_unavailable"
+        else -> "other"
+    }
+}
 
 private fun parseCsv(content: String): List<List<String>> {
     val rows = mutableListOf<List<String>>()

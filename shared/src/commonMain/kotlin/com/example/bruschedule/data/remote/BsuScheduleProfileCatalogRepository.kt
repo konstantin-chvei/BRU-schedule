@@ -106,6 +106,17 @@ class BsuScheduleProfileCatalogRepository(
 
     /** Uses a deeper crawl than interactive search so the manual dataset export can enumerate all linked schedules. */
     suspend fun discoverAll(type: ScheduleProfileType): List<ProfileCandidate> {
+        val discovery = discoverAllWithReport(type)
+        if (discovery.sources.sumOf { it.pagesLoaded } == 0 &&
+            discovery.sources.any { it.requestFailures > 0 }
+        ) {
+            error("Не удалось открыть сайты факультетов БГУ при сборке GitHub-каталога")
+        }
+        return discovery.candidates
+    }
+
+    /** Returns per-faculty crawl statistics so a manual import can distinguish omissions from empty catalogues. */
+    suspend fun discoverAllWithReport(type: ScheduleProfileType): ScheduleCatalogDiscoveryResult {
         val results = supervisorScope {
             FACULTIES.map { faculty ->
                 async(start = CoroutineStart.UNDISPATCHED) {
@@ -125,11 +136,16 @@ class BsuScheduleProfileCatalogRepository(
                 }
             }.awaitAll()
         }
-        val successfulPages = results.sumOf(FacultyResult::pagesLoaded)
-        if (successfulPages == 0 && results.any { it.requestFailures > 0 }) {
-            error("Не удалось открыть сайты факультетов БГУ при сборке GitHub-каталога")
+        val candidates = sortedCandidates(results, type, normalizedQuery = "")
+        val sources = FACULTIES.zip(results).map { (faculty, result) ->
+            ScheduleCatalogSourceReport(
+                name = faculty.name,
+                profilesDiscovered = sortedCandidates(listOf(result), type, normalizedQuery = "").size,
+                pagesLoaded = result.pagesLoaded,
+                requestFailures = result.requestFailures,
+            )
         }
-        return sortedCandidates(results, type, normalizedQuery = "")
+        return ScheduleCatalogDiscoveryResult(candidates = candidates, sources = sources)
     }
 
     private fun sortedCandidates(

@@ -12,7 +12,9 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
-class BruScheduleScraper : ScheduleHtmlParser {
+class BruScheduleScraper(
+    private val genericParser: GenericHtmlScheduleParser = GenericHtmlScheduleParser(),
+) : ScheduleHtmlParser {
     override val formatVersion: Int = PARSER_FORMAT_VERSION
 
     override fun parse(
@@ -35,6 +37,7 @@ class BruScheduleScraper : ScheduleHtmlParser {
         val weekHeaders = document.select(".week-header").map { it.text() }
         val styleText = document.select("style").joinToString("\n") { it.html() }
         val result = mutableListOf<Lesson>()
+        var hasUnparsedLessonContent = false
 
         tables.forEachIndexed tableLoop@{ tableIndex, table ->
             val weekHeader = weekHeaders.getOrNull(tableIndex).orEmpty()
@@ -60,6 +63,10 @@ class BruScheduleScraper : ScheduleHtmlParser {
                     val dayColumnIndex = cellIndex - timeCellIndex - 1
                     val dayColumn = dayColumns.getOrNull(dayColumnIndex) ?: return@cellLoop
                     val cards = cell.select(".lesson-card, .occ-card").toList()
+                    if (cards.isEmpty()) {
+                        if (!isEmptyScheduleCell(cell.text())) hasUnparsedLessonContent = true
+                        return@cellLoop
+                    }
                     cards.forEachIndexed cardLoop@{ cardIndex, card ->
                         val subject = card.select(".title, .occ-line2").firstOrNull()?.text()
                             ?.replace(WHITESPACE, " ")?.trim().orEmpty()
@@ -122,7 +129,29 @@ class BruScheduleScraper : ScheduleHtmlParser {
             }
         }
 
-        return result.distinctBy { it.sourceKey }
+        val genericFallback = if (result.isEmpty() || hasUnparsedLessonContent) {
+            runCatching { genericParser.parse(profile, html, referenceDate) }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+        if (hasUnparsedLessonContent && genericFallback.none { fallback ->
+                result.none { recognized -> lessonIdentity(recognized) == lessonIdentity(fallback) }
+            }
+        ) {
+            error("Не удалось распознать пары в нестандартной разметке таблицы БРУ")
+        }
+        val fallbackLessons = genericFallback.map { lesson ->
+            if (profile.type == ScheduleProfileType.TEACHER && lesson.teacherName.isBlank()) {
+                lesson.copy(teacherName = teacherHeading(document, profile))
+            } else {
+                lesson
+            }
+        }
+        val recognizedLessons = result.distinctBy { it.sourceKey }
+        val recognizedIdentities = recognizedLessons.map(::lessonIdentity).toSet()
+        val additionalFallbackLessons = fallbackLessons.distinctBy(::lessonIdentity)
+            .filterNot { lessonIdentity(it) in recognizedIdentities }
+        return (recognizedLessons + additionalFallbackLessons)
             .sortedWith(compareBy<Lesson>({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
     }
 
@@ -130,6 +159,19 @@ class BruScheduleScraper : ScheduleHtmlParser {
         val pageText = Ksoup.parse(html).text().lowercase().replace('ё', 'е')
         return WEEK_ONE_HEADER.containsMatchIn(pageText) && WEEK_TWO_HEADER.containsMatchIn(pageText)
     }
+
+    private fun isEmptyScheduleCell(text: String): Boolean =
+        text.replace(WHITESPACE, " ").trim().let { it.isEmpty() || EMPTY_CELL.matches(it) }
+
+    private fun lessonIdentity(lesson: Lesson): String = listOf(
+        lesson.lessonDate,
+        lesson.startTime,
+        lesson.endTime,
+        lesson.slotNumber.toString(),
+        lesson.subjectName,
+        lesson.teacherName,
+        lesson.classroom,
+    ).joinToString("|") { it.lowercase().replace('ё', 'е').replace(WHITESPACE, " ").trim() }
 
     private fun parseDayColumns(
         headers: List<com.fleeksoft.ksoup.nodes.Element>,
@@ -213,7 +255,7 @@ class BruScheduleScraper : ScheduleHtmlParser {
         .trim()
 
     companion object {
-        const val PARSER_FORMAT_VERSION = 3
+        const val PARSER_FORMAT_VERSION = 4
 
         private val WEEK_ONE_HEADER = Regex("недел[ья]\\s*1", RegexOption.IGNORE_CASE)
         private val WEEK_TWO_HEADER = Regex("недел[ья]\\s*2", RegexOption.IGNORE_CASE)
@@ -224,6 +266,10 @@ class BruScheduleScraper : ScheduleHtmlParser {
         private val ISO_DATE = Regex("(20\\d{2})-(\\d{1,2})-(\\d{1,2})")
         private val YEAR = Regex("20\\d{2}")
         private val WHITESPACE = Regex("\\s+")
+        private val EMPTY_CELL = Regex(
+            "(?:[-–—−]+|нет(?:\\s+(?:занятий|пары|пар))?|(?:занятий|пар)\\s+нет|отсутствует|не\\s+проводится)",
+            RegexOption.IGNORE_CASE,
+        )
         private val BR_TAG = Regex("(?i)<br\\s*/?>")
         private val BLOCK_END_TAG = Regex("(?i)</(?:div|p|li)\\s*>")
         private val HTML_TAG = Regex("<[^>]+>")

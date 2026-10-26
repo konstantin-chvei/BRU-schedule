@@ -33,12 +33,19 @@ class BruScheduleProfileCatalogRepository(
 
     /** Discovers the complete published BRU group/teacher directory for static GitHub export. */
     suspend fun discoverAll(type: ScheduleProfileType): List<ProfileCandidate> {
-        val candidates = when (type) {
-            ScheduleProfileType.TEACHER -> searchTeachers()
-            ScheduleProfileType.GROUP -> discoverAllGroups()
+        val discovery = discoverAllWithReport(type)
+        if (discovery.candidates.isEmpty() && discovery.sources.any { it.requestFailures > 0 }) {
+            error("Не удалось загрузить каталог расписаний rasp.bru.by")
         }
-        return candidates.distinctBy { "${it.type}|${it.sourceUrl}|${it.sourceKey}" }
+        return discovery.candidates
+            .distinctBy { "${it.type}|${it.sourceUrl}|${it.sourceKey}" }
             .sortedWith(compareBy({ it.name.lowercase() }, { it.subtitle }, { it.sourceUrl }))
+    }
+
+    /** Returns request/profile counts for every live BRU directory page. */
+    suspend fun discoverAllWithReport(type: ScheduleProfileType): ScheduleCatalogDiscoveryResult = when (type) {
+        ScheduleProfileType.TEACHER -> discoverAllTeachersWithReport()
+        ScheduleProfileType.GROUP -> discoverAllGroupsWithReport()
     }
 
     private fun filterCandidates(candidates: List<ProfileCandidate>, query: String): List<ProfileCandidate> =
@@ -51,40 +58,76 @@ class BruScheduleProfileCatalogRepository(
         return parser.teacherCandidates(html, url)
     }
 
-    private suspend fun discoverAllGroups(): List<ProfileCandidate> {
+    private suspend fun discoverAllTeachersWithReport(): ScheduleCatalogDiscoveryResult {
+        val url = BruScheduleDirectoryParser.TEACHERS_INDEX
+        return try {
+            val candidates = parser.teacherCandidates(transport.get(url), url)
+            ScheduleCatalogDiscoveryResult(
+                candidates = candidates,
+                sources = listOf(
+                    ScheduleCatalogSourceReport(
+                        name = "Каталог преподавателей",
+                        profilesDiscovered = candidates.size,
+                        pagesLoaded = 1,
+                        requestFailures = 0,
+                    ),
+                ),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            ScheduleCatalogDiscoveryResult(
+                candidates = emptyList(),
+                sources = listOf(
+                    ScheduleCatalogSourceReport(
+                        name = "Каталог преподавателей",
+                        profilesDiscovered = 0,
+                        pagesLoaded = 0,
+                        requestFailures = 1,
+                    ),
+                ),
+            )
+        }
+    }
+
+    private suspend fun discoverAllGroupsWithReport(): ScheduleCatalogDiscoveryResult {
         val candidates = mutableListOf<ProfileCandidate>()
-        val failures = mutableListOf<String>()
+        val sources = mutableListOf<ScheduleCatalogSourceReport>()
         val roots = listOf(
-            BruScheduleDirectoryParser.FULL_TIME_INDEX,
-            BruScheduleDirectoryParser.PART_TIME_INDEX,
+            BruScheduleDirectoryParser.FULL_TIME_INDEX to "Очная форма",
+            BruScheduleDirectoryParser.PART_TIME_INDEX to "Заочная форма",
         )
-        for (root in roots) {
+        for ((root, rootName) in roots) {
             val rootHtml = try {
                 transport.get(root)
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Throwable) {
-                failures += root
+            } catch (_: Exception) {
+                sources += ScheduleCatalogSourceReport(rootName, 0, 0, 1)
                 continue
             }
-            candidates += parser.groupCandidates(rootHtml, root)
+            val rootCandidates = parser.groupCandidates(rootHtml, root)
+            candidates += rootCandidates
+            sources += ScheduleCatalogSourceReport(rootName, rootCandidates.size, 1, 0)
+
             val faculties = parser.facultyDirectories(rootHtml, root, ScheduleProfileType.GROUP)
             for (faculty in faculties) {
                 val html = try {
                     transport.get(faculty.url)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (_: Throwable) {
-                    failures += faculty.url
+                } catch (_: Exception) {
+                    sources += ScheduleCatalogSourceReport(faculty.name, 0, 0, 1)
                     continue
                 }
-                candidates += parser.groupCandidates(html, faculty.url, faculty.name)
+                val facultyCandidates = parser.groupCandidates(html, faculty.url, faculty.name)
+                candidates += facultyCandidates
+                sources += ScheduleCatalogSourceReport(faculty.name, facultyCandidates.size, 1, 0)
             }
         }
-        if (candidates.isEmpty() && failures.isNotEmpty()) {
-            error("Не удалось загрузить каталоги групп rasp.bru.by (${failures.size} страниц недоступно)")
-        }
-        return candidates
+        val uniqueCandidates = candidates.distinctBy { "${it.type}|${it.sourceUrl}|${it.sourceKey}" }
+            .sortedWith(compareBy({ it.name.lowercase() }, { it.subtitle }, { it.sourceUrl }))
+        return ScheduleCatalogDiscoveryResult(candidates = uniqueCandidates, sources = sources)
     }
 
     private suspend fun searchGroups(query: String): List<ProfileCandidate> {

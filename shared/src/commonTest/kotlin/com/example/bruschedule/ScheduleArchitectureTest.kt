@@ -228,6 +228,51 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun bruParserFallsBackToGenericTableWhenLessonCardClassesChange() {
+        val html = """
+            <html><body>
+              <table class="schedule-table">
+                <thead><tr><th class="time-col">Время</th>
+                  <th>Пн<br><small>19.10</small></th><th>Вт<br><small>20.10</small></th>
+                </tr></thead>
+                <tbody><tr>
+                  <td class="time-col">1 пара 08:30–10:05</td>
+                  <td><div class="new-lesson-layout">Математика<br>
+                    Преподаватель: Петрова А.А.<br>Аудитория: 1 корпус, ауд. 101<br>Практика</div></td>
+                  <td>—</td>
+                </tr></tbody>
+              </table>
+            </body></html>
+        """.trimIndent()
+
+        val parsed = BruScheduleScraper().parse(profile, html, LocalDate(2026, 10, 19)).single()
+
+        assertEquals("Математика", parsed.subjectName)
+        assertEquals("Петрова А.А.", parsed.teacherName)
+        assertEquals("1 корпус, ауд. 101", parsed.classroom)
+        assertEquals("2026-10-19", parsed.lessonDate)
+        assertEquals(LessonType.PRACTICE, parsed.type)
+    }
+
+    @Test
+    fun bruParserKeepsAnAllDashScheduleEmptyInsteadOfInventingLessons() {
+        val html = """
+            <html><body>
+              <table class="schedule-table">
+                <thead><tr><th class="time-col">Время</th>
+                  <th>Вт<br><small>01.12</small></th><th>Ср<br><small>02.12</small></th>
+                </tr></thead>
+                <tbody><tr><td class="time-col">1 пара 08:30–10:05</td><td>—</td><td>—</td></tr></tbody>
+              </table>
+            </body></html>
+        """.trimIndent()
+
+        val parsed = BruScheduleScraper().parse(profile, html, LocalDate(2026, 10, 19))
+
+        assertTrue(parsed.isEmpty())
+    }
+
+    @Test
     fun parserHandlesDecemberToJanuaryHeaderAcrossTwoWeekCycle() {
         val html = """
             <html><body>
@@ -349,13 +394,32 @@ class ScheduleArchitectureTest {
             }
         }
 
-        val candidates = runSuspending {
-            BruScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.TEACHER)
+        val discovery = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.TEACHER)
         }
 
-        assertEquals(1, candidates.size)
-        assertEquals("Агеева Т.Н.", candidates.single().name)
-        assertEquals(teacherUrl, candidates.single().sourceUrl)
+        assertEquals(1, discovery.candidates.size)
+        assertEquals("Агеева Т.Н.", discovery.candidates.single().name)
+        assertEquals(teacherUrl, discovery.candidates.single().sourceUrl)
+        assertEquals(1, discovery.sources.single().profilesDiscovered)
+        assertEquals(1, discovery.sources.single().pagesLoaded)
+        assertEquals(0, discovery.sources.single().requestFailures)
+    }
+
+    @Test
+    fun bruCatalogueDiscoveryReportsAnUnavailableLiveTeacherIndexWithoutThrowing() {
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = error("network unavailable")
+        }
+
+        val discovery = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.TEACHER)
+        }
+
+        assertTrue(discovery.candidates.isEmpty())
+        assertEquals(0, discovery.sources.single().profilesDiscovered)
+        assertEquals(0, discovery.sources.single().pagesLoaded)
+        assertEquals(1, discovery.sources.single().requestFailures)
     }
 
     @Test
@@ -388,12 +452,15 @@ class ScheduleArchitectureTest {
             }
         }
 
-        val candidates = runSuspending {
-            BruScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.GROUP)
+        val discovery = runSuspending {
+            BruScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
         }
 
-        assertEquals(setOf("МПР-261", "УИ-241"), candidates.map { it.name }.toSet())
-        assertEquals(2, candidates.map { it.sourceUrl }.distinct().size)
+        assertEquals(setOf("МПР-261", "УИ-241"), discovery.candidates.map { it.name }.toSet())
+        assertEquals(2, discovery.candidates.map { it.sourceUrl }.distinct().size)
+        assertTrue(discovery.sources.any { it.name == "Автомеханический факультет" && it.profilesDiscovered == 1 })
+        assertTrue(discovery.sources.any { it.name == "Факультет управления и инноваций" && it.profilesDiscovered == 1 })
+        assertTrue(discovery.sources.all { it.requestFailures == 0 })
     }
 
     @Test
@@ -574,13 +641,34 @@ class ScheduleArchitectureTest {
             }
         }
 
-        val candidates = runSuspending {
-            BsuScheduleProfileCatalogRepository(transport).discoverAll(ScheduleProfileType.TEACHER)
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.TEACHER)
         }
 
-        assertEquals(1, candidates.size)
-        assertEquals("Иванова И.И.", candidates.single().name)
-        assertEquals(listOf(sheetUrl), BsuTeacherProfileSourceKey.decode(candidates.single().sourceKey)?.urls)
+        assertEquals(1, discovery.candidates.size)
+        assertEquals("Иванова И.И.", discovery.candidates.single().name)
+        assertEquals(listOf(sheetUrl), BsuTeacherProfileSourceKey.decode(discovery.candidates.single().sourceKey)?.urls)
+        val economy = discovery.sources.single { it.name == "Экономический факультет" }
+        assertEquals(1, economy.profilesDiscovered)
+        assertTrue(economy.pagesLoaded > 0)
+        assertEquals(0, economy.requestFailures)
+        assertEquals(16, discovery.sources.size)
+    }
+
+    @Test
+    fun bsuCatalogueDiscoveryRetainsPerFacultyFailuresForImportDiagnostics() {
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String = error("network unavailable")
+        }
+
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+
+        assertTrue(discovery.candidates.isEmpty())
+        assertEquals(16, discovery.sources.size)
+        assertTrue(discovery.sources.all { it.pagesLoaded == 0 })
+        assertTrue(discovery.sources.all { it.requestFailures > 0 })
     }
 
     @Test
