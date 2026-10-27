@@ -735,6 +735,36 @@ class ScheduleArchitectureTest {
     }
 
     @Test
+    fun bsuCatalogueSkipsUnrelatedUnlabelledFacultyPagesAndFollowsScheduleRoutes() {
+        val facultyUrl = "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/"
+        val unrelatedUrl = "https://economy.bsu.by/news/2026/overview.html"
+        val scheduleUrl = "https://economy.bsu.by/students/raspisanie/groups.html"
+        val requestedUrls = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestedUrls += url
+                return when (url) {
+                    facultyUrl -> """
+                        <a href="$unrelatedUrl"></a>
+                        <a href="$scheduleUrl"></a>
+                    """.trimIndent()
+                    else -> "<html><body></body></html>"
+                }
+            }
+        }
+
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+
+        val economy = discovery.sources.single { it.name == "Экономический факультет" }
+        assertTrue(scheduleUrl in requestedUrls)
+        assertFalse(unrelatedUrl in requestedUrls)
+        assertEquals(0, economy.requestFailures)
+        assertFalse(economy.crawlTruncated)
+    }
+
+    @Test
     fun bsuTeacherCatalogueMergesNameVariantsAcrossSheetsFromTheSameFaculty() {
         val facultyUrl = "https://economy.bsu.by/studentam/dnevnaya-forma-obucheniya/raspisanie/"
         val firstSheet = "https://docs.google.com/spreadsheets/d/econ-teachers-one/edit"

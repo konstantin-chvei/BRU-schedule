@@ -43,6 +43,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.URI
@@ -87,6 +88,84 @@ class ScheduleDataImporterTest {
         assertEquals(teachers.size, mergedTeachers.size)
         assertEquals("Live directory result", mergedTeachers.first().subtitle)
         assertEquals(teachers.size, mergeCatalogueCandidates(emptyList(), teachers).size)
+    }
+
+    @Test
+    fun biologyGroupCandidatesWithTheSameLabelRemainDistinctWhenTheirSourceIdsDiffer() {
+        val source = BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL
+        val first = ProfileCandidate(
+            type = ScheduleProfileType.GROUP,
+            name = "42",
+            sourceUrl = "$source?study=d&course=1&group=41&date=2026-10-26",
+            sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}41",
+            subtitle = "Биологический факультет · Дневная · 1 курс · Экология",
+            universityId = UniversityIds.BSU,
+        )
+        val sameProfileForNextWeek = first.copy(
+            sourceUrl = "$source?study=d&course=1&group=41&date=2026-11-02",
+        )
+        val sameLabelDifferentProfile = first.copy(
+            sourceUrl = "$source?study=z&course=2&group=49&date=2026-10-26",
+            sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}49",
+            subtitle = "Биологический факультет · Заочная · 2 курс · Другая программа",
+        )
+
+        val merged = mergeCatalogueCandidates(
+            listOf(first, sameProfileForNextWeek, sameLabelDifferentProfile),
+            emptyList(),
+        )
+
+        assertEquals(2, merged.size)
+        assertEquals(
+            setOf("bio-group-number:41", "bio-group-number:49"),
+            merged.map(ProfileCandidate::sourceKey).toSet(),
+        )
+    }
+
+    @Test
+    fun sameNamedBiologyProfilesMatchExistingRowsByStableSourceKey() {
+        val existing = listOf(
+            CatalogEntry(
+                id = "biology-group-42",
+                name = "42",
+                subtitle = "Биологический факультет · Дневная · 1 курс · Экология",
+                sourceKey = "bio-group-number:41",
+                schedulePath = "schedules/groups/biology-group-42.csv",
+                status = "ready",
+                updatedAt = "2026-10-01T00:00:00Z",
+            ),
+            CatalogEntry(
+                id = "biology-group-42-evening",
+                name = "42",
+                subtitle = "Биологический факультет · Заочная · 2 курс · Другая программа",
+                sourceKey = "bio-group-number:49",
+                schedulePath = "schedules/groups/biology-group-42-evening.csv",
+                status = "ready",
+                updatedAt = "2026-10-01T00:00:00Z",
+            ),
+        )
+
+        assertEquals(
+            "biology-group-42-evening",
+            findExistingCatalogEntry(
+                name = "42",
+                subtitle = "Биологический факультет · Заочная · 2 курс · Другая программа",
+                parserKey = "bio-group-number:49",
+                existing = existing,
+                alreadyUsed = setOf("biology-group-42"),
+                fallbackId = "42",
+            )?.id,
+        )
+        assertNull(
+            findExistingCatalogEntry(
+                name = "42",
+                subtitle = "Биологический факультет · Магистратура · новая программа",
+                parserKey = "bio-group-number:99",
+                existing = existing,
+                alreadyUsed = emptySet(),
+                fallbackId = "42",
+            ),
+        )
     }
 
     @Test
@@ -443,13 +522,14 @@ private class UniversalScheduleDatasetImporter(
         parserKey: String,
         existing: List<CatalogEntry>,
         alreadyUsed: Set<String>,
-    ): CatalogEntry? {
-        val matching = existing.filter { it.id !in alreadyUsed && normalize(it.name) == normalize(name) }
-        return matching.firstOrNull { it.sourceKey == parserKey }
-            ?: matching.firstOrNull { normalize(it.subtitle) == normalize(subtitle) }
-            ?: matching.firstOrNull { it.id == slug(name) }
-            ?: matching.singleOrNull()
-    }
+    ): CatalogEntry? = findExistingCatalogEntry(
+        name = name,
+        subtitle = subtitle,
+        parserKey = parserKey,
+        existing = existing,
+        alreadyUsed = alreadyUsed,
+        fallbackId = slug(name),
+    )
 
     private fun uniqueId(name: String, sourceUrl: String, parserKey: String, alreadyUsed: Set<String>): String {
         val base = slug(name).ifBlank { "profile" }
@@ -637,10 +717,7 @@ private class UniversalScheduleDatasetImporter(
         }
     }
 
-    private fun normalize(value: String): String = value.lowercase(Locale.ROOT)
-        .replace('ё', 'е')
-        .replace(Regex("\\s+"), " ")
-        .trim()
+    private fun normalize(value: String): String = normalizeImportValue(value)
 
     private fun slug(value: String): String {
         val transliteration = mapOf(
@@ -910,6 +987,28 @@ private fun readRegistryCandidates(
     }
 }
 
+private fun normalizeImportValue(value: String): String = value.lowercase(Locale.ROOT)
+    .replace('ё', 'е')
+    .replace(Regex("\\s+"), " ")
+    .trim()
+
+private fun findExistingCatalogEntry(
+    name: String,
+    subtitle: String,
+    parserKey: String,
+    existing: List<CatalogEntry>,
+    alreadyUsed: Set<String>,
+    fallbackId: String,
+): CatalogEntry? {
+    val matching = existing.filter {
+        it.id !in alreadyUsed && normalizeImportValue(it.name) == normalizeImportValue(name)
+    }
+    matching.firstOrNull { it.sourceKey == parserKey }?.let { return it }
+    matching.firstOrNull { normalizeImportValue(it.subtitle) == normalizeImportValue(subtitle) }?.let { return it }
+    if (isBiologyGroupSourceKey(parserKey)) return null
+    return matching.firstOrNull { it.id == fallbackId } ?: matching.singleOrNull()
+}
+
 private fun mergeCatalogueCandidates(
     primary: List<ProfileCandidate>,
     supplemental: List<ProfileCandidate>,
@@ -927,6 +1026,11 @@ private fun ProfileCandidate.hasSameCatalogueIdentity(other: ProfileCandidate): 
         ScheduleProfileType.TEACHER -> sourceIdentity(sourceUrl) == sourceIdentity(other.sourceUrl)
         ScheduleProfileType.GROUP -> {
             if (normalizeIdentity(name) != normalizeIdentity(other.name)) return false
+            val thisBiologyKey = sourceKey.takeIf(::isBiologyGroupSourceKey)
+            val otherBiologyKey = other.sourceKey.takeIf(::isBiologyGroupSourceKey)
+            if (thisBiologyKey != null || otherBiologyKey != null) {
+                return thisBiologyKey != null && thisBiologyKey == otherBiologyKey
+            }
             val thisParts = sourcePathParts(sourceUrl)
             val otherParts = sourcePathParts(other.sourceUrl)
             val thisMode = thisParts.getOrNull(0).orEmpty()
@@ -951,6 +1055,10 @@ private fun sourceIdentity(sourceUrl: String): String = runCatching {
     val uri = URI(sourceUrl)
     "${uri.host.orEmpty().lowercase(Locale.ROOT)}${uri.path.orEmpty()}"
 }.getOrDefault(sourceUrl.lowercase(Locale.ROOT))
+
+private fun isBiologyGroupSourceKey(sourceKey: String): Boolean =
+    sourceKey.startsWith(BsuBiologyScheduleHtmlParser.BIO_GROUP_SOURCE_KEY_PREFIX) ||
+        sourceKey.startsWith(BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX)
 
 private fun normalizeIdentity(value: String): String = value.lowercase(Locale.ROOT)
     .replace('ё', 'е')

@@ -329,10 +329,7 @@ class BsuScheduleProfileCatalogRepository(
                 ) return@mapNotNull null
                 val routeText = "${source.label} $target".lowercase()
                 val routeLooksRelevant = ROUTE_HINTS.any { hint -> routeText.contains(hint) }
-                val unlabelledOfficialHtml = isBsuHost(target) && isOfficialHtmlPage(target) && !isDocument
-                if (!isSheet && labelGroups.isEmpty() && !routeLooksRelevant && !unlabelledOfficialHtml) {
-                    return@mapNotNull null
-                }
+                if (!isSheet && labelGroups.isEmpty() && !routeLooksRelevant) return@mapNotNull null
                 LinkTarget(target, labelGroups, isSheet, documentFormat, routeLooksRelevant)
             }
                 .distinctBy(LinkTarget::url)
@@ -808,12 +805,6 @@ class BsuScheduleProfileCatalogRepository(
         return !FILE_EXTENSIONS.any { extension -> path.endsWith(extension) }
     }
 
-    private fun isOfficialHtmlPage(url: String): Boolean {
-        val fileName = url.substringBefore('?').substringBefore('#').substringAfterLast('/')
-        val extension = fileName.substringAfterLast('.', missingDelimiterValue = "").lowercase()
-        return extension.isBlank() || extension in OFFICIAL_HTML_EXTENSIONS
-    }
-
     private fun sameHost(first: String, second: String): Boolean =
         host(first).equals(host(second), ignoreCase = true)
 
@@ -1042,7 +1033,6 @@ class BsuScheduleProfileCatalogRepository(
         val TIME_RANGE = Regex("\\b\\d{1,2}[:.]\\d{2}\\s*[-–—−]\\s*\\d{1,2}[:.]\\d{2}\\b")
         val ABBREVIATED_WEEKDAY = Regex("\\b(?:пн|вт|ср|чт|пт|сб|вс|mon|tue|wed|thu|fri|sat|sun)\\b")
         val EXPLICIT_SCHEDULE_DATE = Regex("\\b\\d{1,2}[./]\\d{1,2}(?:[./]\\d{2,4})?\\b")
-        val OFFICIAL_HTML_EXTENSIONS = setOf("html", "htm", "php", "asp", "aspx", "jsp", "do")
         val FILE_EXTENSIONS = listOf(
             ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".rar", ".jpg", ".png",
         )
