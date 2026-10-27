@@ -310,6 +310,7 @@ class BsuScheduleProfileCatalogRepository(
             } + document.select("iframe[src]").toList().map { element ->
                 LinkSource(element.attr("src"), "embedded timetable")
             }
+            var unlabelledRootPagesScheduled = 0
             val eligibleLinks = linkSources.mapNotNull { source ->
                 val href = source.url.trim()
                 if (href.isBlank() || href.startsWith("#") || href.startsWith("mailto:") ||
@@ -329,7 +330,17 @@ class BsuScheduleProfileCatalogRepository(
                 ) return@mapNotNull null
                 val routeText = "${source.label} $target".lowercase()
                 val routeLooksRelevant = ROUTE_HINTS.any { hint -> routeText.contains(hint) }
-                if (!isSheet && labelGroups.isEmpty() && !routeLooksRelevant) return@mapNotNull null
+                val unlabelledOfficialHtml = isBsuHost(target) && sameHost(pageUrl, target) &&
+                    isOfficialHtmlPage(target) && !isDocument
+                val unlabelledOfficialRootPage = !isSheet && labelGroups.isEmpty() && !routeLooksRelevant &&
+                    depth == 0 && unlabelledOfficialHtml
+                val unlabelledRootPage = unlabelledOfficialRootPage &&
+                    unlabelledRootPagesScheduled < MAX_UNLABELLED_ROOT_HTML_LINKS_PER_PAGE
+                if (unlabelledOfficialRootPage && !unlabelledRootPage) crawlTruncated = true
+                if (!isSheet && labelGroups.isEmpty() && !routeLooksRelevant && !unlabelledRootPage) {
+                    return@mapNotNull null
+                }
+                if (unlabelledRootPage) unlabelledRootPagesScheduled++
                 LinkTarget(target, labelGroups, isSheet, documentFormat, routeLooksRelevant)
             }
                 .distinctBy(LinkTarget::url)
@@ -805,6 +816,12 @@ class BsuScheduleProfileCatalogRepository(
         return !FILE_EXTENSIONS.any { extension -> path.endsWith(extension) }
     }
 
+    private fun isOfficialHtmlPage(url: String): Boolean {
+        val fileName = url.substringBefore('?').substringBefore('#').substringAfterLast('/')
+        val extension = fileName.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        return extension.isBlank() || extension in OFFICIAL_HTML_EXTENSIONS
+    }
+
     private fun sameHost(first: String, second: String): Boolean =
         host(first).equals(host(second), ignoreCase = true)
 
@@ -971,6 +988,7 @@ class BsuScheduleProfileCatalogRepository(
         const val MAX_FAILURE_DETAIL_LENGTH = 300
         const val MAX_IMPORT_LINKS_PER_PAGE = 100
         const val MAX_IMPORT_PAGES_PER_FACULTY = 500
+        const val MAX_UNLABELLED_ROOT_HTML_LINKS_PER_PAGE = 4
         const val MAX_LINK_REQUESTS_IN_FLIGHT_PER_FACULTY = 3
         const val BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL
         const val LEGACY_BIOLOGY_ROOT = BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL
@@ -1033,6 +1051,7 @@ class BsuScheduleProfileCatalogRepository(
         val TIME_RANGE = Regex("\\b\\d{1,2}[:.]\\d{2}\\s*[-–—−]\\s*\\d{1,2}[:.]\\d{2}\\b")
         val ABBREVIATED_WEEKDAY = Regex("\\b(?:пн|вт|ср|чт|пт|сб|вс|mon|tue|wed|thu|fri|sat|sun)\\b")
         val EXPLICIT_SCHEDULE_DATE = Regex("\\b\\d{1,2}[./]\\d{1,2}(?:[./]\\d{2,4})?\\b")
+        val OFFICIAL_HTML_EXTENSIONS = setOf("html", "htm", "php", "asp", "aspx", "jsp", "do")
         val FILE_EXTENSIONS = listOf(
             ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".rar", ".jpg", ".png",
         )

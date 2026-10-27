@@ -744,10 +744,8 @@ class ScheduleArchitectureTest {
             override suspend fun get(url: String): String {
                 requestedUrls += url
                 return when (url) {
-                    facultyUrl -> """
-                        <a href="$unrelatedUrl"></a>
-                        <a href="$scheduleUrl"></a>
-                    """.trimIndent()
+                    facultyUrl -> "<a href=\"$scheduleUrl\"></a>"
+                    scheduleUrl -> "<a href=\"$unrelatedUrl\">Открыть страницу</a>"
                     else -> "<html><body></body></html>"
                 }
             }
@@ -762,6 +760,32 @@ class ScheduleArchitectureTest {
         assertFalse(unrelatedUrl in requestedUrls)
         assertEquals(0, economy.requestFailures)
         assertFalse(economy.crawlTruncated)
+    }
+
+    @Test
+    fun bsuCatalogueBoundsUnlabelledRootHtmlCrawlsAndReportsTruncation() {
+        val facultyUrl = "https://fpmi.bsu.by/timetable"
+        val pages = (1..5).map { "https://fpmi.bsu.by/documents/page-$it.html" }
+        val requestedUrls = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestedUrls += url
+                return if (url == facultyUrl) {
+                    pages.joinToString("\n") { page -> "<a href=\"$page\">Открыть страницу</a>" }
+                } else {
+                    "<html><body></body></html>"
+                }
+            }
+        }
+
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+
+        val fpmi = discovery.sources.single { it.name == "ФПМИ" }
+        assertEquals(4, requestedUrls.count { it in pages })
+        assertTrue(fpmi.crawlTruncated)
+        assertEquals(0, fpmi.requestFailures)
     }
 
     @Test
