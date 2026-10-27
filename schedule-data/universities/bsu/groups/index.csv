@@ -1,11 +1,12 @@
 id,name,subtitle,source_key,schedule_path,status,updated_at
 1-gruppa,1 группа,Механико-математический факультет · HTML,1-gruppa,schedules/groups/1-gruppa.csv,ready,2026-10-26T18:44:49.827251552Z
-10-gruppa,10 группа,Механико-математический факультет · HTML,10-gruppa,schedules/groups/10-gruppa.csv,ready,2026-10-26T18:44:50.159460925Z
-11-gruppa,11 группа,Механико-математический факультет · HTML,11-gruppa,schedules/groups/11-gruppa.csv,ready,2026-10-26T18:44:50.327548133Z
-12-gruppa,12 группа,Механико-математический факультет · HTML,12-gruppa,schedules/groups/12-gruppa.csv,ready,2026-10-26T18:44:50.491112010Z
-2-gruppa,2 группа,Механико-математический факультет · HTML,2-gruppa,schedules/groups/2-gruppa.csv,ready,2026-10-26T18:44:55.377578005Z
-3-gruppa,3 группа,Механико-математический факультет · HTML,3-gruppa,schedules/groups/3-gruppa.csv,ready,2026-10-26T18:45:00.303703838Z
-4-gruppa,4 группа,Механико-математический факультет · HTML,4-gruppa,schedules/groups/4-gruppa.csv,ready,2026-10-26T18:45:05.177067816Z
+1-gruppa-dae6c3f06f,1 группа,Механико-математический факультет · HTML,1-gruppa-dae6c3f06f,schedules/groups/1-gruppa-dae6c3f06f.csv,ready,2026-10-27T22:02:15.892153183Z
+10-gruppa,10 группа,Механико-математический факультет · HTML,10-gruppa,schedules/groups/10-gruppa.csv,ready,2026-10-27T22:02:36.952386678Z
+11-gruppa,11 группа,Механико-математический факультет · HTML,11-gruppa,schedules/groups/11-gruppa.csv,ready,2026-10-27T22:02:38.704020102Z
+12-gruppa,12 группа,Механико-математический факультет · HTML,12-gruppa,schedules/groups/12-gruppa.csv,ready,2026-10-27T22:02:42.439768137Z
+2-gruppa,2 группа,Механико-математический факультет · HTML,2-gruppa,schedules/groups/2-gruppa.csv,ready,2026-10-27T22:02:53.911283116Z
+3-gruppa,3 группа,Механико-математический факультет · HTML,3-gruppa,schedules/groups/3-gruppa.csv,ready,2026-10-27T22:03:01.115556396Z
+4-gruppa,4 группа,Механико-математический факультет · HTML,4-gruppa,schedules/groups/4-gruppa.csv,ready,2026-10-27T22:03:08.168405020Z
 40,40,Биологический факультет · Дневная · 4 курс · 6-05-0511 06 Биотехнология · HTML,bio-group-number:40,schedules/groups/40.csv,ready,2026-10-24T16:40:20.291037159Z
 biology-group-41,41,Биологический факультет · Дневная · 1 курс · Экология 6-05-0521-01 · HTML,bio-group-number:41,schedules/groups/biology-group-41.csv,ready,2026-10-24T16:40:25.321231213Z
 42,42,Биологический факультет · Дневная · 1 курс · Биология 6-05-0511-01 · HTML,bio-group-number:42,schedules/groups/42.csv,ready,2026-10-24T16:40:45.780557068Z
@@ -18,18 +19,18 @@ biology-group-41,41,Биологический факультет · Дневн�
 47,47,Биологический факультет · Дневная · 1 курс · Микробиология 6-05-0511-03 · HTML,bio-group-number:47,schedules/groups/47.csv,ready,2026-10-24T16:42:43.376299366Z
 48,48,Биологический факультет · Дневная · 1 курс · Биоинженерия и биоинформатика 6-05-0511-05 · HTML,bio-group-number:48,schedules/groups/48.csv,ready,2026-10-24T16:43:04.444239304Z
 49,49,Биологический факультет · Дневная · 1 курс · Биоинженерия и биоинформатика 6-05-0511-05 · HTML,bio-group-number:49,schedules/groups/49.csv,ready,2026-10-24T16:43:25.577150120Z
-5-gruppa,5 группа,Механико-математический факультет · HTML,5-gruppa,schedules/groups/5-gruppa.csv,ready,2026-10-26T18:46:08.098474579Z
+5-gruppa,5 группа,Механико-математический факультет · HTML,5-gruppa,schedules/groups/5-gruppa.csv,ready,2026-10-27T22:04:17.940494746Z
 50,50,Биологический факультет · Дневная · 1 курс · Биотехнология 6-05-0511-06 · HTML,bio-group-number:50,schedules/groups/50.csv,ready,2026-10-24T16:43:51.730648161Z
 51,51,Биологический факультет · Дневная · 1 курс · Биотехнология 6-05-0511-06 · HTML,bio-group-number:51,schedules/groups/51.csv,ready,2026-10-24T16:44:07.752410483Z
 52,52,Биологический факультет · Дневная · 5 курс · Биология (биотехнология) 1-31 02 01-03 · HTML,bio-group-number:52,schedules/groups/52.csv,ready,2026-10-24T16:44:24.097970711Z
 53,53,Биологический факультет · Дневная · 5 курс · Биология (биотехнология) 1-31 02 01-03 · HTML,bio-group-number:53,schedules/groups/53.csv,ready,2026-10-24T16:44:29.412550127Z
-6-gruppa,6 группа,Механико-математический факультет · HTML,6-gruppa,schedules/groups/6-gruppa.csv,ready,2026-10-26T18:46:27.659457282Z
+6-gruppa,6 группа,Механико-математический факультет · HTML,6-gruppa,schedules/groups/6-gruppa.csv,ready,2026-10-27T22:04:44.797558487Z
 61,61,Биологический факультет · Дневная · 1 курс · ФПБт 7-07-0511-01 · HTML,bio-group-number:61,schedules/groups/61.csv,ready,2026-10-24T16:44:35.674791891Z
 62,62,Биологический факультет · Дневная · 1 курс · ФПБт 7-07-0511-01 · HTML,bio-group-number:62,schedules/groups/62.csv,ready,2026-10-24T16:44:57.068860475Z
 63,63,Биологический факультет · Дневная · 3 курс · ФПБт 7-07-0511-01 · HTML,bio-group-number:63,schedules/groups/63.csv,ready,2026-10-24T16:45:18.633830978Z
-7-gruppa,7 группа,Механико-математический факультет · HTML,7-gruppa,schedules/groups/7-gruppa.csv,ready,2026-10-26T18:46:43.806220887Z
-8-gruppa,8 группа,Механико-математический факультет · HTML,8-gruppa,schedules/groups/8-gruppa.csv,ready,2026-10-26T18:46:43.973193445Z
-9-gruppa,9 группа,Механико-математический факультет · HTML,9-gruppa,schedules/groups/9-gruppa.csv,ready,2026-10-26T18:46:44.138849457Z
+7-gruppa,7 группа,Механико-математический факультет · HTML,7-gruppa,schedules/groups/7-gruppa.csv,ready,2026-10-27T22:05:04.658509242Z
+8-gruppa,8 группа,Механико-математический факультет · HTML,8-gruppa,schedules/groups/8-gruppa.csv,ready,2026-10-27T22:05:06.551384598Z
+9-gruppa,9 группа,Механико-математический факультет · HTML,9-gruppa,schedules/groups/9-gruppa.csv,ready,2026-10-27T22:05:10.591344721Z
 kurs-1-gruppa-1,Курс 1 / Группа 1,Биологический факультет · Магистратура · 1 курс · Биология · HTML,bio-group-number:1,schedules/groups/kurs-1-gruppa-1.csv,ready,2026-10-24T16:45:29.325216417Z
 kurs-1-gruppa-2,Курс 1 / Группа 2,Биологический факультет · Магистратура · 1 курс · Биоинформатика · HTML,bio-group-number:2,schedules/groups/kurs-1-gruppa-2.csv,ready,2026-10-24T16:45:55.662174810Z
 kurs-1-gruppa-3,Курс 1 / Группа 3,Биологический факультет · Магистратура · 1 курс · Биохимия · HTML,bio-group-number:3,schedules/groups/kurs-1-gruppa-3.csv,ready,2026-10-24T16:46:22.634059523Z
