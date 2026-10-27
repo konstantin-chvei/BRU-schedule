@@ -152,7 +152,7 @@ class BsuBiologySourceSnapshotTest {
             id = "bsu-bio-course-1-group-41",
             type = ScheduleProfileType.GROUP,
             name = "Группа 41",
-            sourceUrl = "https://konstantin-chvei.github.io/Schedule/schedule-data/universities/bsu/schedules/groups/biology-group-41.html",
+            sourceUrl = "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-26",
             sourceKey = "${BsuBiologyScheduleHtmlParser.BIO_GROUP_NUMBER_SOURCE_KEY_PREFIX}41",
             universityId = UniversityIds.BSU,
         )
@@ -170,11 +170,11 @@ class BsuBiologySourceSnapshotTest {
             ),
         )
         assertTrue(biologyParser.hasScheduleGrid(LEGACY_GROUP_41_HTML))
-        val lessons = BsuScheduleHtmlParser().parse(profile, LEGACY_GROUP_41_HTML, LocalDate(2026, 10, 19))
+        val lessons = BsuScheduleHtmlParser().parse(profile, LEGACY_GROUP_41_HTML, LocalDate(2026, 10, 26))
 
         assertEquals(6, lessons.size)
         assertEquals(
-            listOf("2026-10-19", "2026-10-19", "2026-10-19", "2026-10-19", "2026-10-19", "2026-10-22"),
+            listOf("2026-10-26", "2026-10-26", "2026-10-26", "2026-10-26", "2026-10-26", "2026-10-29"),
             lessons.map { it.lessonDate },
         )
         assertEquals(listOf("09:00", "10:35", "14:00", "14:00", "14:00", "12:10"), lessons.map { it.startTime })
@@ -213,8 +213,8 @@ class BsuBiologySourceSnapshotTest {
         """.trimIndent()
 
         val LEGACY_GROUP_41_HTML = """
-            <div class="schedule-heading"><h2>Группа №41 — Экология 6-05-0521-01</h2><div class="week">19–25 октября 2026</div></div>
-            <section class="day"><h2 class="day-title">Понедельник</h2>
+            <div class="schedule-heading"><h2>Группа №41 — Экология 6-05-0521-01</h2><div class="week">26 октября – 1 ноября 2026</div></div>
+            <section class="day"><h2 class="day-title">Понедельник (26 окт.)</h2>
               <div class="lesson">
                 <div class="lesson-time"><div class="lesson-number">1 пара</div><div class="lesson-hours">09:00-10:25</div></div>
                 <div class="lesson-main"><div class="lesson-entry">
@@ -247,7 +247,7 @@ class BsuBiologySourceSnapshotTest {
                 </div>
               </div>
             </section>
-            <section class="day"><h2 class="day-title">Четверг</h2>
+            <section class="day"><h2 class="day-title">Четверг (29 окт.)</h2>
               <div class="lesson">
                 <div class="lesson-time"><div class="lesson-number">3 пара</div><div class="lesson-hours">12:10-13:35</div></div>
                 <div class="lesson-main"><div class="lesson-entry"><div class="subgroup-label">Подгруппа 1</div>

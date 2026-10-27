@@ -440,15 +440,19 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
         return lines.size
     }
 
-    private fun weekdayNumber(line: String): Int? = when (normalizeLine(line).lowercase().replace('ё', 'е')) {
-        "понедельник" -> 1
-        "вторник" -> 2
-        "среда" -> 3
-        "четверг" -> 4
-        "пятница" -> 5
-        "суббота" -> 6
-        "воскресенье" -> 7
-        else -> null
+    private fun weekdayNumber(line: String): Int? {
+        // The legacy BSU page appends the calendar date to each heading, e.g. "Понедельник (26 окт.)".
+        val day = normalizeLine(line).lowercase().replace('ё', 'е').takeWhile(Char::isLetter)
+        return when (day) {
+            "понедельник" -> 1
+            "вторник" -> 2
+            "среда" -> 3
+            "четверг" -> 4
+            "пятница" -> 5
+            "суббота" -> 6
+            "воскресенье" -> 7
+            else -> null
+        }
     }
 
     private fun isSubjectMetadata(line: String): Boolean {
