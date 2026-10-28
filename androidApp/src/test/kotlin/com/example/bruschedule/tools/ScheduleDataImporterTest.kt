@@ -204,8 +204,8 @@ class ScheduleDataImporterTest {
             Files.createDirectories(registryFile.parent)
             Files.write(
                 registryFile,
-                (header.joinToString(",", transform = ::csvCell) + "\\n" +
-                    row.joinToString(",", transform = ::csvCell) + "\\n").toByteArray(StandardCharsets.UTF_8),
+                (header.joinToString(",", transform = ::csvCell) + "\n" +
+                    row.joinToString(",", transform = ::csvCell) + "\n").toByteArray(StandardCharsets.UTF_8),
             )
 
             val candidate = readRegistryCandidates(
