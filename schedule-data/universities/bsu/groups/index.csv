@@ -7,31 +7,31 @@ id,name,subtitle,source_key,schedule_path,status,updated_at
 2-gruppa,2 группа,Механико-математический факультет · HTML,2-gruppa,schedules/groups/2-gruppa.csv,ready,2026-10-28T15:54:37.050741850Z
 3-gruppa,3 группа,Механико-математический факультет · HTML,3-gruppa,schedules/groups/3-gruppa.csv,ready,2026-10-28T15:54:41.714945166Z
 4-gruppa,4 группа,Механико-математический факультет · HTML,4-gruppa,schedules/groups/4-gruppa.csv,ready,2026-10-28T15:54:46.393865185Z
-40,40,Биологический факультет · Дневная · 4 курс · 6-05-0511 06 Биотехнология · HTML (legacy fallback),bio-group-number:40,schedules/groups/40.csv,ready,2026-10-28T15:54:50.911434483Z
-biology-group-41,41,Биологический факультет · Дневная · 1 курс · Экология 6-05-0521-01 · HTML (legacy fallback),bio-group-number:41,schedules/groups/biology-group-41.csv,ready,2026-10-28T15:54:55.440937980Z
-42,42,Биологический факультет · Дневная · 1 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:42,schedules/groups/42.csv,ready,2026-10-28T15:54:59.946930506Z
-42a,42A,Биологический факультет · Дневная · 3 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:42A,schedules/groups/42a.csv,ready,2026-10-28T15:55:04.761399091Z
-42a-308df4f788,42А,Биологический факультет · Дневная · 4 курс · 6-05-0511-01 Биология · HTML,bio-group-number:42%D0%90,schedules/groups/42a-308df4f788.csv,ready,2026-10-24T16:41:11.257848717Z
-43,43,Биологический факультет · Дневная · 1 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:43,schedules/groups/43.csv,ready,2026-10-28T15:55:13.678214842Z
-44,44,Биологический факультет · Дневная · 1 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:44,schedules/groups/44.csv,ready,2026-10-28T15:55:18.205938806Z
-45,45,Биологический факультет · Дневная · 1 курс · Биохимия 6-05-0511-02 · HTML (legacy fallback),bio-group-number:45,schedules/groups/45.csv,ready,2026-10-28T15:55:22.685379239Z
-46,46,Биологический факультет · Дневная · 1 курс · Микробиология 6-05-0511-03 · HTML (legacy fallback),bio-group-number:46,schedules/groups/46.csv,ready,2026-10-28T15:55:27.182438517Z
-47,47,Биологический факультет · Дневная · 1 курс · Микробиология 6-05-0511-03 · HTML (legacy fallback),bio-group-number:47,schedules/groups/47.csv,ready,2026-10-28T15:55:31.669590684Z
-48,48,Биологический факультет · Дневная · 1 курс · Биоинженерия и биоинформатика 6-05-0511-05 · HTML (legacy fallback),bio-group-number:48,schedules/groups/48.csv,ready,2026-10-28T15:55:36.151528309Z
-49,49,Биологический факультет · Дневная · 1 курс · Биоинженерия и биоинформатика 6-05-0511-05 · HTML (legacy fallback),bio-group-number:49,schedules/groups/49.csv,ready,2026-10-28T15:55:40.667102163Z
+40,40,Биологический факультет · Дневная · 4 курс · 6-05-0511 06 Биотехнология · HTML (legacy fallback),bio-group-number:40,schedules/groups/40.csv,ready,2026-10-28T19:30:58.830521249Z
+biology-group-41,41,Биологический факультет · Дневная · 1 курс · Экология 6-05-0521-01 · HTML (legacy fallback),bio-group-number:41,schedules/groups/biology-group-41.csv,ready,2026-10-28T19:31:03.441380533Z
+42,42,Биологический факультет · Дневная · 1 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:42,schedules/groups/42.csv,ready,2026-10-28T19:31:08.404038249Z
+42a,42A,Биологический факультет · Дневная · 3 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:42A,schedules/groups/42a.csv,ready,2026-10-28T19:31:13.024793479Z
+42a-308df4f788,42А,Биологический факультет · Дневная · 4 курс · 6-05-0511-01 Биология · HTML (legacy fallback),bio-group-number:42%D0%90,schedules/groups/42a-308df4f788.csv,ready,2026-10-28T19:31:18.393361146Z
+43,43,Биологический факультет · Дневная · 1 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:43,schedules/groups/43.csv,ready,2026-10-28T19:31:23.739543396Z
+44,44,Биологический факультет · Дневная · 1 курс · Биология 6-05-0511-01 · HTML (legacy fallback),bio-group-number:44,schedules/groups/44.csv,ready,2026-10-28T19:31:28.828451497Z
+45,45,Биологический факультет · Дневная · 1 курс · Биохимия 6-05-0511-02 · HTML (legacy fallback),bio-group-number:45,schedules/groups/45.csv,ready,2026-10-28T19:31:34.158102736Z
+46,46,Биологический факультет · Дневная · 1 курс · Микробиология 6-05-0511-03 · HTML (legacy fallback),bio-group-number:46,schedules/groups/46.csv,ready,2026-10-28T19:31:38.782562762Z
+47,47,Биологический факультет · Дневная · 1 курс · Микробиология 6-05-0511-03 · HTML (legacy fallback),bio-group-number:47,schedules/groups/47.csv,ready,2026-10-28T19:31:43.392293123Z
+48,48,Биологический факультет · Дневная · 1 курс · Биоинженерия и биоинформатика 6-05-0511-05 · HTML (legacy fallback),bio-group-number:48,schedules/groups/48.csv,ready,2026-10-28T19:31:48.014284781Z
+49,49,Биологический факультет · Дневная · 1 курс · Биоинженерия и биоинформатика 6-05-0511-05 · HTML (legacy fallback),bio-group-number:49,schedules/groups/49.csv,ready,2026-10-28T19:31:54.248775548Z
 5-gruppa,5 группа,Механико-математический факультет · HTML,5-gruppa,schedules/groups/5-gruppa.csv,ready,2026-10-28T15:55:45.308476474Z
-50,50,Биологический факультет · Дневная · 1 курс · Биотехнология 6-05-0511-06 · HTML (legacy fallback),bio-group-number:50,schedules/groups/50.csv,ready,2026-10-28T15:55:49.796832491Z
-51,51,Биологический факультет · Дневная · 1 курс · Биотехнология 6-05-0511-06 · HTML (legacy fallback),bio-group-number:51,schedules/groups/51.csv,ready,2026-10-28T15:55:54.289255104Z
-52,52,Биологический факультет · Дневная · 5 курс · Биология (биотехнология) 1-31 02 01-03 · HTML (legacy fallback),bio-group-number:52,schedules/groups/52.csv,ready,2026-10-28T15:55:58.793421976Z
-53,53,Биологический факультет · Дневная · 5 курс · Биология (биотехнология) 1-31 02 01-03 · HTML (legacy fallback),bio-group-number:53,schedules/groups/53.csv,ready,2026-10-28T15:56:03.390857137Z
+50,50,Биологический факультет · Дневная · 1 курс · Биотехнология 6-05-0511-06 · HTML (legacy fallback),bio-group-number:50,schedules/groups/50.csv,ready,2026-10-28T19:32:04.024072902Z
+51,51,Биологический факультет · Дневная · 1 курс · Биотехнология 6-05-0511-06 · HTML (legacy fallback),bio-group-number:51,schedules/groups/51.csv,ready,2026-10-28T19:32:09.007371808Z
+52,52,Биологический факультет · Дневная · 5 курс · Биология (биотехнология) 1-31 02 01-03 · HTML (legacy fallback),bio-group-number:52,schedules/groups/52.csv,ready,2026-10-28T19:32:13.567508379Z
+53,53,Биологический факультет · Дневная · 5 курс · Биология (биотехнология) 1-31 02 01-03 · HTML (legacy fallback),bio-group-number:53,schedules/groups/53.csv,ready,2026-10-28T19:32:18.161078361Z
 6-gruppa,6 группа,Механико-математический факультет · HTML,6-gruppa,schedules/groups/6-gruppa.csv,ready,2026-10-28T15:56:03.565640624Z
-61,61,Биологический факультет · Дневная · 1 курс · ФПБт 7-07-0511-01 · HTML (legacy fallback),bio-group-number:61,schedules/groups/61.csv,ready,2026-10-28T15:56:08.046845078Z
-62,62,Биологический факультет · Дневная · 1 курс · ФПБт 7-07-0511-01 · HTML (legacy fallback),bio-group-number:62,schedules/groups/62.csv,ready,2026-10-28T15:56:12.585417561Z
-63,63,Биологический факультет · Дневная · 3 курс · ФПБт 7-07-0511-01 · HTML (legacy fallback),bio-group-number:63,schedules/groups/63.csv,ready,2026-10-28T15:56:17.092395506Z
+61,61,Биологический факультет · Дневная · 1 курс · ФПБт 7-07-0511-01 · HTML (legacy fallback),bio-group-number:61,schedules/groups/61.csv,ready,2026-10-28T19:32:22.726550190Z
+62,62,Биологический факультет · Дневная · 1 курс · ФПБт 7-07-0511-01 · HTML (legacy fallback),bio-group-number:62,schedules/groups/62.csv,ready,2026-10-28T19:32:27.317795385Z
+63,63,Биологический факультет · Дневная · 3 курс · ФПБт 7-07-0511-01 · HTML (legacy fallback),bio-group-number:63,schedules/groups/63.csv,ready,2026-10-28T19:32:32.356367371Z
 7-gruppa,7 группа,Механико-математический факультет · HTML,7-gruppa,schedules/groups/7-gruppa.csv,ready,2026-10-28T15:56:17.264649873Z
 8-gruppa,8 группа,Механико-математический факультет · HTML,8-gruppa,schedules/groups/8-gruppa.csv,ready,2026-10-28T15:56:17.438278472Z
 9-gruppa,9 группа,Механико-математический факультет · HTML,9-gruppa,schedules/groups/9-gruppa.csv,ready,2026-10-28T15:56:17.608517028Z
-kurs-1-gruppa-1,Курс 1 / Группа 1,Биологический факультет · Магистратура · 1 курс · Биология · HTML (legacy fallback),bio-group-number:1,schedules/groups/kurs-1-gruppa-1.csv,ready,2026-10-28T15:56:22.095062148Z
-kurs-1-gruppa-2,Курс 1 / Группа 2,Биологический факультет · Магистратура · 1 курс · Биоинформатика · HTML (legacy fallback),bio-group-number:2,schedules/groups/kurs-1-gruppa-2.csv,ready,2026-10-28T15:56:26.592831373Z
-kurs-1-gruppa-3,Курс 1 / Группа 3,Биологический факультет · Магистратура · 1 курс · Биохимия · HTML (legacy fallback),bio-group-number:3,schedules/groups/kurs-1-gruppa-3.csv,ready,2026-10-28T15:56:31.091923198Z
-kurs-1-gruppa-4,Курс 1 / Группа 4,Биологический факультет · Магистратура · 1 курс · Микробиология · HTML (legacy fallback),bio-group-number:4,schedules/groups/kurs-1-gruppa-4.csv,ready,2026-10-28T15:56:35.561607676Z
+kurs-1-gruppa-1,Курс 1 / Группа 1,Биологический факультет · Магистратура · 1 курс · Биология · HTML (legacy fallback),bio-group-number:1,schedules/groups/kurs-1-gruppa-1.csv,ready,2026-10-28T19:32:36.958100321Z
+kurs-1-gruppa-2,Курс 1 / Группа 2,Биологический факультет · Магистратура · 1 курс · Биоинформатика · HTML (legacy fallback),bio-group-number:2,schedules/groups/kurs-1-gruppa-2.csv,ready,2026-10-28T19:32:41.532886152Z
+kurs-1-gruppa-3,Курс 1 / Группа 3,Биологический факультет · Магистратура · 1 курс · Биохимия · HTML (legacy fallback),bio-group-number:3,schedules/groups/kurs-1-gruppa-3.csv,ready,2026-10-28T19:32:46.322653744Z
+kurs-1-gruppa-4,Курс 1 / Группа 4,Биологический факультет · Магистратура · 1 курс · Микробиология · HTML (legacy fallback),bio-group-number:4,schedules/groups/kurs-1-gruppa-4.csv,ready,2026-10-28T19:32:50.957649330Z
