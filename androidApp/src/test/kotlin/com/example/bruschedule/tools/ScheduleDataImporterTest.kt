@@ -37,7 +37,9 @@ import io.ktor.client.statement.bodyAsBytes
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -50,6 +52,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -136,6 +139,17 @@ class ScheduleDataImporterTest {
 
         assertEquals(listOf("192.0.2.10", "192.0.2.11"), first)
         assertEquals(listOf("192.0.2.11", "192.0.2.10"), retry)
+    }
+
+    @Test
+    fun readerFallbackRecognizesNetworkTimeoutCancellationButNotCallerCancellation() {
+        val connectionTimeout = CancellationException("Connect timeout has expired")
+        val unresolvedAddress = CancellationException("Request cancelled")
+        unresolvedAddress.initCause(UnresolvedAddressException())
+
+        assertTrue(shouldUseReaderFallback(connectionTimeout))
+        assertTrue(shouldUseReaderFallback(unresolvedAddress))
+        assertFalse(shouldUseReaderFallback(CancellationException("Caller cancelled import")))
     }
 
     @Test
@@ -1057,6 +1071,20 @@ private class ResilientDnsResolver(
         Math.floorMod(cursors.computeIfAbsent(key) { AtomicInteger() }.getAndIncrement(), size)
 }
 
+private const val MAX_FAILURE_CAUSES = 8
+
+private fun shouldUseReaderFallback(failure: Throwable): Boolean {
+    val causes = generateSequence(failure as Throwable?) { it.cause }
+        .take(MAX_FAILURE_CAUSES)
+        .filterNotNull()
+        .toList()
+    if (causes.any { it is IOException || it is UnresolvedAddressException }) return true
+    val detail = causes.joinToString(" ") { "${it::class.simpleName.orEmpty()} ${it.message.orEmpty()}" }
+        .lowercase(Locale.ROOT)
+    return listOf("unknownhost", "unresolvedaddress", "ssl", "handshake", "timeout", "timed out", "http 5")
+        .any { marker -> detail.contains(marker) }
+}
+
 /** External source access is restricted to the two universities and the document hosts their parsers use. */
 private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTransport {
     private val dnsResolver = ResilientDnsResolver(
@@ -1088,24 +1116,36 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
     private val responseCache = LinkedHashMap<String, ByteArray>(16, 0.75f, true)
     private var responseCacheBytes = 0L
 
-    override suspend fun get(url: String): String = try {
-        fetch(url, binary = false).toString(StandardCharsets.UTF_8)
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (failure: Exception) {
+    override suspend fun get(url: String): String {
+        val bytes = try {
+            fetch(url, binary = false)
+        } catch (failure: CancellationException) {
+            fetchWithReaderFallback(url, failure)
+        } catch (failure: Exception) {
+            fetchWithReaderFallback(url, failure)
+        }
+        return bytes.toString(StandardCharsets.UTF_8)
+    }
+
+    private suspend fun fetchWithReaderFallback(originalUrl: String, failure: Exception): ByteArray {
         if (!readerFallbackEnabled || !shouldUseReaderFallback(failure)) throw failure
-        try {
-            fetchFromReader(url).toString(StandardCharsets.UTF_8)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
+        currentCoroutineContext().ensureActive()
+        return try {
+            fetchFromReader(originalUrl)
+        } catch (readerFailure: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw readerFallbackFailure(failure, readerFailure)
         } catch (readerFailure: Exception) {
-            throw IOException(
-                "Не удалось открыть источник напрямую (${failure::class.simpleName}) " +
-                    "или через HTML relay (${readerFailure::class.simpleName})",
-                failure,
-            ).also { it.addSuppressed(readerFailure) }
+            throw readerFallbackFailure(failure, readerFailure)
         }
     }
+
+    private fun readerFallbackFailure(originalFailure: Exception, readerFailure: Exception): IOException =
+        IOException(
+            "Не удалось открыть источник напрямую (${originalFailure::class.simpleName}) " +
+                "или через HTML relay (${readerFailure::class.simpleName})",
+            originalFailure,
+        ).also { it.addSuppressed(readerFailure) }
 
     override suspend fun getBytes(url: String): ByteArray = fetch(url, binary = true)
 
@@ -1121,15 +1161,6 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
                 "X-Timeout" to "30",
             ),
         ).also { cache(cacheKey(originalUrl, binary = false), it) }
-    }
-
-    private fun shouldUseReaderFallback(failure: Exception): Boolean {
-        val causes = generateSequence(failure as Throwable?) { it.cause }.take(MAX_FAILURE_CAUSES).filterNotNull().toList()
-        if (causes.any { it is IOException || it is UnresolvedAddressException }) return true
-        val detail = causes.joinToString(" ") { "${it::class.simpleName.orEmpty()} ${it.message.orEmpty()}" }
-            .lowercase(Locale.ROOT)
-        return listOf("unknownhost", "unresolvedaddress", "ssl", "handshake", "timeout", "timed out", "http 5")
-            .any { marker -> detail.contains(marker) }
     }
 
     fun close() = client.close()
@@ -1270,7 +1301,6 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
         const val MAX_CACHE_BYTES = 64 * 1024 * 1024
         const val MIN_HOST_REQUEST_GAP_MILLIS = 300L
         const val MIN_JINA_REQUEST_GAP_MILLIS = 3_100L
-        const val MAX_FAILURE_CAUSES = 8
         const val JINA_READER_HOST = "r.jina.ai"
         const val JINA_READER_BASE = "https://r.jina.ai/"
         const val NANOS_PER_MILLISECOND = 1_000_000L
