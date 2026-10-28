@@ -102,6 +102,22 @@ class BsuBiologyScheduleParserTest {
     }
 
     @Test
+    fun biologyNoScheduleNoticeIsClassifiedAsAnEmptyPeriodRatherThanAnUnavailableProfile() {
+        val html = """
+            <html><body>
+              <h2>Расписание группы № 42</h2>
+              <div>Не удалось загрузить данные — расписание на данный период времени (26.10.2026) отсутствует.</div>
+            </body></html>
+        """.trimIndent()
+
+        val failure = runCatching {
+            BsuBiologyScheduleHtmlParser().parse(groupPageProfile, html, LocalDate(2026, 10, 26))
+        }.exceptionOrNull()
+
+        assertEquals("В источнике не осталось пар в выбранном периоде", failure?.message)
+    }
+
+    @Test
     fun biologyTeacherProfileMergesMatchingLessonsAcrossFacultyGroupPages() {
         val sourceUrls = listOf(
             "https://bsu.bio/schedule.php?study=d&course=1&group=41&date=2026-10-19",

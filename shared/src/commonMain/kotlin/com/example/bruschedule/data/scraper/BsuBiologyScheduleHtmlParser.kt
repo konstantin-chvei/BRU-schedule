@@ -43,6 +43,9 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
             }
         }.distinctBy(Lesson::sourceKey)
             .sortedWith(compareBy({ it.lessonDate }, { it.startTime }, { it.slotNumber }, { it.id }))
+        if (lessons.isEmpty() && pages.any { (_, pageHtml) -> hasExplicitNoScheduleNotice(pageHtml) }) {
+            error("В источнике не осталось пар в выбранном периоде")
+        }
         require(lessons.isNotEmpty()) {
             "В расписании Биофака не найдены пары выбранной группы. Обновите список групп и попробуйте снова"
         }
@@ -540,6 +543,11 @@ class BsuBiologyScheduleHtmlParser : ScheduleHtmlParser {
     private fun isServerRenderedGroupPage(html: String): Boolean {
         val text = Ksoup.parse(html).text()
         return isGroupScheduleTitle(text) && RUSSIAN_WEEKDAY.containsMatchIn(text) && TIME_RANGE.containsMatchIn(text)
+    }
+
+    private fun hasExplicitNoScheduleNotice(html: String): Boolean {
+        val text = Ksoup.parse(html).text().lowercase().replace('ё', 'е')
+        return "расписание на данный период времени" in text && "отсутствует" in text
     }
 
     private fun parseWeek(

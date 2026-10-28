@@ -544,11 +544,13 @@ class BsuScheduleProfileCatalogRepository(
 
     private fun biologyGroupScheduleUrl(request: BiologyRequest, groupId: String, weekDate: String): String =
         if (request.sourceRoot == BIOLOGY_ROOT) {
+            val encodedGroupId = encodeQueryComponent(groupId, preservePercentEncodedBytes = true)
             "$BIOLOGY_ROOT?study_mode=${encodeQueryComponent(request.studyMode.label)}" +
-                "&course=${request.course}&group=${encodeQueryComponent(groupId)}&week_date=$weekDate"
+                "&course=${request.course}&group=$encodedGroupId&week_date=$weekDate"
         } else {
+            val encodedGroupId = encodeQueryComponent(groupId, preservePercentEncodedBytes = true)
             "${request.sourceRoot}?study=${request.studyMode.legacyCode}&course=${request.course}" +
-                "&group=${encodeQueryComponent(groupId)}&date=$weekDate"
+                "&group=$encodedGroupId&date=$weekDate"
         }
 
     private suspend fun fetchBiologyIndexPages(requests: List<BiologyRequest>): List<BiologyPageResult> =
@@ -894,10 +896,25 @@ class BsuScheduleProfileCatalogRepository(
     private fun matchesQuery(value: String, normalizedQuery: String): Boolean =
         normalize(value).contains(normalizedQuery)
 
-    private fun encodeQueryComponent(value: String): String = buildString {
+    private fun encodeQueryComponent(
+        value: String,
+        preservePercentEncodedBytes: Boolean = false,
+    ): String = buildString {
         val hex = "0123456789ABCDEF"
-        value.encodeToByteArray().forEach { byte ->
-            val code = byte.toInt() and 0xff
+        val bytes = value.encodeToByteArray()
+        var index = 0
+        while (index < bytes.size) {
+            val code = bytes[index].toInt() and 0xff
+            if (preservePercentEncodedBytes && code == '%'.code && index + 2 < bytes.size) {
+                val high = bytes[index + 1].toInt() and 0xff
+                val low = bytes[index + 2].toInt() and 0xff
+                if (high.isAsciiHexDigit() && low.isAsciiHexDigit()) {
+                    append('%').append(high.toChar().uppercaseChar()).append(low.toChar().uppercaseChar())
+                    index += 3
+                    continue
+                }
+            }
+
             val safe = code in 'a'.code..'z'.code || code in 'A'.code..'Z'.code ||
                 code in '0'.code..'9'.code || code == '-'.code || code == '_'.code ||
                 code == '.'.code || code == '~'.code
@@ -906,8 +923,12 @@ class BsuScheduleProfileCatalogRepository(
             } else {
                 append('%').append(hex[code shr 4]).append(hex[code and 0x0f])
             }
+            index++
         }
     }
+
+    private fun Int.isAsciiHexDigit(): Boolean =
+        this in '0'.code..'9'.code || this in 'A'.code..'F'.code || this in 'a'.code..'f'.code
 
     private fun normalize(value: String): String = value.lowercase()
         .replace('ё', 'е')

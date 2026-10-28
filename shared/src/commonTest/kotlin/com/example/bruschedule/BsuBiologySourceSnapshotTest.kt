@@ -12,6 +12,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlinx.coroutines.test.runTest
@@ -100,6 +101,36 @@ class BsuBiologySourceSnapshotTest {
         assertTrue(matches.single().sourceUrl.startsWith(BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL))
         assertTrue(matches.single().sourceUrl.contains("group=49"))
         assertTrue(requested.contains(BsuBiologyScheduleHtmlParser.BIOLOGY_SERVER_RENDERED_SCHEDULE_URL))
+        assertTrue(requested.contains(legacyIndexUrl))
+    }
+
+    @Test
+    fun legacyBiologyGroupIdsKeepTheirExistingPercentEscapesWhenBuildingScheduleUrls() = runTest {
+        val requested = mutableListOf<String>()
+        val legacyIndexUrl = "${BsuBiologyScheduleHtmlParser.BIOLOGY_SCHEDULE_URL}?study=d&course=4&date=2026-10-19"
+        val legacyIndexHtml = """
+            <html><body>
+              <a href="schedule.php?study=d&amp;course=4&amp;group=42%D0%90&amp;date=2026-10-19">Группа 42А</a>
+            </body></html>
+        """.trimIndent()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requested += url
+                return if (url == legacyIndexUrl) legacyIndexHtml else "<html><body></body></html>"
+            }
+        }
+        val fixedClock = object : Clock {
+            override fun now(): Instant = Instant.parse("2026-10-23T09:00:00Z")
+        }
+
+        val matches = BsuScheduleProfileCatalogRepository(transport, clock = fixedClock)
+            .search(UniversityIds.BSU, ScheduleProfileType.GROUP, "42А")
+
+        assertEquals(1, matches.size)
+        assertEquals("Группа 42А", matches.single().name)
+        assertEquals("bio-group-number:42%D0%90", matches.single().sourceKey)
+        assertTrue(matches.single().sourceUrl.contains("group=42%D0%90&date=2026-10-19"))
+        assertFalse(matches.single().sourceUrl.contains("group=42%25D0%2590"))
         assertTrue(requested.contains(legacyIndexUrl))
     }
 
