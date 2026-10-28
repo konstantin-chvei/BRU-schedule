@@ -64,16 +64,23 @@ def validate(root: Path) -> list[str]:
                 if not profile_id or profile_id in seen_profiles:
                     errors.append(f"Пустой или повторный id профиля в {index_path}: {profile_id!r}")
                 seen_profiles.add(profile_id)
-                path = PurePosixPath(row.get("schedule_path", ""))
+                status = row.get("status", "")
+                schedule_path = row.get("schedule_path", "")
+                if status not in {"ready", "missing", "unavailable"}:
+                    errors.append(f"Неизвестный статус профиля {status!r} в {index_path}")
+                    continue
+                if status == "unavailable" and not schedule_path:
+                    continue
+                path = PurePosixPath(schedule_path)
                 expected_prefix = f"schedules/{profile_type}/"
                 if path.is_absolute() or ".." in path.parts or not path.as_posix().startswith(expected_prefix):
                     errors.append(f"Небезопасный schedule_path {path} в {index_path}")
                     continue
                 schedule_file = university_dir.joinpath(*path.parts)
-                if row.get("status") == "ready" and not schedule_file.is_file():
+                if status == "ready" and not schedule_file.is_file():
                     errors.append(f"{profile_id} помечен ready, но файла нет: {schedule_file}")
                     continue
-                if row.get("status") != "ready":
+                if status != "ready":
                     continue
                 if schedule_file.stat().st_size == 0:
                     errors.append(f"Пустой файл расписания: {schedule_file}")

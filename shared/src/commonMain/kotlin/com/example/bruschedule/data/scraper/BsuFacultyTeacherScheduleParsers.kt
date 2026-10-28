@@ -138,6 +138,20 @@ internal object BsuFacultyTeacherScheduleParserRegistry {
         "Филологический факультет" to BsuPhilologyFacultyTeacherScheduleParser(),
         "Факультет философии и социальных наук" to BsuFfsnFacultyTeacherScheduleParser(),
         "Факультет радиофизики и компьютерных технологий" to BsuRctFacultyTeacherScheduleParser(),
+        "Военный факультет" to BsuGenericFacultyTeacherScheduleParser(),
+        "Международный государственный экологический институт имени А.Д.Сахарова БГУ" to BsuGenericFacultyTeacherScheduleParser(),
+        "Институт теологии имени святых Мефодия и Кирилла БГУ" to BsuGenericFacultyTeacherScheduleParser(),
+        "Республиканский институт китаеведения имени Конфуция" to BsuGenericFacultyTeacherScheduleParser(),
+        "Институт повышения квалификации и переподготовки в области технологий информатизации и управления БГУ" to
+            BsuGenericFacultyTeacherScheduleParser(),
+        "Институт переподготовки и повышения квалификации судей, работников прокуратуры, судов и учреждений юстиции БГУ" to
+            BsuGenericFacultyTeacherScheduleParser(),
+        "Лицей им. Ф.Э. Дзержинского БГУ" to BsuGenericFacultyTeacherScheduleParser(),
+        "Юридический колледж БГУ" to BsuGenericFacultyTeacherScheduleParser(),
+        "Совместный институт БГУ и Даляньского политехнического университета" to
+            BsuGenericFacultyTeacherScheduleParser(),
+        "Институт дополнительного образования" to BsuGenericFacultyTeacherScheduleParser(),
+        "Институт инновационного образования под эгидой БГУ" to BsuGenericFacultyTeacherScheduleParser(),
     )
 
     val registeredFacultyNames: Set<String> get() = facultyParsers.keys

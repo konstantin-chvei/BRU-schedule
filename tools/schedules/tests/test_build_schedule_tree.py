@@ -16,6 +16,7 @@ from tools.schedules.build_schedule_tree import (
     normalize_snapshot_data,
     safe_relative_path,
 )
+from tools.schedules.validate_schedule_data import validate
 
 
 class PoliteFetcherTest(unittest.TestCase):
@@ -119,6 +120,78 @@ biology-group-41,41,Биофак,https://bsu.bio/schedule.php?group=41,bio-group
                 self.assertNotIn("source_url", reader.fieldnames or [])
             self.assertEqual("bio-group-number:41", row["source_key"])
             self.assertEqual("ready", row["status"])
+
+
+    def test_internal_teacher_source_url_list_is_not_published_in_the_profile_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            registry = root / "registry"
+            (registry / "bsu").mkdir(parents=True)
+            local_snapshot = root / "imports/bsu/teacher.html"
+            local_snapshot.parent.mkdir(parents=True)
+            local_snapshot.write_text("<html>schedule</html>", encoding="utf-8")
+            (registry / "universities.csv").write_text(
+                """id,name,website_url
+bsu,Белорусский государственный университет,https://bsu.by
+""",
+                encoding="utf-8",
+            )
+            (registry / "bsu/teachers.csv").write_text(
+                """id,name,subtitle,source_url,source_key,source_urls,schedule_path,local_file
+teacher-1,Иванов И.И.,ФПМИ,https://fpmi.bsu.by/timetable,teacher-1,https://fpmi.bsu.by/timetable|https://mmf.bsu.by/timetable,schedules/teachers/teacher-1.html,imports/bsu/teacher.html
+""",
+                encoding="utf-8",
+            )
+
+            build(argparse.Namespace(
+                registry=registry,
+                output=root / "schedule-data",
+                repository_root=root,
+                university=None,
+                profile_id=None,
+                fetch=False,
+                delay_seconds=0.0,
+                retries=0,
+            ))
+
+            index_path = root / "schedule-data/universities/bsu/teachers/index.csv"
+            index_text = index_path.read_text(encoding="utf-8")
+            with index_path.open("r", encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle)
+                row = next(reader)
+                self.assertIn("source_key", reader.fieldnames or [])
+                self.assertNotIn("source_url", reader.fieldnames or [])
+                self.assertNotIn("source_urls", reader.fieldnames or [])
+            self.assertEqual("teacher-1", row["source_key"])
+            self.assertNotIn("fpmi.bsu.by", index_text)
+            self.assertNotIn("mmf.bsu.by", index_text)
+
+
+class ScheduleDataValidationTest(unittest.TestCase):
+    def test_unavailable_profile_without_schedule_file_is_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "universities.csv").write_text(
+                "id,name\nbsu,Белорусский государственный университет\n",
+                encoding="utf-8",
+            )
+            university_dir = root / "universities/bsu"
+            university_dir.mkdir(parents=True)
+            (university_dir / "university.json").write_text("{}\n", encoding="utf-8")
+            groups = university_dir / "groups"
+            groups.mkdir()
+            (groups / "index.csv").write_text(
+                "id,name,schedule_path,status\ngroup-41,41,,unavailable\n",
+                encoding="utf-8",
+            )
+            teachers = university_dir / "teachers"
+            teachers.mkdir()
+            (teachers / "index.csv").write_text(
+                "id,name,schedule_path,status\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual([], validate(root))
 
 
 class _Response:

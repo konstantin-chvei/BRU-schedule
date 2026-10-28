@@ -8,6 +8,8 @@ import com.example.bruschedule.data.remote.HtmlTransport
 import com.example.bruschedule.data.remote.ScheduleCatalogDiscoveryResult
 import com.example.bruschedule.data.remote.ScheduleCatalogSourceReport
 import com.example.bruschedule.data.scraper.BsuBiologyScheduleHtmlParser
+import com.example.bruschedule.data.scraper.BsuTeacherNameMatcher
+import com.example.bruschedule.data.scraper.BsuTeacherProfileSourceKey
 import com.example.bruschedule.data.scraper.UniversityScheduleHtmlParser
 import com.example.bruschedule.domain.model.DefaultUniversities
 import com.example.bruschedule.domain.model.Lesson
@@ -21,7 +23,10 @@ import com.example.bruschedule.domain.model.UniversityIds
 import com.example.bruschedule.domain.usecase.ScheduleCycleExpander
 import com.example.bruschedule.domain.usecase.SemesterCoveragePolicy
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.ProxyBuilder
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.cio.CioDnsResolver
+import io.ktor.client.engine.cio.JvmDnsResolver
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
 import io.ktor.client.plugins.cookies.HttpCookies
@@ -30,6 +35,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -46,7 +52,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 import java.net.URI
+import java.net.UnknownHostException
+import java.nio.channels.UnresolvedAddressException
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -57,6 +66,8 @@ import java.time.Instant
 import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * One-shot, explicit GitHub dataset import. Normal app builds/tests never contact university sites.
@@ -69,6 +80,61 @@ class ScheduleDataImporterTest {
         assertEquals("\"Преподаватель \"\"И.И.\"\"\"", csvCell("Преподаватель \"И.И.\""))
         assertEquals("строка 1 строка 2", csvCell("строка 1\nстрока 2"))
         assertEquals("Ошибка [source URL] HTTP 403", redactUrls("Ошибка https://example.org/secret?key=abc HTTP 403"))
+    }
+
+    @Test
+    fun dnsResolverFallsBackWhenTheSystemResolverCannotResolveAUniversityHost() {
+        val calls = mutableListOf<String>()
+        val resolver = ResilientDnsResolver(
+            listOf(
+                { hostname ->
+                    calls += "system:$hostname"
+                    throw UnknownHostException("system DNS unavailable")
+                },
+                { hostname ->
+                    calls += "alternate:$hostname"
+                    listOf("93.184.216.34")
+                },
+            ),
+        )
+
+        val addresses = runBlocking { resolver.resolve("fpmi.bsu.by") }
+
+        assertEquals(listOf("93.184.216.34"), addresses)
+        assertEquals(listOf("system:fpmi.bsu.by", "alternate:fpmi.bsu.by"), calls)
+    }
+
+    @Test
+    fun dnsResolverRotatesResolverBetweenConnectionRetries() {
+        val systemCalls = mutableListOf<String>()
+        val alternateCalls = mutableListOf<String>()
+        val resolver = ResilientDnsResolver(
+            listOf(
+                { hostname -> systemCalls += hostname; listOf("93.184.216.34") },
+                { hostname -> alternateCalls += hostname; listOf("1.1.1.1") },
+            ),
+        )
+
+        val first = runBlocking { resolver.resolve("mmf.bsu.by") }
+        val retry = runBlocking { resolver.resolve("mmf.bsu.by") }
+
+        assertEquals(listOf("93.184.216.34"), first)
+        assertEquals(listOf("1.1.1.1"), retry)
+        assertEquals(listOf("mmf.bsu.by"), systemCalls)
+        assertEquals(listOf("mmf.bsu.by"), alternateCalls)
+    }
+
+    @Test
+    fun dnsResolverRotatesAddressesReturnedByTheResolverBetweenRetries() {
+        val resolver = ResilientDnsResolver(
+            listOf({ _: String -> listOf("192.0.2.10", "192.0.2.11") }),
+        )
+
+        val first = runBlocking { resolver.resolve("geo.bsu.by") }
+        val retry = runBlocking { resolver.resolve("geo.bsu.by") }
+
+        assertEquals(listOf("192.0.2.10", "192.0.2.11"), first)
+        assertEquals(listOf("192.0.2.11", "192.0.2.10"), retry)
     }
 
     @Test
@@ -88,6 +154,84 @@ class ScheduleDataImporterTest {
         assertEquals(teachers.size, mergedTeachers.size)
         assertEquals("Live directory result", mergedTeachers.first().subtitle)
         assertEquals(teachers.size, mergeCatalogueCandidates(emptyList(), teachers).size)
+    }
+
+    @Test
+    fun bsuTeachersWithDifferentNamesRemainDistinctWhenTheyShareASchedulePage() {
+        val sharedUrl = "https://fpmi.bsu.by/timetable/2026-10-26"
+        val candidates = listOf(
+            ProfileCandidate(
+                type = ScheduleProfileType.TEACHER,
+                name = "Иванов Иван Иванович",
+                sourceUrl = sharedUrl,
+                sourceKey = "teacher:ivanov",
+                subtitle = "ФПМИ · расписаний: 1",
+                universityId = UniversityIds.BSU,
+            ),
+            ProfileCandidate(
+                type = ScheduleProfileType.TEACHER,
+                name = "Петров Пётр Петрович",
+                sourceUrl = sharedUrl,
+                sourceKey = "teacher:petrov",
+                subtitle = "ФПМИ · расписаний: 1",
+                universityId = UniversityIds.BSU,
+            ),
+        )
+
+        val merged = mergeCatalogueCandidates(emptyList(), candidates)
+
+        assertEquals(2, merged.size)
+    }
+
+    @Test
+    fun bsuTeacherRegistryReconstructsAllPrivateScheduleSourcesFromItsOfflineRow() {
+        val repositoryRoot = Files.createTempDirectory("bsu-registry-test")
+        try {
+            val registryFile = repositoryRoot.resolve("tools/schedules/registry/bsu/teachers.csv")
+            val sourceUrls = listOf(
+                "https://fpmi.bsu.by/timetable/first?course=1&week=2026-10-26",
+                "https://fpmi.bsu.by/timetable/second?course=2&week=2026-10-26",
+            )
+            val header = listOf("id", "name", "subtitle", "source_url", "source_key", "source_urls")
+            val row = listOf(
+                "teacher-ivanov",
+                "Иванов Иван Иванович",
+                "ФПМИ · расписаний: 2",
+                sourceUrls.first(),
+                "teacher-ivanov",
+                encodeRegistrySourceUrls(sourceUrls),
+            )
+            Files.createDirectories(registryFile.parent)
+            Files.write(
+                registryFile,
+                (header.joinToString(",", transform = ::csvCell) + "\\n" +
+                    row.joinToString(",", transform = ::csvCell) + "\\n").toByteArray(StandardCharsets.UTF_8),
+            )
+
+            val candidate = readRegistryCandidates(
+                repositoryRoot,
+                DefaultUniversities.BSU,
+                ScheduleProfileType.TEACHER,
+            ).single()
+            val reconstructed = BsuTeacherProfileSourceKey.decode(candidate.sourceKey)
+
+            assertEquals(sourceUrls, reconstructed?.urls)
+            assertEquals("Иванов Иван Иванович", reconstructed?.teacherName)
+            assertEquals("ФПМИ", reconstructed?.facultyName)
+        } finally {
+            repositoryRoot.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun bsuOfflineRegistrySuppliesProfilesWhenLiveFacultyCataloguesAreUnavailable() {
+        val repositoryRoot = findRepositoryRoot()
+        val groups = readRegistryCandidates(repositoryRoot, DefaultUniversities.BSU, ScheduleProfileType.GROUP)
+        val teachers = readRegistryCandidates(repositoryRoot, DefaultUniversities.BSU, ScheduleProfileType.TEACHER)
+
+        assertTrue(groups.any { it.sourceKey == "bio-group-number:41" })
+        assertTrue(groups.all { isAllowedBsuRegistryHost(URI(it.sourceUrl).host.orEmpty().lowercase(Locale.ROOT)) })
+        assertTrue(teachers.all { isAllowedBsuRegistryHost(URI(it.sourceUrl).host.orEmpty().lowercase(Locale.ROOT)) })
     }
 
     @Test
@@ -293,6 +437,8 @@ private class UniversalScheduleDatasetImporter(
 
             val groups = mergeCatalogueCandidates(groupDiscovery.candidates, registryGroups)
             val teachers = mergeCatalogueCandidates(teacherDiscovery.candidates, registryTeachers)
+            persistBsuRegistryCandidates(ScheduleProfileType.GROUP, groups)
+            persistBsuRegistryCandidates(ScheduleProfileType.TEACHER, teachers)
             discoveredCount += groups.size + teachers.size
             println(
                 "${university.id}: discovered ${groups.size} groups and ${teachers.size} teachers " +
@@ -382,6 +528,88 @@ private class UniversalScheduleDatasetImporter(
         )
     }
 
+    private fun persistBsuRegistryCandidates(
+        type: ScheduleProfileType,
+        candidates: List<ProfileCandidate>,
+    ) {
+        if (candidates.isEmpty() || candidates.any { it.universityId != UniversityIds.BSU }) return
+        val registryDirectory = repositoryRoot.resolve("tools/schedules/registry/bsu")
+        val path = registryDirectory.resolve("${type.directoryName()}.csv")
+        val fields = listOf("id", "name", "subtitle", "source_url", "source_key", "source_urls", "schedule_path", "local_file")
+        val parsed = if (Files.isRegularFile(path)) {
+            parseCsv(String(Files.readAllBytes(path), StandardCharsets.UTF_8))
+        } else {
+            emptyList()
+        }
+        val oldHeader = parsed.firstOrNull().orEmpty().map { it.removePrefix("\uFEFF").trim().lowercase(Locale.ROOT) }
+        fun oldValue(row: List<String>, name: String): String =
+            oldHeader.indexOf(name).takeIf { it >= 0 }?.let { row.getOrNull(it).orEmpty().trim() }.orEmpty()
+
+        val rowsByIdentity = linkedMapOf<String, List<String>>()
+        val usedIds = mutableSetOf<String>()
+        parsed.drop(1).forEach { row ->
+            val id = oldValue(row, "id")
+            val name = oldValue(row, "name")
+            val sourceUrl = oldValue(row, "source_url")
+            if (id.isBlank() || name.isBlank() || sourceUrl.isBlank()) return@forEach
+            val sourceKey = oldValue(row, "source_key").ifBlank { name }
+            val subtitle = oldValue(row, "subtitle")
+            val candidate = ProfileCandidate(
+                type = type,
+                name = name,
+                sourceUrl = sourceUrl,
+                sourceKey = sourceKey,
+                subtitle = subtitle,
+                universityId = UniversityIds.BSU,
+            )
+            rowsByIdentity[registryIdentity(candidate)] = fields.map { field ->
+                when (field) {
+                    "id" -> id
+                    "name" -> name
+                    "subtitle" -> subtitle
+                    "source_url" -> sourceUrl
+                    "source_key" -> sourceKey
+                    "source_urls" -> oldValue(row, field)
+                    "schedule_path" -> oldValue(row, field)
+                    "local_file" -> oldValue(row, field)
+                    else -> ""
+                }
+            }
+            usedIds += id
+        }
+
+        candidates.forEach { candidate ->
+            val identity = registryIdentity(candidate)
+            val previous = rowsByIdentity[identity]
+            val previousId = previous?.getOrNull(fields.indexOf("id")).orEmpty()
+            val id = previousId.ifBlank {
+                uniqueId(candidate.name, candidate.sourceUrl, candidate.sourceKey, usedIds)
+            }
+            usedIds += id
+            val schedulePath = previous?.getOrNull(fields.indexOf("schedule_path"))
+                ?.takeIf(String::isNotBlank)
+                ?: "schedules/${type.directoryName()}/$id.html"
+            val localFile = previous?.getOrNull(fields.indexOf("local_file")).orEmpty()
+            val teacherSources = if (type == ScheduleProfileType.TEACHER) {
+                BsuTeacherProfileSourceKey.decode(candidate.sourceKey)?.urls ?: listOf(candidate.sourceUrl)
+            } else {
+                emptyList()
+            }
+            val registrySourceKey = if (type == ScheduleProfileType.TEACHER) id else candidate.sourceKey
+            rowsByIdentity[identity] = listOf(
+                id,
+                candidate.name,
+                candidate.subtitle,
+                candidate.sourceUrl,
+                registrySourceKey,
+                encodeRegistrySourceUrls(teacherSources),
+                schedulePath,
+                localFile,
+            )
+        }
+        writeCsv(path, fields, rowsByIdentity.values.toList())
+    }
+
     private suspend fun importType(
         university: University,
         type: ScheduleProfileType,
@@ -408,6 +636,7 @@ private class UniversalScheduleDatasetImporter(
             )
             usedIds += id
             val relativePath = "schedules/$typeDirectory/$id.csv"
+            val publicSourceKey = if (isBiologyGroup(candidate)) candidate.sourceKey else id
             val profile = ScheduleProfile(
                 id = id,
                 type = type,
@@ -428,7 +657,6 @@ private class UniversalScheduleDatasetImporter(
                 }
                 val outputPath = dataRoot.resolve("universities/${university.id}/$relativePath")
                 atomicWrite(outputPath, csv)
-                val publicSourceKey = if (isBiologyGroup(candidate)) candidate.sourceKey else id
                 output[id] = CatalogEntry(
                     id = id,
                     name = candidate.name,
@@ -453,9 +681,20 @@ private class UniversalScheduleDatasetImporter(
                     category = category,
                     reason = detail,
                 )
-                old?.takeIf { isReadyFile(university.id, it) }?.let { existingEntry ->
-                    output[existingEntry.id] = existingEntry
+                val preserved = old?.takeIf { isReadyFile(university.id, it) }
+                if (preserved != null) {
+                    output[preserved.id] = preserved
                     preservedCount++
+                } else {
+                    output[id] = CatalogEntry(
+                        id = id,
+                        name = candidate.name,
+                        subtitle = candidate.subtitle,
+                        sourceKey = publicSourceKey,
+                        schedulePath = "",
+                        status = "unavailable",
+                        updatedAt = Instant.now().toString(),
+                    )
                 }
                 System.err.println(
                     "Skipped ${university.id}/$typeDirectory/${candidate.name} [$category; ${candidate.subtitle}]: $detail",
@@ -469,13 +708,14 @@ private class UniversalScheduleDatasetImporter(
             delay(PROFILE_DELAY_MILLIS)
         }
 
-        val discoveredNames = sortedCandidates.map { normalize(it.name) }.toSet()
         existing.filter { entry ->
-            entry.status == "ready" && entry.id !in output && normalize(entry.name) !in discoveredNames &&
-                isReadyFile(university.id, entry)
+            entry.id !in output && (
+                (entry.status == "ready" && isReadyFile(university.id, entry)) ||
+                    entry.status in setOf("unavailable", "missing")
+                )
         }.forEach { stale ->
             output[stale.id] = stale
-            preservedCount++
+            if (stale.status == "ready" && isReadyFile(university.id, stale)) preservedCount++
         }
         writeIndex(indexPath, output.values.sortedBy { it.name.lowercase(Locale.ROOT) })
     }
@@ -766,9 +1006,73 @@ private class UniversalScheduleDatasetImporter(
     }
 }
 
+private fun configuredSourceHttpProxy(): String? {
+    val value = System.getenv("SCHEDULE_SOURCE_HTTP_PROXY")?.trim()?.takeIf(String::isNotBlank) ?: return null
+    val uri = runCatching { URI(value) }.getOrElse { error("SCHEDULE_SOURCE_HTTP_PROXY is not a valid URL") }
+    require(
+        uri.scheme?.equals("http", ignoreCase = true) == true && uri.host?.isNotBlank() == true &&
+            uri.userInfo == null && (uri.port == -1 || uri.port in 1..65_535),
+    ) {
+        "SCHEDULE_SOURCE_HTTP_PROXY must be an unauthenticated http:// proxy URL"
+    }
+    return value
+}
+
+private typealias HostDnsResolver = suspend (hostname: String) -> List<String>
+
+/** Tries system and public DNS resolvers in rotation while keeping TLS hostname verification enabled. */
+private class ResilientDnsResolver(
+    private val resolvers: List<HostDnsResolver>,
+) {
+    private val resolverCursors = ConcurrentHashMap<String, AtomicInteger>()
+    private val addressCursors = ConcurrentHashMap<String, AtomicInteger>()
+
+    suspend fun resolve(hostname: String): List<String> {
+        require(hostname.isNotBlank()) { "DNS hostname is blank" }
+        require(resolvers.isNotEmpty()) { "No DNS resolvers configured" }
+        val resolverStart = nextIndex(resolverCursors, hostname, resolvers.size)
+        var lastFailure: Exception? = null
+        for (offset in resolvers.indices) {
+            val resolver = resolvers[(resolverStart + offset) % resolvers.size]
+            try {
+                val addresses = resolver(hostname)
+                    .map(String::trim)
+                    .filter(String::isNotBlank)
+                    .distinct()
+                if (addresses.isNotEmpty()) {
+                    val addressStart = nextIndex(addressCursors, hostname, addresses.size)
+                    return addresses.indices.map { index -> addresses[(addressStart + index) % addresses.size] }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                lastFailure = failure
+            }
+        }
+        throw lastFailure ?: UnknownHostException(hostname)
+    }
+
+    private fun nextIndex(cursors: ConcurrentHashMap<String, AtomicInteger>, key: String, size: Int): Int =
+        Math.floorMod(cursors.computeIfAbsent(key) { AtomicInteger() }.getAndIncrement(), size)
+}
+
 /** External source access is restricted to the two universities and the document hosts their parsers use. */
 private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTransport {
+    private val dnsResolver = ResilientDnsResolver(
+        listOf(
+            JvmDnsResolver(),
+            CioDnsResolver(server = "1.1.1.1", timeout = 2.seconds),
+            CioDnsResolver(server = "8.8.8.8", timeout = 2.seconds),
+        ),
+    )
+    private val configuredProxy = configuredSourceHttpProxy()
+    private val readerFallbackEnabled =
+        System.getenv("SCHEDULE_SOURCE_READER_FALLBACK")?.trim()?.lowercase(Locale.ROOT) != "false"
     private val client = HttpClient(CIO) {
+        engine {
+            dnsResolver = this@UniversitySourceHttpTransport.dnsResolver::resolve
+            configuredProxy?.let { proxyUrl -> this.proxy = ProxyBuilder.http(proxyUrl) }
+        }
         followRedirects = false
         install(HttpCookies) { storage = AcceptAllCookiesStorage() }
         install(HttpTimeout) {
@@ -783,13 +1087,57 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
     private val responseCache = LinkedHashMap<String, ByteArray>(16, 0.75f, true)
     private var responseCacheBytes = 0L
 
-    override suspend fun get(url: String): String = fetch(url, binary = false).toString(StandardCharsets.UTF_8)
+    override suspend fun get(url: String): String = try {
+        fetch(url, binary = false).toString(StandardCharsets.UTF_8)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        if (!readerFallbackEnabled || !shouldUseReaderFallback(failure)) throw failure
+        try {
+            fetchFromReader(url).toString(StandardCharsets.UTF_8)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (readerFailure: Exception) {
+            throw IOException(
+                "Не удалось открыть источник напрямую (${failure::class.simpleName}) " +
+                    "или через HTML relay (${readerFailure::class.simpleName})",
+                failure,
+            ).also { it.addSuppressed(readerFailure) }
+        }
+    }
 
     override suspend fun getBytes(url: String): ByteArray = fetch(url, binary = true)
 
+    private suspend fun fetchFromReader(originalUrl: String): ByteArray {
+        validateAllowedUrl(originalUrl)
+        val readerUrl = "$JINA_READER_BASE$originalUrl"
+        return fetch(
+            originalUrl = readerUrl,
+            binary = false,
+            extraHeaders = mapOf(
+                "X-Return-Format" to "html",
+                "X-No-Cache" to "true",
+                "X-Timeout" to "30",
+            ),
+        ).also { cache(cacheKey(originalUrl, binary = false), it) }
+    }
+
+    private fun shouldUseReaderFallback(failure: Exception): Boolean {
+        val causes = generateSequence(failure as Throwable?) { it.cause }.take(MAX_FAILURE_CAUSES).filterNotNull().toList()
+        if (causes.any { it is IOException || it is UnresolvedAddressException }) return true
+        val detail = causes.joinToString(" ") { "${it::class.simpleName.orEmpty()} ${it.message.orEmpty()}" }
+            .lowercase(Locale.ROOT)
+        return listOf("unknownhost", "unresolvedaddress", "ssl", "handshake", "timeout", "timed out", "http 5")
+            .any { marker -> detail.contains(marker) }
+    }
+
     fun close() = client.close()
 
-    private suspend fun fetch(originalUrl: String, binary: Boolean): ByteArray {
+    private suspend fun fetch(
+        originalUrl: String,
+        binary: Boolean,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): ByteArray {
         val originalCacheKey = cacheKey(originalUrl, binary)
         cached(originalCacheKey)?.let { return it }
         var currentUrl = originalUrl
@@ -798,7 +1146,11 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
             val host = validateAllowedUrl(currentUrl)
             var attempt = 0
             while (true) {
-                pace(host)
+                pace(
+                    host,
+                    minGapMillis = if (host == JINA_READER_HOST) MIN_JINA_REQUEST_GAP_MILLIS
+                    else MIN_HOST_REQUEST_GAP_MILLIS,
+                )
                 val response = try {
                     client.get(currentUrl) {
                         header(HttpHeaders.UserAgent, USER_AGENT)
@@ -808,6 +1160,7 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
                             else "text/html,application/xhtml+xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*;q=0.8",
                         )
                         header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.8")
+                        extraHeaders.forEach { (name, value) -> header(name, value) }
                     }
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
@@ -857,15 +1210,13 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
         }
     }
 
-    private suspend fun pace(host: String) {
+    private suspend fun pace(host: String, minGapMillis: Long) {
         val lock = hostLocks.computeIfAbsent(host) { Mutex() }
         lock.withLock {
             val previous = lastRequestAtNanos[host]
             if (previous != null) {
                 val elapsedMillis = (System.nanoTime() - previous) / NANOS_PER_MILLISECOND
-                if (elapsedMillis < MIN_HOST_REQUEST_GAP_MILLIS) {
-                    delay(MIN_HOST_REQUEST_GAP_MILLIS - elapsedMillis)
-                }
+                if (elapsedMillis < minGapMillis) delay(minGapMillis - elapsedMillis)
             }
             lastRequestAtNanos[host] = System.nanoTime()
         }
@@ -874,14 +1225,16 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
     private fun validateAllowedUrl(value: String): String {
         val uri = runCatching { URI(value) }.getOrElse { error("Некорректный URL источника") }
         val host = uri.host?.lowercase(Locale.ROOT) ?: error("В источнике отсутствует host")
-        val isAllowed = uri.scheme.equals("https", ignoreCase = true) &&
-            (uri.port == -1 || uri.port == 443) && uri.userInfo == null && (
-                host == "rasp.bru.by" || host == "bsu.bio" || host == "bsu.by" || host.endsWith(".bsu.by") ||
-                    host == "docs.google.com" || host == "drive.google.com" ||
-                    host == "drive.usercontent.google.com" || host.endsWith(".googleusercontent.com") ||
-                    host == "dropbox.com" || host.endsWith(".dropbox.com") ||
-                    host == "dropboxusercontent.com" || host.endsWith(".dropboxusercontent.com")
-                )
+        val isUniversityOrDocumentHost =
+            host == "rasp.bru.by" || host == "bsu.bio" || host == "bsu.by" || host.endsWith(".bsu.by") ||
+                host == "docs.google.com" || host == "drive.google.com" ||
+                host == "drive.usercontent.google.com" || host.endsWith(".googleusercontent.com") ||
+                host == "dropbox.com" || host.endsWith(".dropbox.com") ||
+                host == "dropboxusercontent.com" || host.endsWith(".dropboxusercontent.com")
+        val isReaderRelay = host == JINA_READER_HOST && uri.rawPath.orEmpty().startsWith("/https://")
+        val isAllowed = uri.scheme?.equals("https", ignoreCase = true) == true &&
+            (uri.port == -1 || uri.port == 443) && uri.userInfo == null &&
+            (isUniversityOrDocumentHost || isReaderRelay)
         require(isAllowed) { "Источник не входит в разрешённые сайты университетов и их документов" }
         return host
     }
@@ -915,6 +1268,10 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
         const val MAX_SCHEDULE_BYTES = 30 * 1024 * 1024
         const val MAX_CACHE_BYTES = 64 * 1024 * 1024
         const val MIN_HOST_REQUEST_GAP_MILLIS = 300L
+        const val MIN_JINA_REQUEST_GAP_MILLIS = 3_100L
+        const val MAX_FAILURE_CAUSES = 8
+        const val JINA_READER_HOST = "r.jina.ai"
+        const val JINA_READER_BASE = "https://r.jina.ai/"
         const val NANOS_PER_MILLISECOND = 1_000_000L
         const val USER_AGENT = "ScheduleGitHubDatasetImporter/1.0 (explicit manual import)"
     }
@@ -930,13 +1287,13 @@ private fun findRepositoryRoot(): Path {
     }
 }
 
-/** Keeps the checked-in BRU catalogue available when a live directory page is incomplete. */
+/** Keeps checked-in BRU/BSU profiles available when a live directory page is incomplete. */
 private fun readRegistryCandidates(
     repositoryRoot: Path,
     university: University,
     type: ScheduleProfileType,
 ): List<ProfileCandidate> {
-    if (university.id != UniversityIds.BRU) return emptyList()
+    if (university.id != UniversityIds.BRU && university.id != UniversityIds.BSU) return emptyList()
     val directoryName = when (type) {
         ScheduleProfileType.GROUP -> "groups"
         ScheduleProfileType.TEACHER -> "teachers"
@@ -958,21 +1315,43 @@ private fun readRegistryCandidates(
         val sourceUrl = value(row, "source_url", "url")
         if (name.isBlank() || sourceUrl.isBlank()) return@mapNotNull null
         val uri = runCatching { URI(sourceUrl) }.getOrNull() ?: return@mapNotNull null
+        val host = uri.host.orEmpty().lowercase(Locale.ROOT)
         val path = uri.rawPath.orEmpty()
-        val expectedPath = when (type) {
+        val allowedHost = when (university.id) {
+            UniversityIds.BRU -> host == "rasp.bru.by"
+            UniversityIds.BSU -> isAllowedBsuRegistryHost(host)
+            else -> false
+        }
+        val expectedPath = university.id != UniversityIds.BRU || when (type) {
             ScheduleProfileType.GROUP -> path.startsWith("/full_time/") || path.startsWith("/part_time/")
             ScheduleProfileType.TEACHER -> path.startsWith("/teachers/")
         }
         if (
-            !uri.scheme.equals("https", ignoreCase = true) ||
-            !uri.host.orEmpty().equals("rasp.bru.by", ignoreCase = true) ||
+            !uri.scheme.equals("https", ignoreCase = true) || !allowedHost ||
             uri.userInfo != null || (uri.port != -1 && uri.port != 443) || !expectedPath
         ) return@mapNotNull null
 
-        val sourceKey = value(row, "source_key", "key").ifBlank {
-            when (type) {
-                ScheduleProfileType.GROUP -> name
-                ScheduleProfileType.TEACHER -> path
+        val storedSourceKey = value(row, "source_key", "key")
+        val decodedTeacherKey = if (type == ScheduleProfileType.TEACHER) {
+            BsuTeacherProfileSourceKey.decode(storedSourceKey)
+        } else {
+            null
+        }
+        val storedTeacherUrls = decodeRegistrySourceUrls(value(row, "source_urls"))
+        val sourceKey = when (type) {
+            ScheduleProfileType.GROUP -> storedSourceKey.ifBlank { name }
+            ScheduleProfileType.TEACHER -> when {
+                storedTeacherUrls.isEmpty() && decodedTeacherKey != null -> storedSourceKey
+                else -> {
+                    val urls = storedTeacherUrls.ifEmpty { decodedTeacherKey?.urls.orEmpty() }
+                        .ifEmpty { listOf(sourceUrl) }
+                    val teacherName = decodedTeacherKey?.teacherName ?: name
+                    val facultyName = decodedTeacherKey?.facultyName
+                        ?: value(row, "subtitle").substringBefore(" ·").trim().takeIf(String::isNotBlank)
+                    runCatching {
+                        BsuTeacherProfileSourceKey.encode(teacherName, urls, facultyName)
+                    }.getOrElse { storedSourceKey.ifBlank { path } }
+                }
             }
         }
         if (sourceKey.isBlank()) return@mapNotNull null
@@ -986,6 +1365,35 @@ private fun readRegistryCandidates(
         )
     }
 }
+
+private fun encodeRegistrySourceUrls(urls: List<String>): String = urls.joinToString("|") { url ->
+    url.replace("%", "%25").replace("|", "%7C")
+}
+
+private fun decodeRegistrySourceUrls(value: String): List<String> = value.split('|')
+    .map { encoded -> encoded.replace("%7C", "|").replace("%25", "%") }
+    .filter(String::isNotBlank)
+
+private fun registryIdentity(candidate: ProfileCandidate): String = when (candidate.type) {
+    ScheduleProfileType.GROUP -> {
+        val profileIdentity = if (isBiologyGroupSourceKey(candidate.sourceKey)) {
+            candidate.sourceKey
+        } else {
+            "${normalizeIdentity(candidate.name)}|${sourceIdentity(candidate.sourceUrl)}"
+        }
+        "groups|$profileIdentity"
+    }
+    ScheduleProfileType.TEACHER ->
+        "teachers|${normalizeIdentity(candidate.name)}|" +
+            "${normalizeIdentity(candidate.subtitle.substringBefore(" ·"))}|${sourceIdentity(candidate.sourceUrl)}"
+}
+
+private fun isAllowedBsuRegistryHost(host: String): Boolean =
+    host == "bsu.bio" || host == "bsu.by" || host.endsWith(".bsu.by") ||
+        host == "docs.google.com" || host == "drive.google.com" ||
+        host == "drive.usercontent.google.com" || host.endsWith(".googleusercontent.com") ||
+        host == "dropbox.com" || host.endsWith(".dropbox.com") ||
+        host == "dropboxusercontent.com" || host.endsWith(".dropboxusercontent.com")
 
 private fun normalizeImportValue(value: String): String = value.lowercase(Locale.ROOT)
     .replace('ё', 'е')
@@ -1023,7 +1431,15 @@ private fun mergeCatalogueCandidates(
 private fun ProfileCandidate.hasSameCatalogueIdentity(other: ProfileCandidate): Boolean {
     if (type != other.type) return false
     return when (type) {
-        ScheduleProfileType.TEACHER -> sourceIdentity(sourceUrl) == sourceIdentity(other.sourceUrl)
+        ScheduleProfileType.TEACHER -> if (
+            universityId == UniversityIds.BSU && other.universityId == UniversityIds.BSU
+        ) {
+            normalizeIdentity(subtitle.substringBefore(" ·")) ==
+                normalizeIdentity(other.subtitle.substringBefore(" ·")) &&
+                BsuTeacherNameMatcher.matches(name, other.name)
+        } else {
+            sourceIdentity(sourceUrl) == sourceIdentity(other.sourceUrl)
+        }
         ScheduleProfileType.GROUP -> {
             if (normalizeIdentity(name) != normalizeIdentity(other.name)) return false
             val thisBiologyKey = sourceKey.takeIf(::isBiologyGroupSourceKey)

@@ -330,8 +330,7 @@ class BsuScheduleProfileCatalogRepository(
                 ) return@mapNotNull null
                 val routeText = "${source.label} $target".lowercase()
                 val routeLooksRelevant = ROUTE_HINTS.any { hint -> routeText.contains(hint) }
-                val unlabelledOfficialHtml = isBsuHost(target) && sameHost(pageUrl, target) &&
-                    isOfficialHtmlPage(target) && !isDocument
+                val unlabelledOfficialHtml = isBsuHost(target) && isOfficialHtmlPage(target) && !isDocument
                 val unlabelledOfficialRootPage = !isSheet && labelGroups.isEmpty() && !routeLooksRelevant &&
                     depth == 0 && unlabelledOfficialHtml
                 val unlabelledRootPage = unlabelledOfficialRootPage &&
@@ -1059,10 +1058,46 @@ class BsuScheduleProfileCatalogRepository(
                 "https://ffsn.bsu.by/ru/dfo-raspisanie-zanyatij.html",
             ),
             FacultySource("Факультет радиофизики и компьютерных технологий", "https://rct.bsu.by/education"),
+            FacultySource("Военный факультет", "https://bsu.by/structure/faculties/voennyy-fakultet-d"),
+            FacultySource(
+                "Международный государственный экологический институт имени А.Д.Сахарова БГУ",
+                "https://bsu.by/structure/faculties/uo-mezhdunarodnyy-gosudarstvennyy-ekologicheskiy-institut-imeni-a-d-sakharova-bgu-d",
+            ),
+            FacultySource(
+                "Институт теологии имени святых Мефодия и Кирилла БГУ",
+                "https://bsu.by/structure/faculties/guo-institut-teologii-imeni-svyatykh-mefodiya-i-kirilla-bgu-d",
+            ),
+            FacultySource(
+                "Республиканский институт китаеведения имени Конфуция",
+                "https://bsu.by/structure/faculties/respublikanskiy-institut-kitaevedeniya-imeni-konfutsiya-d",
+            ),
+            FacultySource(
+                "Институт повышения квалификации и переподготовки в области технологий информатизации и управления БГУ",
+                "https://bsu.by/structure/faculties/guo-institut-povysheniya-kvalifikatsii-i-perepodgotovki-v-oblasti-tekhnologiy-informatizatsii-i-upra-d",
+            ),
+            FacultySource(
+                "Институт переподготовки и повышения квалификации судей, работников прокуратуры, судов и учреждений юстиции БГУ",
+                "https://bsu.by/structure/faculties/uo-institut-perepodgotovki-i-povysheniya-kvalifikatsii-sudey-rabotnikov-prokuratury-sudov-i-uchrezhd-d",
+            ),
+            FacultySource("Лицей им. Ф.Э. Дзержинского БГУ", "https://bsu.by/structure/faculties/guo-litsey-bgu-d"),
+            FacultySource("Юридический колледж БГУ", "https://bsu.by/structure/faculties/uo-yuridicheskiy-kolledzh-bgu-d"),
+            FacultySource(
+                "Совместный институт БГУ и Даляньского политехнического университета",
+                "https://bsu.by/structure/faculties/sovmestnyy-institut-bgu-i-dalyanskogo-politekhnicheskogo-universiteta-d",
+            ),
+            FacultySource(
+                "Институт дополнительного образования",
+                "https://bsu.by/structure/faculties/institut-dopolnitelnogo-obrazovaniya-d",
+            ),
+            FacultySource(
+                "Институт инновационного образования под эгидой БГУ",
+                "https://bsu.by/structure/faculties/institut-innovatsionnogo-obrazovaniya-pod-egidoy-bgu--d",
+            ),
         )
 
         val ROUTE_HINTS = listOf(
-            "raspis", "timetable", "schedule", "занят", "распис", "дневн", "заочн", "курс", "group", "групп", "dropbox",
+            "raspis", "timetable", "schedule", "занят", "распис", "дневн", "заочн", "курс", "group", "групп",
+            "dropbox", "сайт", "site",
         )
         val DAY_OR_DATE_HINTS = listOf(
             "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье",

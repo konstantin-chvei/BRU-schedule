@@ -76,8 +76,19 @@ class ScheduleArchitectureTest {
                 "https://hist.bsu.by/uchebnyj-protsess/grafik-uchebnogo-protsessa/raspisanie-zanyatij.html",
                 "https://philology.bsu.by/ru/studjentu/raspisanie",
                 "https://chemistry.bsu.by/index.php/ru/studentam/grafik-uchebnogo-protsessa/raspisanie",
+                "https://bsu.by/structure/faculties/voennyy-fakultet-d",
+                "https://bsu.by/structure/faculties/uo-mezhdunarodnyy-gosudarstvennyy-ekologicheskiy-institut-imeni-a-d-sakharova-bgu-d",
+                "https://bsu.by/structure/faculties/guo-institut-teologii-imeni-svyatykh-mefodiya-i-kirilla-bgu-d",
+                "https://bsu.by/structure/faculties/respublikanskiy-institut-kitaevedeniya-imeni-konfutsiya-d",
+                "https://bsu.by/structure/faculties/guo-institut-povysheniya-kvalifikatsii-i-perepodgotovki-v-oblasti-tekhnologiy-informatizatsii-i-upra-d",
+                "https://bsu.by/structure/faculties/uo-institut-perepodgotovki-i-povysheniya-kvalifikatsii-sudey-rabotnikov-prokuratury-sudov-i-uchrezhd-d",
+                "https://bsu.by/structure/faculties/guo-litsey-bgu-d",
+                "https://bsu.by/structure/faculties/uo-yuridicheskiy-kolledzh-bgu-d",
+                "https://bsu.by/structure/faculties/sovmestnyy-institut-bgu-i-dalyanskogo-politekhnicheskogo-universiteta-d",
+                "https://bsu.by/structure/faculties/institut-dopolnitelnogo-obrazovaniya-d",
+                "https://bsu.by/structure/faculties/institut-innovatsionnogo-obrazovaniya-pod-egidoy-bgu--d",
             ).all { it in catalogue.configuredFacultySourceUrls },
-            "The catalogue must retain every official faculty URL supplied for the full-university import",
+            "The catalogue must retain official faculty and education-institution roots for the full-university import",
         )
         assertEquals(
             setOf(
@@ -97,6 +108,17 @@ class ScheduleArchitectureTest {
                 "Филологический факультет",
                 "Факультет философии и социальных наук",
                 "Факультет радиофизики и компьютерных технологий",
+                "Военный факультет",
+                "Международный государственный экологический институт имени А.Д.Сахарова БГУ",
+                "Институт теологии имени святых Мефодия и Кирилла БГУ",
+                "Республиканский институт китаеведения имени Конфуция",
+                "Институт повышения квалификации и переподготовки в области технологий информатизации и управления БГУ",
+                "Институт переподготовки и повышения квалификации судей, работников прокуратуры, судов и учреждений юстиции БГУ",
+                "Лицей им. Ф.Э. Дзержинского БГУ",
+                "Юридический колледж БГУ",
+                "Совместный институт БГУ и Даляньского политехнического университета",
+                "Институт дополнительного образования",
+                "Институт инновационного образования под эгидой БГУ",
             ),
             BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames,
         )
@@ -119,9 +141,9 @@ class ScheduleArchitectureTest {
             "ФМО",
         )
         assertEquals(
-            setOf("Военный факультет"),
+            emptySet(),
             officialFacultySourceAliases - BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames,
-            "Military Faculty has no public lesson timetable URL in the official BSU pages",
+            "All official faculty names must have a configured schedule source adapter",
         )
         assertTrue("Институт бизнеса" in BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames)
         val adapters = BsuFacultyTeacherScheduleParserRegistry.registeredFacultyNames.map { facultyName ->
@@ -715,7 +737,7 @@ class ScheduleArchitectureTest {
         assertEquals(1, economy.profilesDiscovered)
         assertTrue(economy.pagesLoaded > 0)
         assertEquals(0, economy.requestFailures)
-        assertEquals(16, discovery.sources.size)
+        assertEquals(27, discovery.sources.size)
     }
 
     @Test
@@ -729,7 +751,7 @@ class ScheduleArchitectureTest {
         }
 
         assertTrue(discovery.candidates.isEmpty())
-        assertEquals(16, discovery.sources.size)
+        assertEquals(27, discovery.sources.size)
         assertTrue(discovery.sources.all { it.pagesLoaded == 0 })
         assertTrue(discovery.sources.all { it.requestFailures > 0 })
     }
@@ -760,6 +782,35 @@ class ScheduleArchitectureTest {
         assertFalse(unrelatedUrl in requestedUrls)
         assertEquals(0, economy.requestFailures)
         assertFalse(economy.crawlTruncated)
+    }
+
+    @Test
+    fun bsuCatalogueFollowsAnOfficialInstitutionSiteToItsSchedulePage() {
+        val institutionUrl = "https://bsu.by/structure/faculties/guo-institut-teologii-imeni-svyatykh-mefodiya-i-kirilla-bgu-d"
+        val officialSiteUrl = "https://www.theology.bsu.by/"
+        val scheduleUrl = "https://www.theology.bsu.by/students/timetable"
+        val requestedUrls = mutableListOf<String>()
+        val transport = object : HtmlTransport {
+            override suspend fun get(url: String): String {
+                requestedUrls += url
+                return when (url) {
+                    institutionUrl -> "<a href=\"http://www.theology.bsu.by/\">Перейти на сайт</a>"
+                    officialSiteUrl -> "<a href=\"$scheduleUrl\">Расписание занятий</a>"
+                    scheduleUrl -> "<html><body></body></html>"
+                    else -> "<html><body></body></html>"
+                }
+            }
+        }
+
+        val discovery = runSuspending {
+            BsuScheduleProfileCatalogRepository(transport).discoverAllWithReport(ScheduleProfileType.GROUP)
+        }
+
+        assertTrue(officialSiteUrl in requestedUrls)
+        assertTrue(scheduleUrl in requestedUrls)
+        val theology = discovery.sources.single { it.name == "Институт теологии имени святых Мефодия и Кирилла БГУ" }
+        assertEquals(0, theology.requestFailures)
+        assertTrue(theology.pagesLoaded >= 3)
     }
 
     @Test

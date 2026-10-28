@@ -53,6 +53,8 @@ jobs:
           SCHEDULE_DATA_UNIVERSITY: ${{ inputs.university || 'all' }}
           SCHEDULE_REPOSITORY_ROOT: ${{ github.workspace }}
           SCHEDULE_DATA_ROOT: ${{ github.workspace }}/schedule-data
+          SCHEDULE_SOURCE_HTTP_PROXY: ${{ secrets.SCHEDULE_SOURCE_HTTP_PROXY }}
+          SCHEDULE_SOURCE_READER_FALLBACK: 'true'
         run: |
           set -euo pipefail
           ANDROID_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -106,6 +108,45 @@ jobs:
               f"{report['preserved_profiles']} preserved, "
               f"{report['skipped_profiles']} skipped"
           )
+          if "bsu" in report.get("universities", []):
+              sources = [
+                  source for source in report.get("catalogue_sources", [])
+                  if source.get("university") == "bsu" and source.get("source") != "Оффлайн-реестр"
+              ]
+              incomplete = [
+                  source for source in sources
+                  if source.get("request_failures", 0) > 0 or source.get("crawl_truncated", False)
+              ]
+              missing_source_types = [
+                  profile_type for profile_type in ("groups", "teachers")
+                  if sum(source.get("type") == profile_type for source in sources) != 27
+              ]
+              failed_profiles = [
+                  failure for failure in report.get("failures", [])
+                  if failure.get("university") == "bsu" and failure.get("category") != "no_lessons_in_period"
+              ]
+              if incomplete or missing_source_types or failed_profiles:
+                  print(
+                      "::error::Refusing to publish incomplete BSU schedules: "
+                      f"{len(incomplete)} source errors, {len(missing_source_types)} incomplete source types, "
+                      f"{len(failed_profiles)} profile import failures."
+                  )
+                  for source in incomplete:
+                      details = "; ".join(source.get("request_failure_details", [])).replace(chr(10), " ").replace(chr(13), " ").replace("\\n", " ")
+                      print(
+                          f"::error title=Incomplete {source.get('type')} source::{source.get('source')}: "
+                          f"{source.get('request_failures')} failed requests; "
+                          f"crawl_truncated={source.get('crawl_truncated')}; {details}"
+                      )
+                  for profile_type in missing_source_types:
+                      count = sum(source.get("type") == profile_type for source in sources)
+                      print(f"::error::Expected 27 BSU {profile_type} sources, found {count}.")
+                  for failure in failed_profiles:
+                      print(
+                          f"::error title=Unavailable BSU profile::{failure.get('type')} "
+                          f"{failure.get('profile')}: {failure.get('category')} — {failure.get('reason')}"
+                      )
+                  raise SystemExit(1)
           PY
 
       - name: Commit and publish updated datasets to the selected branch
@@ -120,8 +161,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           imported_data="$RUNNER_TEMP/imported-schedule-data"
-          mkdir -p "$imported_data"
+          imported_bsu_registry="$RUNNER_TEMP/imported-bsu-registry"
+          mkdir -p "$imported_data" "$imported_bsu_registry"
           cp -a schedule-data/. "$imported_data/"
+          cp -a tools/schedules/registry/bsu/. "$imported_bsu_registry/"
 
           for attempt in 1 2 3; do
             git fetch origin "refs/heads/${branch}:refs/remotes/origin/${branch}"
@@ -132,7 +175,10 @@ jobs:
             git -C "$publish_dir" rm -r --ignore-unmatch --quiet schedule-data
             mkdir -p "$publish_dir/schedule-data"
             cp -a "$imported_data"/. "$publish_dir/schedule-data/"
-            git -C "$publish_dir" add -- schedule-data/
+            rm -rf "$publish_dir/tools/schedules/registry/bsu"
+            mkdir -p "$publish_dir/tools/schedules/registry/bsu"
+            cp -a "$imported_bsu_registry"/. "$publish_dir/tools/schedules/registry/bsu/"
+            git -C "$publish_dir" add -- schedule-data/ tools/schedules/registry/bsu/
 
             if git -C "$publish_dir" diff --cached --quiet; then
               echo "No schedule dataset changes to publish"
