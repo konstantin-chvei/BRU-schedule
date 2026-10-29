@@ -153,6 +153,16 @@ class ScheduleDataImporterTest {
     }
 
     @Test
+    fun readerFallbackPreferenceIsCachedPerUnavailableSourceHost() {
+        val hosts = ReaderFallbackHostRegistry()
+        val failure = UnknownHostException("DNS unavailable")
+        hosts.mark("FPMI.BSU.BY", failure)
+
+        assertEquals(failure, hosts.failureFor("fpmi.bsu.by"))
+        assertNull(hosts.failureFor("mmf.bsu.by"))
+    }
+
+    @Test
     fun bruOfflineRegistrySuppliesEverySavedGroupAndTeacherProfileToTheImporter() {
         val repositoryRoot = findRepositoryRoot()
         val groups = readRegistryCandidates(repositoryRoot, DefaultUniversities.BRU, ScheduleProfileType.GROUP)
@@ -1085,6 +1095,16 @@ private fun shouldUseReaderFallback(failure: Throwable): Boolean {
         .any { marker -> detail.contains(marker) }
 }
 
+private class ReaderFallbackHostRegistry {
+    private val directFailures = ConcurrentHashMap<String, Exception>()
+
+    fun mark(host: String, failure: Exception) {
+        if (host.isNotBlank()) directFailures.putIfAbsent(host.lowercase(Locale.ROOT), failure)
+    }
+
+    fun failureFor(host: String): Exception? = directFailures[host.lowercase(Locale.ROOT)]
+}
+
 /** External source access is restricted to the two universities and the document hosts their parsers use. */
 private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTransport {
     private val dnsResolver = ResilientDnsResolver(
@@ -1097,6 +1117,7 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
     private val configuredProxy = configuredSourceHttpProxy()
     private val readerFallbackEnabled =
         System.getenv("SCHEDULE_SOURCE_READER_FALLBACK")?.trim()?.lowercase(Locale.ROOT) != "false"
+    private val readerFallbackHosts = ReaderFallbackHostRegistry()
     private val client = HttpClient(CIO) {
         engine {
             dnsResolver = this@UniversitySourceHttpTransport.dnsResolver::resolve
@@ -1117,28 +1138,46 @@ private class UniversitySourceHttpTransport : HtmlTransport, BinaryResourceTrans
     private var responseCacheBytes = 0L
 
     override suspend fun get(url: String): String {
-        val bytes = try {
-            fetch(url, binary = false)
-        } catch (failure: CancellationException) {
-            fetchWithReaderFallback(url, failure)
-        } catch (failure: Exception) {
-            fetchWithReaderFallback(url, failure)
+        val sourceHost = sourceHost(url)
+        val previousDirectFailure = if (readerFallbackEnabled) {
+            sourceHost?.let(readerFallbackHosts::failureFor)
+        } else {
+            null
+        }
+        val bytes = if (previousDirectFailure != null) {
+            fetchFromReaderOrWrap(url, previousDirectFailure)
+        } else {
+            try {
+                fetch(url, binary = false)
+            } catch (failure: CancellationException) {
+                fetchWithReaderFallback(url, failure)
+            } catch (failure: Exception) {
+                fetchWithReaderFallback(url, failure)
+            }
         }
         return bytes.toString(StandardCharsets.UTF_8)
     }
 
     private suspend fun fetchWithReaderFallback(originalUrl: String, failure: Exception): ByteArray {
         if (!readerFallbackEnabled || !shouldUseReaderFallback(failure)) throw failure
+        sourceHost(originalUrl)?.let { readerFallbackHosts.mark(it, failure) }
+        return fetchFromReaderOrWrap(originalUrl, failure)
+    }
+
+    private suspend fun fetchFromReaderOrWrap(originalUrl: String, directFailure: Exception): ByteArray {
         currentCoroutineContext().ensureActive()
         return try {
             fetchFromReader(originalUrl)
         } catch (readerFailure: CancellationException) {
             currentCoroutineContext().ensureActive()
-            throw readerFallbackFailure(failure, readerFailure)
+            throw readerFallbackFailure(directFailure, readerFailure)
         } catch (readerFailure: Exception) {
-            throw readerFallbackFailure(failure, readerFailure)
+            throw readerFallbackFailure(directFailure, readerFailure)
         }
     }
+
+    private fun sourceHost(url: String): String? =
+        runCatching { URI(url).host?.lowercase(Locale.ROOT) }.getOrNull()
 
     private fun readerFallbackFailure(originalFailure: Exception, readerFailure: Exception): IOException =
         IOException(
