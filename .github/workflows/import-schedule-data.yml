@@ -12,6 +12,15 @@ on:
           - all
           - bru
           - bsu
+      profile_type:
+        description: Profile catalogues to refresh (split groups and teachers to fit the import time limit)
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - groups
+          - teachers
 
 permissions:
   actions: write
@@ -51,6 +60,7 @@ jobs:
         env:
           SCHEDULE_DATA_IMPORT: 'true'
           SCHEDULE_DATA_UNIVERSITY: ${{ inputs.university || 'all' }}
+          SCHEDULE_DATA_PROFILE_TYPE: ${{ inputs.profile_type || 'all' }}
           SCHEDULE_REPOSITORY_ROOT: ${{ github.workspace }}
           SCHEDULE_DATA_ROOT: ${{ github.workspace }}/schedule-data
           SCHEDULE_SOURCE_HTTP_PROXY: ${{ secrets.SCHEDULE_SOURCE_HTTP_PROXY }}
@@ -101,12 +111,16 @@ jobs:
           import json
           from pathlib import Path
           report = json.loads(Path("schedule-data/import-report.json").read_text(encoding="utf-8"))
+          expected_profile_types = report.get("profile_types", ["groups", "teachers"])
+          if not expected_profile_types or any(profile_type not in ("groups", "teachers") for profile_type in expected_profile_types):
+              raise SystemExit(f"Invalid profile_types in import report: {expected_profile_types!r}")
           print(
               "Import summary: "
               f"{report['discovered_profiles']} discovered, "
               f"{report['imported_profiles']} imported, "
               f"{report['preserved_profiles']} preserved, "
-              f"{report['skipped_profiles']} skipped"
+              f"{report['skipped_profiles']} skipped; "
+              f"catalogues: {', '.join(expected_profile_types)}"
           )
           if "bsu" in report.get("universities", []):
               sources = [
@@ -120,7 +134,7 @@ jobs:
               ]
               source_type_counts = {
                   profile_type: sum(source.get("type") == profile_type for source in sources)
-                  for profile_type in ("groups", "teachers")
+                  for profile_type in expected_profile_types
               }
               print(
                   "BSU catalogue source reports: "
@@ -131,7 +145,9 @@ jobs:
               ]
               failed_profiles = [
                   failure for failure in report.get("failures", [])
-                  if failure.get("university") == "bsu" and failure.get("category") != "no_lessons_in_period"
+                  if failure.get("university") == "bsu"
+                  and failure.get("type") in expected_profile_types
+                  and failure.get("category") != "no_lessons_in_period"
               ]
               if incomplete or missing_source_types or failed_profiles:
                   print(

@@ -346,6 +346,20 @@ class ScheduleDataImporterTest {
     }
 
     @Test
+    fun manualImportCanTargetGroupsAndTeachersIndependently() {
+        assertEquals(listOf(ScheduleProfileType.GROUP), selectedScheduleProfileTypes("groups"))
+        assertEquals(listOf(ScheduleProfileType.TEACHER), selectedScheduleProfileTypes("teachers"))
+        assertEquals(
+            listOf(ScheduleProfileType.GROUP, ScheduleProfileType.TEACHER),
+            selectedScheduleProfileTypes("all"),
+        )
+        assertEquals(
+            listOf(ScheduleProfileType.GROUP, ScheduleProfileType.TEACHER),
+            selectedScheduleProfileTypes(null),
+        )
+    }
+
+    @Test
     fun importAllPublishedSchedulesWhenExplicitlyEnabled() {
         if (System.getenv("SCHEDULE_DATA_IMPORT") != "true") return
 
@@ -359,6 +373,8 @@ class ScheduleDataImporterTest {
         ).toAbsolutePath().normalize()
         val selectedUniversity = System.getenv("SCHEDULE_DATA_UNIVERSITY")?.trim()?.lowercase(Locale.ROOT)
             ?.takeIf(String::isNotBlank)
+        val selectedProfileType = System.getenv("SCHEDULE_DATA_PROFILE_TYPE")?.trim()
+            ?.takeIf(String::isNotBlank)
 
         val transport = UniversitySourceHttpTransport()
         try {
@@ -367,7 +383,7 @@ class ScheduleDataImporterTest {
                     transport = transport,
                     repositoryRoot = repositoryRoot,
                     dataRoot = dataRoot,
-                ).import(selectedUniversity)
+                ).import(selectedUniversity, selectedProfileType)
             }
             println(
                 "Schedule data import complete: " +
@@ -379,6 +395,15 @@ class ScheduleDataImporterTest {
             transport.close()
         }
     }
+}
+
+private fun selectedScheduleProfileTypes(selection: String?): List<ScheduleProfileType> = when (
+    selection?.trim()?.lowercase(Locale.ROOT).orEmpty()
+) {
+    "", "all" -> listOf(ScheduleProfileType.GROUP, ScheduleProfileType.TEACHER)
+    "groups" -> listOf(ScheduleProfileType.GROUP)
+    "teachers" -> listOf(ScheduleProfileType.TEACHER)
+    else -> error("Unsupported profile type selection: $selection")
 }
 
 private data class DatasetImportSummary(
@@ -433,13 +458,15 @@ private class UniversalScheduleDatasetImporter(
     private var importedCount = 0
     private var preservedCount = 0
 
-    suspend fun import(selectedUniversityId: String?): DatasetImportSummary {
+    suspend fun import(selectedUniversityId: String?, selectedProfileType: String?): DatasetImportSummary {
         val universities = when (selectedUniversityId) {
             null, "", "all" -> listOf(DefaultUniversities.BRU, DefaultUniversities.BSU)
             UniversityIds.BRU -> listOf(DefaultUniversities.BRU)
             UniversityIds.BSU -> listOf(DefaultUniversities.BSU)
             else -> error("Unsupported university selection: $selectedUniversityId")
         }
+        val profileTypes = selectedScheduleProfileTypes(selectedProfileType)
+        val universityIds = universities.map(University::id)
         require(dataRoot.startsWith(repositoryRoot) && dataRoot != repositoryRoot) {
             "SCHEDULE_DATA_ROOT must point to a directory inside the checked-out repository"
         }
@@ -451,31 +478,27 @@ private class UniversalScheduleDatasetImporter(
         writeCsv(dataRoot.resolve("universities.csv"), listOf("id", "name", "website_url", "enabled"), rootEntries)
 
         for (university in universities) {
-            val groupDiscovery = discoverLiveCandidates(university, ScheduleProfileType.GROUP)
-            val teacherDiscovery = discoverLiveCandidates(university, ScheduleProfileType.TEACHER)
-            val registryGroups = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.GROUP)
-            val registryTeachers = readRegistryCandidates(repositoryRoot, university, ScheduleProfileType.TEACHER)
-            recordSourceReports(university, ScheduleProfileType.GROUP, groupDiscovery.sources)
-            recordSourceReports(university, ScheduleProfileType.TEACHER, teacherDiscovery.sources)
-            recordRegistrySource(university, ScheduleProfileType.GROUP, registryGroups.size)
-            recordRegistrySource(university, ScheduleProfileType.TEACHER, registryTeachers.size)
-
-            val groups = mergeCatalogueCandidates(groupDiscovery.candidates, registryGroups)
-            val teachers = mergeCatalogueCandidates(teacherDiscovery.candidates, registryTeachers)
-            persistBsuRegistryCandidates(ScheduleProfileType.GROUP, groups)
-            persistBsuRegistryCandidates(ScheduleProfileType.TEACHER, teachers)
-            discoveredCount += groups.size + teachers.size
-            println(
-                "${university.id}: discovered ${groups.size} groups and ${teachers.size} teachers " +
-                    "(${groups.size - groupDiscovery.candidates.size} groups and " +
-                    "${teachers.size - teacherDiscovery.candidates.size} teachers supplemented from the offline registry)",
-            )
-            importType(university, ScheduleProfileType.GROUP, groups)
-            importType(university, ScheduleProfileType.TEACHER, teachers)
-            writeUniversityMetadata(university)
+            for (type in profileTypes) {
+                val discovery = discoverLiveCandidates(university, type)
+                val registryCandidates = readRegistryCandidates(repositoryRoot, university, type)
+                recordSourceReports(university, type, discovery.sources)
+                recordRegistrySource(university, type, registryCandidates.size)
+                val candidates = mergeCatalogueCandidates(discovery.candidates, registryCandidates)
+                persistBsuRegistryCandidates(type, candidates)
+                discoveredCount += candidates.size
+                writeImportReport(universityIds, profileTypes)
+                val typeName = if (type == ScheduleProfileType.GROUP) "groups" else "teachers"
+                println(
+                    "${university.id}: discovered ${candidates.size} $typeName " +
+                        "(${candidates.size - discovery.candidates.size} supplemented from the offline registry)",
+                )
+                importType(university, type, candidates, universityIds, profileTypes)
+                writeUniversityMetadata(university)
+                writeImportReport(universityIds, profileTypes)
+            }
         }
 
-        writeImportReport(universities.map(University::id))
+        writeImportReport(universityIds, profileTypes)
         return DatasetImportSummary(
             discovered = discoveredCount,
             imported = importedCount,
@@ -639,6 +662,8 @@ private class UniversalScheduleDatasetImporter(
         university: University,
         type: ScheduleProfileType,
         candidates: List<com.example.bruschedule.domain.model.ProfileCandidate>,
+        reportUniversityIds: List<String>,
+        reportProfileTypes: List<ScheduleProfileType>,
     ) {
         val typeDirectory = type.directoryName()
         val indexPath = dataRoot.resolve("universities/${university.id}/$typeDirectory/index.csv")
@@ -729,6 +754,7 @@ private class UniversalScheduleDatasetImporter(
             if (processedForType % PROGRESS_INTERVAL == 0 || processedForType == sortedCandidates.size) {
                 println("${university.id}/$typeDirectory: processed $processedForType/${sortedCandidates.size}; " +
                     "$importedCount parsed, $preservedCount preserved, ${failedImports.size} skipped")
+                writeImportReport(reportUniversityIds, reportProfileTypes)
             }
             delay(PROFILE_DELAY_MILLIS)
         }
@@ -877,7 +903,10 @@ private class UniversalScheduleDatasetImporter(
         atomicWrite(directory.resolve("university.json"), json)
     }
 
-    private fun writeImportReport(universityIds: List<String>) {
+    private fun writeImportReport(
+        universityIds: List<String>,
+        profileTypes: List<ScheduleProfileType>,
+    ) {
         val serializedSources = sourceReports
             .sortedWith(compareBy<ImportSourceReport>({ it.universityId }, { it.profileType }, { it.source }))
             .joinToString(",\n") { source ->
@@ -908,6 +937,7 @@ private class UniversalScheduleDatasetImporter(
             appendLine("{")
             appendLine("  \"generated_at\": ${json(Instant.now().toString())},")
             appendLine("  \"universities\": [${universityIds.joinToString(", ") { json(it) }}],")
+            appendLine("  \"profile_types\": [${profileTypes.joinToString(", ") { json(it.directoryName()) }}],")
             appendLine("  \"discovered_profiles\": $discoveredCount,")
             appendLine("  \"imported_profiles\": $importedCount,")
             appendLine("  \"preserved_profiles\": $preservedCount,")
